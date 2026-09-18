@@ -13,7 +13,12 @@ resource "aws_iam_openid_connect_provider" "github" {
 # Trust only THIS repo's workflows -- no other repo can assume this role.
 data "aws_iam_policy_document" "github_assume" {
   statement {
-    actions = ["sts:AssumeRoleWithWebIdentity"]
+    # TagSession is required too: aws-actions/configure-aws-credentials
+    # attaches ~7 session tags (repository, ref, sha, actor, ...) by default,
+    # and AWS rejects the whole AssumeRoleWithWebIdentity call if the trust
+    # policy doesn't also allow that -- confirmed via a live failed run
+    # ("Not authorized to perform sts:AssumeRoleWithWebIdentity").
+    actions = ["sts:AssumeRoleWithWebIdentity", "sts:TagSession"]
 
     principals {
       type        = "Federated"
