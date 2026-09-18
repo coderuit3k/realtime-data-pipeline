@@ -41,10 +41,18 @@ jobs:
       - working-directory: infra
         run: terraform plan -out=tfplan
 
+      # archive_file's output .zip files are ephemeral, local to this runner
+      # -- terraform apply of a *saved* plan never re-evaluates data sources,
+      # so it needs those exact zip bytes to still exist. Upload them
+      # alongside the plan (confirmed via a live failed apply: rebuilding
+      # from source in a separate job produces the zips in a different path
+      # than what the saved plan recorded, so "no such file or directory").
       - uses: actions/upload-artifact@v4
         with:
           name: tfplan
-          path: infra/tfplan
+          path: |
+            infra/tfplan
+            infra/build/*.zip
           retention-days: 1
 
   apply:
@@ -56,9 +64,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build Lambda packages
-        run: ./scripts/build_lambdas.sh
-
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
@@ -69,10 +74,12 @@ jobs:
         with:
           terraform_version: "1.9.5"
 
+      # Restores infra/tfplan and infra/build/*.zip from the plan job -- no
+      # need to rebuild, we're applying exactly what was already planned.
       - uses: actions/download-artifact@v4
         with:
           name: tfplan
-          path: infra
+          path: .
 
       - working-directory: infra
         run: |
