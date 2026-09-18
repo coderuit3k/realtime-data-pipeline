@@ -1,0 +1,25 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+local_output/
+local_output_curated/
+.env
+
+# Terraform state/plan can contain resource details and must never be committed
+# (the .lock.hcl file IS meant to be committed, so it's not listed here)
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+infra/build/
+infra/terraform.tfvars
+infra-bootstrap/terraform.tfvars
+
+# eval run artifacts, not code
+eval/results.csv
+
+# Claude Code's own session state, not project-relevant
+.claude/

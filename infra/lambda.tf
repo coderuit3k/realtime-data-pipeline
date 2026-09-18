@@ -1,0 +1,77 @@
+# Zips are built by ../scripts/build_lambdas.sh, which must run before `terraform apply`
+# (see infra/README.md). Terraform only re-packages what that script already staged.
+
+data "archive_file" "hackernews_ingestion" {
+  type        = "zip"
+  source_dir  = "${path.module}/build/hackernews_ingestion"
+  output_path = "${path.module}/build/hackernews_ingestion.zip"
+}
+
+data "archive_file" "news_ingestion" {
+  type        = "zip"
+  source_dir  = "${path.module}/build/news_ingestion"
+  output_path = "${path.module}/build/news_ingestion.zip"
+}
+
+data "archive_file" "transform" {
+  type        = "zip"
+  source_dir  = "${path.module}/build/transform"
+  output_path = "${path.module}/build/transform.zip"
+}
+
+resource "aws_lambda_function" "hackernews_ingestion" {
+  function_name    = "${local.name_prefix}-hackernews-ingestion"
+  role             = aws_iam_role.ingestion_lambda.arn
+  handler          = "hackernews_ingestion.lambda_handler"
+  runtime          = var.lambda_runtime
+  timeout          = 60
+  memory_size      = 256
+  filename         = data.archive_file.hackernews_ingestion.output_path
+  source_code_hash = data.archive_file.hackernews_ingestion.output_base64sha256
+
+  environment {
+    variables = {
+      RAW_BUCKET     = aws_s3_bucket.raw.bucket
+      HN_FEED        = var.hn_feed
+      HN_STORY_LIMIT = tostring(var.hn_story_limit)
+    }
+  }
+}
+
+resource "aws_lambda_function" "news_ingestion" {
+  function_name    = "${local.name_prefix}-news-ingestion"
+  role             = aws_iam_role.ingestion_lambda.arn
+  handler          = "news_ingestion.lambda_handler"
+  runtime          = var.lambda_runtime
+  timeout          = 60
+  memory_size      = 256
+  filename         = data.archive_file.news_ingestion.output_path
+  source_code_hash = data.archive_file.news_ingestion.output_base64sha256
+
+  environment {
+    variables = {
+      RAW_BUCKET       = aws_s3_bucket.raw.bucket
+      NEWS_SECRET_NAME = aws_secretsmanager_secret.news_api.name
+      NEWS_QUERY       = var.news_query
+    }
+  }
+}
+
+resource "aws_lambda_function" "transform" {
+  function_name    = "${local.name_prefix}-transform"
+  role             = aws_iam_role.transform_lambda.arn
+  handler          = "transform.lambda_handler"
+  runtime          = var.lambda_runtime
+  timeout          = 120
+  memory_size      = 512
+  filename         = data.archive_file.transform.output_path
+  source_code_hash = data.archive_file.transform.output_base64sha256
+  layers           = [var.pandas_layer_arn]
+
+  environment {
+    variables = {
+      CURATED_BUCKET        = aws_s3_bucket.curated.bucket
+      BEDROCK_TEXT_MODEL_ID = var.bedrock_text_model_id
+    }
+  }
+}

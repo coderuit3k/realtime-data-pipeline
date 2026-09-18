@@ -1,0 +1,7 @@
+requests==2.32.3
+boto3==1.34.145
+# pandas/pyarrow are only needed for local dev/test -- the deployed transform
+# Lambda gets them from the AWS SDK for pandas layer (see infra/variables.tf),
+# so these are left unpinned to match whatever wheels are available locally.
+pandas>=2.2
+pyarrow>=17.0

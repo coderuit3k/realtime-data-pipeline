@@ -1,0 +1,11 @@
+# RAGAS evaluation -- a dev-only tool, never deployed to Lambda (see eval/README.md).
+# Pinned deliberately: ragas 0.4.3 hard-imports langchain_community/langchain_openai
+# internals that don't exist on their latest releases (a real, current packaging
+# bug -- ragas assumes an older langchain-core generation). This exact
+# combination is the one actually verified to import and run end-to-end.
+-r requirements-dev.txt
+ragas==0.4.3
+langchain-core==0.3.86
+langchain-community==0.3.27
+langchain-openai==0.3.35
+langchain-aws==0.2.35
