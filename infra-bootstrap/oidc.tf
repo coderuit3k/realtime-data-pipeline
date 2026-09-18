@@ -13,12 +13,7 @@ resource "aws_iam_openid_connect_provider" "github" {
 # Trust only THIS repo's workflows -- no other repo can assume this role.
 data "aws_iam_policy_document" "github_assume" {
   statement {
-    # TagSession is required too: aws-actions/configure-aws-credentials
-    # attaches ~7 session tags (repository, ref, sha, actor, ...) by default,
-    # and AWS rejects the whole AssumeRoleWithWebIdentity call if the trust
-    # policy doesn't also allow that -- confirmed via a live failed run
-    # ("Not authorized to perform sts:AssumeRoleWithWebIdentity").
-    actions = ["sts:AssumeRoleWithWebIdentity", "sts:TagSession"]
+    actions = ["sts:AssumeRoleWithWebIdentity"]
 
     principals {
       type        = "Federated"
@@ -31,10 +26,17 @@ data "aws_iam_policy_document" "github_assume" {
       values   = ["sts.amazonaws.com"]
     }
 
+    # Confirmed via CloudTrail on a live rejected run: GitHub's current sub
+    # claim is "repo:<org>@<org_id>/<repo>@<repo_id>:ref:refs/heads/<branch>"
+    # -- it inserts "@<numeric id>" right after the org and repo names, not
+    # just after the whole string. A plain "repo:org/repo:*" pattern (no
+    # wildcard until after the colon) never matches that and silently
+    # denies every assume-role call. Wildcard right after org/repo too so
+    # this matches both this newer format and the older plain-name one.
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_org}/${var.github_repo}:*"]
+      values   = ["repo:${var.github_org}*/${var.github_repo}*:*"]
     }
   }
 }

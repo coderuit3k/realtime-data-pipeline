@@ -19,6 +19,12 @@
       "Resource": "*"
     },
     {
+      "Sid": "DebugCloudTrail",
+      "Effect": "Allow",
+      "Action": ["cloudtrail:LookupEvents"],
+      "Resource": "*"
+    },
+    {
       "Sid": "TerraformStateLock",
       "Effect": "Allow",
       "Action": "dynamodb:*",
