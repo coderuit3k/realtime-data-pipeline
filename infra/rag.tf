@@ -84,6 +84,12 @@ data "archive_file" "rag_query" {
   output_path = "${path.module}/build/rag_query.zip"
 }
 
+data "archive_file" "rag_agent" {
+  type        = "zip"
+  source_dir  = "${path.module}/build/rag_agent"
+  output_path = "${path.module}/build/rag_agent.zip"
+}
+
 resource "aws_lambda_function" "rag_build_index" {
   function_name    = "${local.name_prefix}-rag-build-index"
   role             = aws_iam_role.rag_lambda.arn
@@ -132,5 +138,36 @@ resource "aws_lambda_function" "rag_query" {
 
 resource "aws_cloudwatch_log_group" "rag_query" {
   name              = "/aws/lambda/${aws_lambda_function.rag_query.function_name}"
+  retention_in_days = var.log_retention_days
+}
+
+# Agentic RAG: same index and IAM role as rag_query, but the model decides for
+# itself (via Bedrock Converse tool use) whether/when to call
+# search_knowledge_base and search_web and how many times, instead of the
+# fixed retrieve -> grade -> fallback pipeline in query.py.
+resource "aws_lambda_function" "rag_agent" {
+  function_name    = "${local.name_prefix}-rag-agent"
+  role             = aws_iam_role.rag_lambda.arn
+  handler          = "agent.lambda_handler"
+  runtime          = var.lambda_runtime
+  timeout          = 90
+  memory_size      = 512
+  filename         = data.archive_file.rag_agent.output_path
+  source_code_hash = data.archive_file.rag_agent.output_base64sha256
+  layers           = [var.pandas_layer_arn]
+
+  environment {
+    variables = {
+      CURATED_BUCKET         = aws_s3_bucket.curated.bucket
+      BEDROCK_EMBED_MODEL_ID = var.bedrock_embed_model_id
+      BEDROCK_TEXT_MODEL_ID  = var.bedrock_text_model_id
+      RAG_TOP_K              = tostring(var.rag_top_k)
+      TAVILY_SECRET_NAME     = aws_secretsmanager_secret.tavily_api.name
+    }
+  }
+}
+
+resource "aws_cloudwatch_log_group" "rag_agent" {
+  name              = "/aws/lambda/${aws_lambda_function.rag_agent.function_name}"
   retention_in_days = var.log_retention_days
 }

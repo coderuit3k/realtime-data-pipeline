@@ -41,5 +41,6 @@ package_no_deps transform transform/transform.py
 package_no_deps rag_build_index rag/build_index.py
 # rag_query needs `requests` too now (Tavily web search fallback for CRAG).
 package_with_requests rag_query rag/query.py
+package_with_requests rag_agent rag/agent.py
 
 echo "Lambda build artifacts ready under $BUILD_DIR"

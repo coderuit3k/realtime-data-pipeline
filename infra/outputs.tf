@@ -45,3 +45,7 @@ output "rag_build_index_function_name" {
 output "rag_query_function_name" {
   value = aws_lambda_function.rag_query.function_name
 }
+
+output "rag_agent_function_name" {
+  value = aws_lambda_function.rag_agent.function_name
+}

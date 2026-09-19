@@ -96,12 +96,23 @@ apply`). Query them in the Athena console under workgroup
 for ready-to-run examples, including one that correlates Hacker News
 keywords against News API keywords on the same day.
 
-## Agentic RAG demo
+## RAG demos: fixed pipeline + tool-calling agent
 
 `rag/` retrieves-and-generates over the curated zone using Amazon Bedrock --
 no vector database (e.g. OpenSearch Serverless): at this dataset's size,
 Lambda-memory cosine similarity is plenty, and it avoids a service that bills
-24/7 even idle.
+24/7 even idle. Two Lambdas answer questions over the same index, for
+comparison:
+
+- `rag/query.py` -- a **fixed pipeline**: retrieve, grade with CRAG, and
+  fall back through 3 hardcoded tiers (local KB -> web search -> model
+  knowledge). The orchestration logic lives in Python if/else branches; the
+  LLM only grades and generates.
+- `rag/agent.py` -- a genuine **tool-calling agent**: the LLM itself decides
+  whether/when to call `search_knowledge_base` and `search_web`, how to
+  reformulate the query, and when it has enough to answer -- via Bedrock's
+  Converse API with function calling, not hardcoded branching. See
+  [Agentic RAG: tool-calling agent](#agentic-rag-tool-calling-agent) below.
 
 - `rag/build_index.py` (Lambda `<project>-rag-build-index`, on-demand): reads
   every curated Parquet record, embeds it with Titan (`amazon.titan-embed-text-v2:0`),
@@ -153,6 +164,40 @@ Anthropic models on Bedrock need one extra one-time step beyond enabling
 Model access/catalog -> the Anthropic model -> "Submit use case details").
 Amazon's own models (Titan) don't need this. Allow up to ~15 minutes for it
 to propagate before retrying.
+
+### Agentic RAG: tool-calling agent
+
+`rag/agent.py` (Lambda `<project>-rag-agent`, on-demand) replaces the fixed
+CRAG branching above with a real agent loop over Bedrock's **Converse API**
+tool use: the model gets two tools, `search_knowledge_base` (the local
+index) and `search_web` (Tavily), and on each turn decides for itself
+whether to call one, which query to search with, whether to reformulate and
+search again, or to stop and answer. The loop runs until the model returns
+a plain text turn (no more tool calls) or `MAX_ITERATIONS` (6) is hit, at
+which point one final call asks for a best-effort answer with tools
+withdrawn. Every tool call is recorded in the response's `tool_calls` trace
+-- unlike the pipeline version, this isn't knowable in advance from the
+code; it's whatever the model chose to do for that specific question.
+
+Verified live, two real runs against the same index:
+- **In-domain** ("What is trending in AI safety and regulation right
+  now?"): the agent called `search_knowledge_base` **three times** with
+  three different reformulated queries before answering -- it wasn't told
+  to retry, it decided the first results needed broadening. Answered with
+  13 cited sources, all real URLs from the ingested corpus.
+- **Out-of-domain** ("What's a good recipe for banh mi?"): the agent
+  skipped the knowledge base entirely and called `search_web` directly on
+  the first turn -- it inferred from the tool descriptions alone that this
+  question wasn't a fit for the tech/news knowledge base, without any
+  hardcoded domain check.
+
+```bash
+aws lambda invoke --function-name realtime-data-pipeline-dev-rag-agent \
+  --cli-binary-format raw-in-base64-out \
+  --payload '{"question": "What is trending in AI right now?"}' \
+  --cli-read-timeout 90 \
+  /tmp/agent-answer.json && cat /tmp/agent-answer.json
+```
 
 ### Evaluating it: RAGAS
 
