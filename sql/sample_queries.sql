@@ -71,6 +71,10 @@ UNION ALL
 SELECT 'crypto' AS source, year, month, day, COUNT(*) AS records
 FROM crypto_prices
 GROUP BY year, month, day
+UNION ALL
+SELECT 'github' AS source, year, month, day, COUNT(*) AS records
+FROM github_repos
+GROUP BY year, month, day
 ORDER BY year, month, day;
 
 -- 6. Latest weather reading per tracked location
@@ -107,3 +111,37 @@ FROM crypto_prices c
 LEFT JOIN mentions m ON m.keyword = c.coin_id
 WHERE c.year = '2026' AND c.month = '09' AND c.day = '19'
 ORDER BY c.observed_at DESC;
+
+-- 9. Top trending GitHub repos today (proxy: created in the last N days,
+-- sorted by stars -- see github_trending_ingestion.py for why there's no
+-- official "trending" API to call instead)
+SELECT full_name, language, stars, forks, keywords, pushed_at
+FROM github_repos
+WHERE year = '2026' AND month = '09' AND day = '19'
+ORDER BY stars DESC
+LIMIT 20;
+
+-- 10. Individual keywords appearing in BOTH trending GitHub repos and
+-- Hacker News stories on the same day -- is what's trending on GitHub also
+-- what HN is discussing?
+WITH gh_kw AS (
+    SELECT repo_id, TRIM(kw) AS keyword
+    FROM github_repos
+    CROSS JOIN UNNEST(split(keywords, ',')) AS t(kw)
+    WHERE year = '2026' AND month = '09' AND day = '19'
+),
+hn_kw AS (
+    SELECT story_id, TRIM(kw) AS keyword
+    FROM hackernews_stories
+    CROSS JOIN UNNEST(split(keywords, ',')) AS t(kw)
+    WHERE year = '2026' AND month = '09' AND day = '19'
+)
+SELECT
+    gh_kw.keyword,
+    COUNT(DISTINCT gh_kw.repo_id) AS github_mentions,
+    COUNT(DISTINCT hn_kw.story_id) AS hn_mentions
+FROM gh_kw
+JOIN hn_kw ON gh_kw.keyword = hn_kw.keyword
+GROUP BY gh_kw.keyword
+ORDER BY github_mentions + hn_mentions DESC
+LIMIT 20;

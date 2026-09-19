@@ -1,11 +1,11 @@
 # Real-time Data Pipeline on AWS
 
 Serverless ELT pipeline that ingests Hacker News stories, news articles,
-weather observations, and cryptocurrency prices, correlates social buzz
-against real-world news and market moves, and lands all four in an AWS data
-lake queryable via Athena. Built as a portfolio project demonstrating the
-AWS/Python/SQL/IaC/CI-CD skills for the Data Engineer Intern role at Cloud
-Kinetics.
+weather observations, cryptocurrency prices, and trending GitHub repos,
+correlates social buzz against real-world news, market moves, and dev
+activity, and lands all five in an AWS data lake queryable via Athena.
+Built as a portfolio project demonstrating the AWS/Python/SQL/IaC/CI-CD
+skills for the Data Engineer Intern role at Cloud Kinetics.
 
 ## Architecture
 
@@ -15,6 +15,7 @@ flowchart TD
     B[News API] --> C
     W[Open-Meteo API] --> C
     P[CoinGecko API] --> C
+    GH[GitHub Search API] --> C
     C --> D[Lambda: Ingestion]
     D --> E[S3 Raw Zone - JSON]
     E --> F[Lambda: Transform]
@@ -34,9 +35,12 @@ flowchart TD
 
 - `ingestion/` -- Lambda functions that pull from Hacker News (public,
   no-auth API), NewsAPI, Open-Meteo (public, no-auth weather API for 4
-  fixed Vietnam locations: TP.HCM, Vung Tau, Dong Nai, Da Lat), and
-  CoinGecko (public, no-auth price API for bitcoin/ethereum/solana),
-  normalize records, write newline-delimited JSON to the S3 raw zone.
+  fixed Vietnam locations: TP.HCM, Vung Tau, Dong Nai, Da Lat), CoinGecko
+  (public, no-auth price API for bitcoin/ethereum/solana), and GitHub's
+  Search API (public, no-auth; a proxy for "trending" since GitHub has no
+  official trending API -- repos created in the last 7 days, sorted by
+  stars), normalize records, write newline-delimited JSON to the S3 raw
+  zone.
 - `transform/` -- Lambda triggered by new raw objects; cleans, dedups, extracts
   keywords, writes Parquet to the S3 curated zone.
 - `rag/` -- on-demand serverless RAG over the curated zone (see
@@ -70,14 +74,16 @@ Run a handler locally without any AWS resources:
 ```bash
 DRY_RUN=true python -m ingestion.hackernews_ingestion  # no credentials needed
 DRY_RUN=true python -m ingestion.news_ingestion
-DRY_RUN=true python -m ingestion.weather_ingestion       # no credentials needed
-DRY_RUN=true python -m ingestion.crypto_ingestion        # no credentials needed
+DRY_RUN=true python -m ingestion.weather_ingestion         # no credentials needed
+DRY_RUN=true python -m ingestion.crypto_ingestion          # no credentials needed
+DRY_RUN=true python -m ingestion.github_trending_ingestion # no credentials needed
 ```
 
 (`news_ingestion` still needs a real `NEWS_SECRET_NAME` secret reachable via
 Secrets Manager -- or a mocked `get_secret` -- since only the S3 write step
-is stubbed by `DRY_RUN`. Hacker News', Open-Meteo's, and CoinGecko's APIs
-are all public, so their ingestion needs no credentials at all.)
+is stubbed by `DRY_RUN`. Hacker News', Open-Meteo's, CoinGecko's, and
+GitHub's Search APIs are all public, so their ingestion needs no
+credentials at all.)
 
 ## Deploying to AWS
 
@@ -91,15 +97,17 @@ are all public, so their ingestion needs no credentials at all.)
 
 ## Sample analytics
 
-`infra/glue.tf` registers a Glue database (`<project>_curated`) with four
-tables -- `hackernews_stories`, `news_articles`, `weather_observations`, and
-`crypto_prices` -- over the curated zone, using Athena partition projection
-(no crawler or `MSCK REPAIR TABLE` needed; queries work immediately after
-`terraform apply`). Query them in the Athena console under workgroup
-`<project>-analytics`. See [`sql/sample_queries.sql`](sql/sample_queries.sql)
-for ready-to-run examples, including one that correlates Hacker News
-keywords against News API keywords on the same day, and one that correlates
-crypto keyword mentions against that coin's same-day price change.
+`infra/glue.tf` registers a Glue database (`<project>_curated`) with five
+tables -- `hackernews_stories`, `news_articles`, `weather_observations`,
+`crypto_prices`, and `github_repos` -- over the curated zone, using Athena
+partition projection (no crawler or `MSCK REPAIR TABLE` needed; queries
+work immediately after `terraform apply`). Query them in the Athena console
+under workgroup `<project>-analytics`. See
+[`sql/sample_queries.sql`](sql/sample_queries.sql) for ready-to-run
+examples, including ones that correlate Hacker News keywords against News
+API keywords, crypto keyword mentions against that coin's same-day price
+change, and trending GitHub repo keywords against Hacker News keywords on
+the same day.
 
 ## RAG demos: fixed pipeline + tool-calling agent
 
@@ -120,10 +128,15 @@ comparison:
   [Agentic RAG: tool-calling agent](#agentic-rag-tool-calling-agent) below.
 
 - `rag/build_index.py` (Lambda `<project>-rag-build-index`, on-demand): reads
-  every curated Parquet record, embeds it with Titan (`amazon.titan-embed-text-v2:0`),
-  writes `s3://<curated-bucket>/rag-index/index.json`. **Incremental**: caches
-  by document id + text, so a re-run only embeds new/changed records (verified:
-  a second run over the same 359 docs re-embedded 0, all served from cache).
+  every curated Parquet record from the three text-bearing sources --
+  `hackernews_stories`, `news_articles`, `github_repos` -- embeds each with
+  Titan (`amazon.titan-embed-text-v2:0`), writes
+  `s3://<curated-bucket>/rag-index/index.json`. `weather_observations` and
+  `crypto_prices` are deliberately excluded: numeric telemetry with no
+  natural-language text isn't a fit for semantic search (see their
+  transform-side handling below). **Incremental**: caches by document id +
+  text, so a re-run only embeds new/changed records (verified: a second run
+  over the same 359 docs re-embedded 0, all served from cache).
 - `rag/query.py` (Lambda `<project>-rag-query`, on-demand): embeds the
   question, does in-memory cosine similarity against that index, then runs
   **CRAG** (Corrective RAG) before generating, with a real 3-tier fallback:

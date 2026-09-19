@@ -145,6 +145,34 @@ def test_transform_records_dedups_crypto_by_price_id_no_llm_call(monkeypatch):
     assert result[0]["keywords"] == []
 
 
+def test_record_text_github_combines_full_name_and_description():
+    record = {"full_name": "org/repo", "description": "a fast tool"}
+    assert transform.record_text(record, "github") == "org/repo a fast tool"
+
+
+def test_clean_github_record_strips_fields():
+    record = {"repo_id": "1", "full_name": "  org/repo  ", "description": " a tool "}
+
+    result = transform.clean_github_record(record)
+
+    assert result["full_name"] == "org/repo"
+    assert result["description"] == "a tool"
+
+
+def test_transform_records_dedups_github_by_repo_id_and_attaches_keywords(monkeypatch):
+    fake_llm = lambda texts: [["a", "b"] for _ in texts]  # noqa: E731
+    monkeypatch.setattr(transform, "extract_keywords_llm", fake_llm)
+    records = [
+        {"repo_id": "1", "full_name": "org/repo", "description": ""},
+        {"repo_id": "1", "full_name": "org/repo", "description": ""},
+    ]
+
+    result = transform.transform_records("github", records)
+
+    assert len(result) == 1
+    assert result[0]["keywords"] == ["a", "b"]
+
+
 def test_transform_records_rejects_unknown_source():
     try:
         transform.transform_records("unknown", [])

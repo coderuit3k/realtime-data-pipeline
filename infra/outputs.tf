@@ -30,6 +30,10 @@ output "crypto_ingestion_function_name" {
   value = aws_lambda_function.crypto_ingestion.function_name
 }
 
+output "github_trending_ingestion_function_name" {
+  value = aws_lambda_function.github_trending_ingestion.function_name
+}
+
 output "transform_function_name" {
   value = aws_lambda_function.transform.function_name
 }

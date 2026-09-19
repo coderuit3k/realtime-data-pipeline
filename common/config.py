@@ -28,6 +28,15 @@ WEATHER_LOCATIONS = [
 # overlap with what NEWS_QUERY and Hacker News discussions actually mention.
 CRYPTO_COIN_IDS = ["bitcoin", "ethereum", "solana"]
 
+# GitHub has no official "trending repos" API (github.com/trending is HTML-only,
+# and scraping it risks breaking on any markup change or ToS friction). The
+# Search API's repos-created-recently-sorted-by-stars is the standard honest
+# proxy other trending trackers use instead -- same idea, a documented
+# endpoint. Unauthenticated search calls are capped at 10/min; ingesting once
+# per 10-minute schedule tick is well inside that.
+GITHUB_TRENDING_DAYS = int(os.environ.get("GITHUB_TRENDING_DAYS", "7"))
+GITHUB_TRENDING_LIMIT = int(os.environ.get("GITHUB_TRENDING_LIMIT", "20"))
+
 # When true (or when RAW_BUCKET is unset), records are written under ./local_output
 # instead of S3 -- lets the handlers run locally without any AWS resources.
 DRY_RUN = os.environ.get("DRY_RUN", "false").lower() == "true"

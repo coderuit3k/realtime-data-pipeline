@@ -103,6 +103,8 @@ def extract_keywords_llm(texts: list[str]) -> list[list[str]]:
 def record_text(record: dict, source: str) -> str:
     if source == "hackernews":
         return f"{record.get('title') or ''} {record.get('text') or ''}".strip()
+    if source == "github":
+        return f"{record.get('full_name') or ''} {record.get('description') or ''}".strip()
     return f"{record.get('title') or ''} {record.get('description') or ''}".strip()
 
 
@@ -157,6 +159,13 @@ def clean_crypto_record(record: dict) -> dict:
     return cleaned
 
 
+def clean_github_record(record: dict) -> dict:
+    cleaned = dict(record)
+    cleaned["full_name"] = (cleaned.get("full_name") or "").strip()
+    cleaned["description"] = (cleaned.get("description") or "").strip()
+    return cleaned
+
+
 def transform_records(source: str, records: list[dict]) -> list[dict]:
     if source == "hackernews":
         cleaned = dedup_records([clean_hackernews_record(r) for r in records], "story_id")
@@ -177,6 +186,9 @@ def transform_records(source: str, records: list[dict]) -> list[dict]:
         for record in cleaned:
             record["keywords"] = []
         return cleaned
+    elif source == "github":
+        cleaned = dedup_records([clean_github_record(r) for r in records], "repo_id")
+        return attach_keywords(cleaned, source)
     else:
         raise ValueError(f"Unknown source: {source}")
 

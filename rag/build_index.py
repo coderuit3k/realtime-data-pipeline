@@ -47,6 +47,16 @@ def build_document(record: dict, source: str) -> dict:
             "text": text,
         }
 
+    if source == "github":
+        text = f"{record.get('full_name') or ''} {record.get('description') or ''}".strip()
+        return {
+            "id": record["repo_id"],
+            "source": "github",
+            "title": record.get("full_name") or "",
+            "url": record.get("url") or "",
+            "text": text,
+        }
+
     text = f"{record.get('title') or ''} {record.get('description') or ''}".strip()
     return {
         "id": record["article_id"],
@@ -87,7 +97,12 @@ def read_parquet_records(bucket: str, key: str) -> list[dict]:
 def build_documents() -> list[dict]:
     bucket = config.CURATED_BUCKET
     documents = []
-    for source, prefix in (("hackernews", "source=hackernews/"), ("news", "source=news/")):
+    sources = (
+        ("hackernews", "source=hackernews/"),
+        ("news", "source=news/"),
+        ("github", "source=github/"),
+    )
+    for source, prefix in sources:
         for key in list_parquet_keys(bucket, prefix):
             for record in read_parquet_records(bucket, key):
                 documents.append(build_document(record, source))

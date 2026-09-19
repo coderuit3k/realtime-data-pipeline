@@ -22,6 +22,11 @@ resource "aws_cloudwatch_log_group" "crypto_ingestion" {
   retention_in_days = var.log_retention_days
 }
 
+resource "aws_cloudwatch_log_group" "github_trending_ingestion" {
+  name              = "/aws/lambda/${aws_lambda_function.github_trending_ingestion.function_name}"
+  retention_in_days = var.log_retention_days
+}
+
 resource "aws_cloudwatch_log_group" "transform" {
   name              = "/aws/lambda/${aws_lambda_function.transform.function_name}"
   retention_in_days = var.log_retention_days

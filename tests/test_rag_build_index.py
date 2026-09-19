@@ -41,6 +41,22 @@ def test_build_document_news_maps_fields():
     assert doc["text"] == "Some article some description"
 
 
+def test_build_document_github_maps_fields():
+    record = {
+        "repo_id": "123",
+        "full_name": "org/repo",
+        "description": "a fast tool",
+        "url": "https://github.com/org/repo",
+    }
+
+    doc = build_document(record, "github")
+
+    assert doc["id"] == "123"
+    assert doc["source"] == "github"
+    assert doc["title"] == "org/repo"
+    assert doc["text"] == "org/repo a fast tool"
+
+
 def test_dedup_documents_keeps_first_occurrence():
     docs = [{"id": "1", "v": "a"}, {"id": "2", "v": "b"}, {"id": "1", "v": "c"}]
 

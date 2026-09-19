@@ -31,6 +31,18 @@ variable "news_query" {
   default     = "cryptocurrency OR technology"
 }
 
+variable "github_trending_days" {
+  description = "Lookback window (days) for the GitHub Search API's created:> filter, used as a trending-repos proxy"
+  type        = number
+  default     = 7
+}
+
+variable "github_trending_limit" {
+  description = "Max number of repos fetched per GitHub trending ingestion run"
+  type        = number
+  default     = 20
+}
+
 variable "ingestion_schedule" {
   description = "EventBridge schedule expression for the ingestion Lambdas"
   type        = string

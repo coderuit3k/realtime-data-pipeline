@@ -40,6 +40,19 @@ resource "aws_lambda_permission" "allow_eventbridge_crypto" {
   source_arn    = aws_cloudwatch_event_rule.ingestion_schedule.arn
 }
 
+resource "aws_cloudwatch_event_target" "github_trending_ingestion" {
+  rule = aws_cloudwatch_event_rule.ingestion_schedule.name
+  arn  = aws_lambda_function.github_trending_ingestion.arn
+}
+
+resource "aws_lambda_permission" "allow_eventbridge_github" {
+  statement_id  = "AllowEventBridgeInvokeGithub"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.github_trending_ingestion.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.ingestion_schedule.arn
+}
+
 resource "aws_lambda_permission" "allow_eventbridge_hackernews" {
   statement_id  = "AllowEventBridgeInvokeHackernews"
   action        = "lambda:InvokeFunction"
