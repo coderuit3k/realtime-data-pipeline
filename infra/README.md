@@ -41,6 +41,96 @@ aws secretsmanager put-secret-value \
   --secret-string '{"api_key":"..."}'
 ```
 
+## Web app IAM user (manual -- not managed by Terraform)
+
+The `web/` Next.js app (dashboard + RAG assistant) needs its own AWS
+credentials, scoped read-only to Athena/Glue/S3/CloudWatch plus
+`lambda:InvokeFunction` on just the two RAG Lambdas. This user is created
+**manually via the AWS CLI**, not by `terraform apply` -- the GitHub Actions
+deploy role is deliberately scoped to manage IAM *roles* only (see
+`infra-bootstrap/oidc.tf`), not IAM *users* or access keys, so a compromised
+CI run can never mint its own long-lived credentials. Run this once, with
+your own AWS credentials, after `infra`'s first apply:
+
+```bash
+cd infra
+USER_NAME="realtime-data-pipeline-dev-web-app"  # matches local.name_prefix-web-app; adjust if your project_name/environment differ
+aws iam create-user --user-name "$USER_NAME"
+
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+REGION=us-east-1
+WORKGROUP_ARN="arn:aws:athena:${REGION}:${ACCOUNT_ID}:workgroup/$(terraform output -raw athena_workgroup_name)"
+DATABASE="$(terraform output -raw glue_database_name)"
+CURATED_BUCKET_ARN="arn:aws:s3:::$(terraform output -raw curated_bucket_name)"
+RAG_QUERY_ARN="arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:$(terraform output -raw rag_query_function_name)"
+RAG_AGENT_ARN="arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:$(terraform output -raw rag_agent_function_name)"
+
+cat > /tmp/web-app-policy.json <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AthenaQuery",
+      "Effect": "Allow",
+      "Action": ["athena:StartQueryExecution", "athena:GetQueryExecution", "athena:GetQueryResults", "athena:StopQueryExecution", "athena:GetWorkGroup"],
+      "Resource": "${WORKGROUP_ARN}"
+    },
+    {
+      "Sid": "GlueReadCuratedDatabase",
+      "Effect": "Allow",
+      "Action": ["glue:GetTable", "glue:GetDatabase", "glue:GetPartitions"],
+      "Resource": [
+        "arn:aws:glue:${REGION}:${ACCOUNT_ID}:catalog",
+        "arn:aws:glue:${REGION}:${ACCOUNT_ID}:database/${DATABASE}",
+        "arn:aws:glue:${REGION}:${ACCOUNT_ID}:table/${DATABASE}/*"
+      ]
+    },
+    {
+      "Sid": "S3ReadCuratedData",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:ListBucket", "s3:GetBucketLocation"],
+      "Resource": ["${CURATED_BUCKET_ARN}", "${CURATED_BUCKET_ARN}/*"]
+    },
+    {
+      "Sid": "S3AthenaResults",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject"],
+      "Resource": "${CURATED_BUCKET_ARN}/athena-results/*"
+    },
+    {
+      "Sid": "CloudWatchAlarmsReadOnly",
+      "Effect": "Allow",
+      "Action": ["cloudwatch:DescribeAlarms"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "InvokeRagLambdas",
+      "Effect": "Allow",
+      "Action": ["lambda:InvokeFunction"],
+      "Resource": ["${RAG_QUERY_ARN}", "${RAG_AGENT_ARN}"]
+    }
+  ]
+}
+EOF
+
+aws iam put-user-policy \
+  --user-name "$USER_NAME" \
+  --policy-name "${USER_NAME}-policy" \
+  --policy-document file:///tmp/web-app-policy.json
+
+aws iam create-access-key --user-name "$USER_NAME"
+# Copy the AccessKeyId/SecretAccessKey straight into Vercel's project env
+# vars (never commit them, never put them in GitHub Actions secrets --
+# this user is for the Vercel-hosted app only).
+rm /tmp/web-app-policy.json
+```
+
+Rotate by running `aws iam create-access-key` again (an IAM user may hold up
+to 2 keys) then `aws iam delete-access-key --access-key-id <old-id>` once
+Vercel's env var is updated; delete the user entirely with
+`aws iam delete-user-policy` + `aws iam delete-access-key` (for each key) +
+`aws iam delete-user` if the web app is retired.
+
 ## Updating Lambda code
 
 Re-run `./scripts/build_lambdas.sh` then `terraform apply` -- the zip hash
