@@ -4,8 +4,21 @@ import { getLambdaClient, requiredEnv } from "@/lib/aws";
 import { checkRateLimit } from "@/lib/ratelimit";
 import { normalizeAssistantResult, type AssistantMode } from "@/lib/assistant";
 
+// rag_agent's own Lambda timeout is 90s (see infra/rag.tf); 60 is Vercel's ceiling
+// on non-Pro plans, so this may still not be enough headroom on a Hobby plan.
+export const maxDuration = 60;
+
+const MAX_QUESTION_LENGTH = 500;
+
 function clientIp(request: NextRequest): string {
-  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const h = request.headers;
+  const xff = h.get("x-forwarded-for")?.split(",").map((s) => s.trim()).filter(Boolean) ?? [];
+  return (
+    h.get("x-vercel-forwarded-for")?.trim() ||
+    h.get("x-real-ip")?.trim() ||
+    xff[xff.length - 1] ||
+    "unknown"
+  );
 }
 
 export async function POST(request: NextRequest) {
@@ -15,6 +28,13 @@ export async function POST(request: NextRequest) {
 
   if (!question || (mode !== "crag" && mode !== "agent")) {
     return NextResponse.json({ error: "Thiếu 'question' hoặc 'mode' không hợp lệ." }, { status: 400 });
+  }
+
+  if (question.length > MAX_QUESTION_LENGTH) {
+    return NextResponse.json(
+      { error: `Câu hỏi quá dài (tối đa ${MAX_QUESTION_LENGTH} ký tự).` },
+      { status: 400 }
+    );
   }
 
   const rateLimit = await checkRateLimit(clientIp(request));

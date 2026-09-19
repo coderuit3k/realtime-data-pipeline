@@ -72,15 +72,23 @@ export async function runAthenaQuery(client: AthenaClient, sql: string): Promise
   const queryExecutionId = start.QueryExecutionId;
   if (!queryExecutionId) throw new Error("Athena did not return a QueryExecutionId");
 
-  for (let attempt = 0; attempt < 20; attempt++) {
+  let succeeded = false;
+  for (let attempt = 0; attempt < 50; attempt++) {
     const status = await client.send(new GetQueryExecutionCommand({ QueryExecutionId: queryExecutionId }));
     const state = status.QueryExecution?.Status?.State;
-    if (state === "SUCCEEDED") break;
+    if (state === "SUCCEEDED") {
+      succeeded = true;
+      break;
+    }
     if (state === "FAILED" || state === "CANCELLED") {
       const reason = status.QueryExecution?.Status?.StateChangeReason ?? "unknown reason";
       throw new Error(`Athena query ${state.toLowerCase()}: ${reason}`);
     }
-    await sleep(300);
+    await sleep(500);
+  }
+
+  if (!succeeded) {
+    throw new Error("Athena query timed out waiting for SUCCEEDED state");
   }
 
   const results = await client.send(new GetQueryResultsCommand({ QueryExecutionId: queryExecutionId }));

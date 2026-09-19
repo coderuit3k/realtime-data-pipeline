@@ -131,6 +131,22 @@ Vercel's env var is updated; delete the user entirely with
 `aws iam delete-user-policy` + `aws iam delete-access-key` (for each key) +
 `aws iam delete-user` if the web app is retired.
 
+### Web app environment variables
+
+These get set as Vercel project environment variables (see `web/.env.example`
+for placeholder values and one-line comments):
+
+- `AWS_ACCESS_KEY_ID` -- access key for the web-app IAM user above
+- `AWS_SECRET_ACCESS_KEY` -- secret key for the web-app IAM user above
+- `AWS_REGION` -- region the pipeline's resources live in
+- `ATHENA_WORKGROUP` -- Athena workgroup the dashboard queries against
+- `ATHENA_DATABASE` -- Glue/Athena database the dashboard queries against
+- `ALARM_NAME_PREFIX` -- CloudWatch alarm name prefix for the dashboard's alarm counts
+- `RAG_QUERY_FUNCTION_NAME` -- name of the `rag_query` (CRAG) Lambda
+- `RAG_AGENT_FUNCTION_NAME` -- name of the `rag_agent` Lambda
+- `UPSTASH_REDIS_REST_URL` -- Upstash Redis REST URL for assistant rate limiting
+- `UPSTASH_REDIS_REST_TOKEN` -- Upstash Redis REST token for assistant rate limiting
+
 ## Updating Lambda code
 
 Re-run `./scripts/build_lambdas.sh` then `terraform apply` -- the zip hash

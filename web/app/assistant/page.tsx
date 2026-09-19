@@ -62,6 +62,7 @@ export default function AssistantPage() {
               placeholder="Đặt câu hỏi về dữ liệu đã ingest…"
               className="flex-grow bg-transparent text-sm text-textPrimary outline-none placeholder:text-textMuted"
               disabled={loading}
+              maxLength={500}
             />
             <button
               onClick={submit}

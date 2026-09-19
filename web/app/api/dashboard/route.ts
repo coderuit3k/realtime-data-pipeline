@@ -12,6 +12,10 @@ import type { DashboardResponse, SourceVolume, ActivityItem } from "@/lib/types"
 
 export const revalidate = 60;
 
+// rag_query/rag_agent aren't invoked here, but Athena queries can be slow;
+// 60 is Vercel's ceiling on non-Pro plans.
+export const maxDuration = 60;
+
 const COST_ESTIMATE_USD = 1.02;
 const SOURCES_TOTAL = 5;
 
@@ -54,7 +58,9 @@ export async function GET() {
       costEstimateUsd: COST_ESTIMATE_USD,
       recentActivity,
     };
-    return NextResponse.json(response);
+    return NextResponse.json(response, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
+    });
   } catch (error) {
     console.error("Dashboard API failed", error);
     return NextResponse.json(

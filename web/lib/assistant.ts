@@ -40,17 +40,23 @@ export function normalizeAssistantResult(mode: AssistantMode, raw: unknown): Ass
   const shared = {
     mode,
     question: base.question,
-    answer: base.answer,
+    answer: typeof base.answer === "string" ? base.answer : "",
     grounded: base.grounded,
-    sources: base.sources,
+    sources: Array.isArray(base.sources) ? base.sources : [],
   };
   if (mode === "crag") {
     const cragRaw = raw as RawCragPayload;
     return {
       ...shared,
-      cragDetail: { answerSource: cragRaw.answer_source, discarded: cragRaw.discarded_low_relevance },
+      cragDetail: {
+        answerSource: cragRaw.answer_source,
+        discarded: Array.isArray(cragRaw.discarded_low_relevance) ? cragRaw.discarded_low_relevance : [],
+      },
     };
   }
   const agentRaw = raw as RawAgentPayload;
-  return { ...shared, agentDetail: { toolCalls: agentRaw.tool_calls } };
+  return {
+    ...shared,
+    agentDetail: { toolCalls: Array.isArray(agentRaw.tool_calls) ? agentRaw.tool_calls : [] },
+  };
 }

@@ -78,6 +78,41 @@ describe("POST /api/assistant", () => {
     expect(response.status).toBe(502);
   });
 
+  it("returns 400 when the question exceeds the max length", async () => {
+    const response = await POST(makeRequest({ question: "x".repeat(501), mode: "crag" }));
+    expect(response.status).toBe(400);
+    expect(mockedCheckRateLimit).not.toHaveBeenCalled();
+  });
+
+  it("uses the rightmost X-Forwarded-For hop as the rate limit identifier", async () => {
+    mockedCheckRateLimit.mockResolvedValue({ allowed: true, remaining: 4 });
+    const payload = {
+      statusCode: 200,
+      question: "hi",
+      answer: "answer text",
+      grounded: true,
+      answer_source: "local_knowledge_base",
+      sources: [],
+      discarded_low_relevance: [],
+    };
+    mockedGetLambdaClient.mockReturnValue({
+      send: vi.fn().mockResolvedValue({ Payload: Buffer.from(JSON.stringify(payload)) }),
+    } as never);
+
+    const request = new NextRequest("http://localhost/api/assistant", {
+      method: "POST",
+      body: JSON.stringify({ question: "hi", mode: "crag" }),
+      headers: {
+        "content-type": "application/json",
+        "x-forwarded-for": "1.2.3.4, 5.6.7.8",
+      },
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+    expect(mockedCheckRateLimit).toHaveBeenCalledWith("5.6.7.8");
+  });
+
   it("returns 500 when a required environment variable is missing", async () => {
     mockedCheckRateLimit.mockResolvedValue({ allowed: true, remaining: 4 });
     const { requiredEnv } = await import("@/lib/aws");

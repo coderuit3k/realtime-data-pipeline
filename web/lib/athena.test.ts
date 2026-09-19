@@ -77,4 +77,27 @@ describe("runAthenaQuery", () => {
     process.env.ATHENA_DATABASE = "db";
     await expect(runAthenaQuery(client, "SELECT 1")).rejects.toThrow("table not found");
   });
+
+  it("throws a timeout error when the query never reaches SUCCEEDED", async () => {
+    vi.useFakeTimers();
+    try {
+      const send = vi
+        .fn()
+        .mockResolvedValueOnce({ QueryExecutionId: "q-3" })
+        .mockResolvedValue({ QueryExecution: { Status: { State: "RUNNING" } } });
+      const client = { send } as unknown as import("@aws-sdk/client-athena").AthenaClient;
+
+      process.env.ATHENA_WORKGROUP = "wg";
+      process.env.ATHENA_DATABASE = "db";
+
+      const promise = runAthenaQuery(client, "SELECT 1");
+      const assertion = expect(promise).rejects.toThrow(
+        "Athena query timed out waiting for SUCCEEDED state"
+      );
+      await vi.advanceTimersByTimeAsync(50 * 500 + 1000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
