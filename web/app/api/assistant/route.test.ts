@@ -77,4 +77,17 @@ describe("POST /api/assistant", () => {
     const response = await POST(makeRequest({ question: "hi", mode: "crag" }));
     expect(response.status).toBe(502);
   });
+
+  it("returns 500 when a required environment variable is missing", async () => {
+    mockedCheckRateLimit.mockResolvedValue({ allowed: true, remaining: 4 });
+    const { requiredEnv } = await import("@/lib/aws");
+    vi.mocked(requiredEnv).mockImplementationOnce(() => {
+      throw new Error("Environment variable RAG_QUERY_FUNCTION_NAME is required but was not set");
+    });
+
+    const response = await POST(makeRequest({ question: "hi", mode: "crag" }));
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.error).toBe("Không gọi được RAG Lambda, thử lại sau.");
+  });
 });

@@ -22,11 +22,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Đợi một chút rồi hỏi tiếp." }, { status: 429 });
   }
 
-  const functionName = requiredEnv(
-    mode === "crag" ? "RAG_QUERY_FUNCTION_NAME" : "RAG_AGENT_FUNCTION_NAME"
-  );
-
   try {
+    const functionName = requiredEnv(
+      mode === "crag" ? "RAG_QUERY_FUNCTION_NAME" : "RAG_AGENT_FUNCTION_NAME"
+    );
     const response = await getLambdaClient().send(
       new InvokeCommand({ FunctionName: functionName, Payload: Buffer.from(JSON.stringify({ question })) })
     );
