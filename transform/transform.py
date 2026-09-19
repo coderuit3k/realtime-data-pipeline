@@ -151,6 +151,12 @@ def clean_weather_record(record: dict) -> dict:
     return cleaned
 
 
+def clean_crypto_record(record: dict) -> dict:
+    cleaned = dict(record)
+    cleaned["coin_id"] = (cleaned.get("coin_id") or "").strip()
+    return cleaned
+
+
 def transform_records(source: str, records: list[dict]) -> list[dict]:
     if source == "hackernews":
         cleaned = dedup_records([clean_hackernews_record(r) for r in records], "story_id")
@@ -163,6 +169,11 @@ def transform_records(source: str, records: list[dict]) -> list[dict]:
         # extraction doesn't apply. "keywords" is set (empty) purely so
         # write_parquet's column access below doesn't need a source-specific branch.
         cleaned = dedup_records([clean_weather_record(r) for r in records], "weather_id")
+        for record in cleaned:
+            record["keywords"] = []
+        return cleaned
+    elif source == "crypto":
+        cleaned = dedup_records([clean_crypto_record(r) for r in records], "price_id")
         for record in cleaned:
             record["keywords"] = []
         return cleaned

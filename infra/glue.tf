@@ -51,6 +51,19 @@ locals {
     { name = "keywords", type = "string" },
   ]
 
+  crypto_columns = [
+    { name = "price_id", type = "string" },
+    { name = "source", type = "string" },
+    { name = "coin_id", type = "string" },
+    { name = "price_usd", type = "double" },
+    { name = "market_cap_usd", type = "double" },
+    { name = "volume_24h_usd", type = "double" },
+    { name = "change_24h_pct", type = "double" },
+    { name = "observed_at", type = "string" },
+    { name = "ingested_at", type = "string" },
+    { name = "keywords", type = "string" },
+  ]
+
   # Shared partition projection config -- only the source-specific location
   # template differs between the two tables.
   partition_projection_base = {
@@ -184,6 +197,48 @@ resource "aws_glue_catalog_table" "weather_observations" {
 
     dynamic "columns" {
       for_each = local.weather_columns
+      content {
+        name = columns.value.name
+        type = columns.value.type
+      }
+    }
+  }
+}
+
+resource "aws_glue_catalog_table" "crypto_prices" {
+  name          = "crypto_prices"
+  database_name = aws_glue_catalog_database.curated.name
+  table_type    = "EXTERNAL_TABLE"
+
+  parameters = merge(local.partition_projection_base, {
+    "classification"            = "parquet"
+    "storage.location.template" = "s3://${aws_s3_bucket.curated.bucket}/source=crypto/year=$${year}/month=$${month}/day=$${day}/"
+  })
+
+  partition_keys {
+    name = "year"
+    type = "string"
+  }
+  partition_keys {
+    name = "month"
+    type = "string"
+  }
+  partition_keys {
+    name = "day"
+    type = "string"
+  }
+
+  storage_descriptor {
+    location      = "s3://${aws_s3_bucket.curated.bucket}/source=crypto/"
+    input_format  = "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat"
+    output_format = "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat"
+
+    ser_de_info {
+      serialization_library = "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe"
+    }
+
+    dynamic "columns" {
+      for_each = local.crypto_columns
       content {
         name = columns.value.name
         type = columns.value.type

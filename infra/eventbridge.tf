@@ -27,6 +27,19 @@ resource "aws_lambda_permission" "allow_eventbridge_weather" {
   source_arn    = aws_cloudwatch_event_rule.ingestion_schedule.arn
 }
 
+resource "aws_cloudwatch_event_target" "crypto_ingestion" {
+  rule = aws_cloudwatch_event_rule.ingestion_schedule.name
+  arn  = aws_lambda_function.crypto_ingestion.arn
+}
+
+resource "aws_lambda_permission" "allow_eventbridge_crypto" {
+  statement_id  = "AllowEventBridgeInvokeCrypto"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.crypto_ingestion.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.ingestion_schedule.arn
+}
+
 resource "aws_lambda_permission" "allow_eventbridge_hackernews" {
   statement_id  = "AllowEventBridgeInvokeHackernews"
   action        = "lambda:InvokeFunction"

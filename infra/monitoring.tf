@@ -19,6 +19,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
     hackernews_ingestion = aws_lambda_function.hackernews_ingestion.function_name
     news_ingestion       = aws_lambda_function.news_ingestion.function_name
     weather_ingestion    = aws_lambda_function.weather_ingestion.function_name
+    crypto_ingestion     = aws_lambda_function.crypto_ingestion.function_name
     transform            = aws_lambda_function.transform.function_name
   }
 

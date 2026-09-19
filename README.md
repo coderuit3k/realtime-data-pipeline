@@ -1,10 +1,11 @@
 # Real-time Data Pipeline on AWS
 
-Serverless ELT pipeline that ingests Hacker News stories + news articles +
-weather observations, correlates social buzz against real-world news, and
-lands all three in an AWS data lake queryable via Athena. Built as a
-portfolio project demonstrating the AWS/Python/SQL/IaC/CI-CD skills for the
-Data Engineer Intern role at Cloud Kinetics.
+Serverless ELT pipeline that ingests Hacker News stories, news articles,
+weather observations, and cryptocurrency prices, correlates social buzz
+against real-world news and market moves, and lands all four in an AWS data
+lake queryable via Athena. Built as a portfolio project demonstrating the
+AWS/Python/SQL/IaC/CI-CD skills for the Data Engineer Intern role at Cloud
+Kinetics.
 
 ## Architecture
 
@@ -13,6 +14,7 @@ flowchart TD
     A[Hacker News API] --> C[EventBridge Scheduler]
     B[News API] --> C
     W[Open-Meteo API] --> C
+    P[CoinGecko API] --> C
     C --> D[Lambda: Ingestion]
     D --> E[S3 Raw Zone - JSON]
     E --> F[Lambda: Transform]
@@ -31,9 +33,10 @@ flowchart TD
 ```
 
 - `ingestion/` -- Lambda functions that pull from Hacker News (public,
-  no-auth API), NewsAPI, and Open-Meteo (public, no-auth weather API for 4
-  fixed Vietnam locations: TP.HCM, Vung Tau, Dong Nai, Da Lat), normalize
-  records, write newline-delimited JSON to the S3 raw zone.
+  no-auth API), NewsAPI, Open-Meteo (public, no-auth weather API for 4
+  fixed Vietnam locations: TP.HCM, Vung Tau, Dong Nai, Da Lat), and
+  CoinGecko (public, no-auth price API for bitcoin/ethereum/solana),
+  normalize records, write newline-delimited JSON to the S3 raw zone.
 - `transform/` -- Lambda triggered by new raw objects; cleans, dedups, extracts
   keywords, writes Parquet to the S3 curated zone.
 - `rag/` -- on-demand serverless RAG over the curated zone (see
@@ -68,12 +71,13 @@ Run a handler locally without any AWS resources:
 DRY_RUN=true python -m ingestion.hackernews_ingestion  # no credentials needed
 DRY_RUN=true python -m ingestion.news_ingestion
 DRY_RUN=true python -m ingestion.weather_ingestion       # no credentials needed
+DRY_RUN=true python -m ingestion.crypto_ingestion        # no credentials needed
 ```
 
 (`news_ingestion` still needs a real `NEWS_SECRET_NAME` secret reachable via
 Secrets Manager -- or a mocked `get_secret` -- since only the S3 write step
-is stubbed by `DRY_RUN`. Hacker News' and Open-Meteo's APIs are public, so
-their ingestion needs no credentials at all.)
+is stubbed by `DRY_RUN`. Hacker News', Open-Meteo's, and CoinGecko's APIs
+are all public, so their ingestion needs no credentials at all.)
 
 ## Deploying to AWS
 
@@ -87,14 +91,15 @@ their ingestion needs no credentials at all.)
 
 ## Sample analytics
 
-`infra/glue.tf` registers a Glue database (`<project>_curated`) with three
-tables -- `hackernews_stories`, `news_articles`, and `weather_observations`
--- over the curated zone, using Athena partition projection (no crawler or
-`MSCK REPAIR TABLE` needed; queries work immediately after `terraform
-apply`). Query them in the Athena console under workgroup
+`infra/glue.tf` registers a Glue database (`<project>_curated`) with four
+tables -- `hackernews_stories`, `news_articles`, `weather_observations`, and
+`crypto_prices` -- over the curated zone, using Athena partition projection
+(no crawler or `MSCK REPAIR TABLE` needed; queries work immediately after
+`terraform apply`). Query them in the Athena console under workgroup
 `<project>-analytics`. See [`sql/sample_queries.sql`](sql/sample_queries.sql)
 for ready-to-run examples, including one that correlates Hacker News
-keywords against News API keywords on the same day.
+keywords against News API keywords on the same day, and one that correlates
+crypto keyword mentions against that coin's same-day price change.
 
 ## RAG demos: fixed pipeline + tool-calling agent
 

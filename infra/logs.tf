@@ -17,6 +17,11 @@ resource "aws_cloudwatch_log_group" "weather_ingestion" {
   retention_in_days = var.log_retention_days
 }
 
+resource "aws_cloudwatch_log_group" "crypto_ingestion" {
+  name              = "/aws/lambda/${aws_lambda_function.crypto_ingestion.function_name}"
+  retention_in_days = var.log_retention_days
+}
+
 resource "aws_cloudwatch_log_group" "transform" {
   name              = "/aws/lambda/${aws_lambda_function.transform.function_name}"
   retention_in_days = var.log_retention_days

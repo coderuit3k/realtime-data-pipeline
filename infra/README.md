@@ -52,12 +52,12 @@ What's actually running, at this project's low volume:
 
 | Resource | Ongoing cost |
 | --- | --- |
-| Lambda (4 functions, ~every 10 min) | ~$0 (well within free tier) |
+| Lambda (5 functions, ~every 10 min) | ~$0 (well within free tier) |
 | S3 (raw + curated) | Pennies/month |
-| Secrets Manager (2 secrets: NewsAPI, Tavily -- Open-Meteo needs no key) | ~$0.80/month |
-| CloudWatch alarms (4) | ~$0.40/month |
+| Secrets Manager (2 secrets: NewsAPI, Tavily -- Open-Meteo and CoinGecko need no key) | ~$0.80/month |
+| CloudWatch alarms (5) | ~$0.50/month |
 | CloudWatch Logs (14-day retention) | Pennies/month |
-| Glue Data Catalog (3 tables) | Free (first 1M objects/month free) |
+| Glue Data Catalog (4 tables) | Free (first 1M objects/month free) |
 | Athena (pay per query, tiny dataset) | Pennies per query |
 | RAG Lambdas + Bedrock (on-demand only, no schedule) | $0 when not invoked; pennies per build/query when it is |
 | Tavily web search (CRAG fallback, free tier) | $0 up to 1,000 searches/month |

@@ -129,6 +129,22 @@ def test_transform_records_dedups_weather_by_weather_id_no_llm_call(monkeypatch)
     assert result[0]["keywords"] == []
 
 
+def test_transform_records_dedups_crypto_by_price_id_no_llm_call(monkeypatch):
+    def fail_if_called(texts):
+        raise AssertionError("crypto records should never trigger keyword extraction")
+
+    monkeypatch.setattr(transform, "extract_keywords_llm", fail_if_called)
+    records = [
+        {"price_id": "bitcoin-1", "coin_id": "bitcoin", "price_usd": 81314.0},
+        {"price_id": "bitcoin-1", "coin_id": "bitcoin", "price_usd": 81314.0},
+    ]
+
+    result = transform.transform_records("crypto", records)
+
+    assert len(result) == 1
+    assert result[0]["keywords"] == []
+
+
 def test_transform_records_rejects_unknown_source():
     try:
         transform.transform_records("unknown", [])

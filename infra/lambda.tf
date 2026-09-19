@@ -19,6 +19,12 @@ data "archive_file" "weather_ingestion" {
   output_path = "${path.module}/build/weather_ingestion.zip"
 }
 
+data "archive_file" "crypto_ingestion" {
+  type        = "zip"
+  source_dir  = "${path.module}/build/crypto_ingestion"
+  output_path = "${path.module}/build/crypto_ingestion.zip"
+}
+
 data "archive_file" "transform" {
   type        = "zip"
   source_dir  = "${path.module}/build/transform"
@@ -72,6 +78,23 @@ resource "aws_lambda_function" "weather_ingestion" {
   memory_size      = 256
   filename         = data.archive_file.weather_ingestion.output_path
   source_code_hash = data.archive_file.weather_ingestion.output_base64sha256
+
+  environment {
+    variables = {
+      RAW_BUCKET = aws_s3_bucket.raw.bucket
+    }
+  }
+}
+
+resource "aws_lambda_function" "crypto_ingestion" {
+  function_name    = "${local.name_prefix}-crypto-ingestion"
+  role             = aws_iam_role.ingestion_lambda.arn
+  handler          = "crypto_ingestion.lambda_handler"
+  runtime          = var.lambda_runtime
+  timeout          = 60
+  memory_size      = 256
+  filename         = data.archive_file.crypto_ingestion.output_path
+  source_code_hash = data.archive_file.crypto_ingestion.output_base64sha256
 
   environment {
     variables = {

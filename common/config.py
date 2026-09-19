@@ -23,6 +23,11 @@ WEATHER_LOCATIONS = [
     {"name": "Da Lat", "latitude": 11.9404, "longitude": 108.4583},
 ]
 
+# CoinGecko's public /simple/price endpoint needs no API key. These are the
+# coin ids it expects (its own naming, not ticker symbols) -- picked for
+# overlap with what NEWS_QUERY and Hacker News discussions actually mention.
+CRYPTO_COIN_IDS = ["bitcoin", "ethereum", "solana"]
+
 # When true (or when RAW_BUCKET is unset), records are written under ./local_output
 # instead of S3 -- lets the handlers run locally without any AWS resources.
 DRY_RUN = os.environ.get("DRY_RUN", "false").lower() == "true"

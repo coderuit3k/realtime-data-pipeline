@@ -67,6 +67,10 @@ UNION ALL
 SELECT 'weather' AS source, year, month, day, COUNT(*) AS records
 FROM weather_observations
 GROUP BY year, month, day
+UNION ALL
+SELECT 'crypto' AS source, year, month, day, COUNT(*) AS records
+FROM crypto_prices
+GROUP BY year, month, day
 ORDER BY year, month, day;
 
 -- 6. Latest weather reading per tracked location
@@ -75,3 +79,31 @@ FROM weather_observations
 WHERE year = '2026' AND month = '09' AND day = '19'
 ORDER BY observed_at DESC
 LIMIT 20;
+
+-- 7. Latest price per tracked coin
+SELECT coin_id, price_usd, change_24h_pct, market_cap_usd, observed_at
+FROM crypto_prices
+WHERE year = '2026' AND month = '09' AND day = '19'
+ORDER BY observed_at DESC
+LIMIT 20;
+
+-- 8. Correlate crypto mentions (HN + News keywords) against that coin's
+-- same-day price change -- the actual point of adding crypto as a source:
+-- does social/news buzz about a coin line up with it actually moving?
+WITH mentions AS (
+    SELECT TRIM(kw) AS keyword, COUNT(*) AS mention_count
+    FROM (
+        SELECT keywords FROM hackernews_stories
+        WHERE year = '2026' AND month = '09' AND day = '19'
+        UNION ALL
+        SELECT keywords FROM news_articles
+        WHERE year = '2026' AND month = '09' AND day = '19'
+    )
+    CROSS JOIN UNNEST(split(keywords, ',')) AS t(kw)
+    GROUP BY TRIM(kw)
+)
+SELECT c.coin_id, c.price_usd, c.change_24h_pct, COALESCE(m.mention_count, 0) AS mention_count
+FROM crypto_prices c
+LEFT JOIN mentions m ON m.keyword = c.coin_id
+WHERE c.year = '2026' AND c.month = '09' AND c.day = '19'
+ORDER BY c.observed_at DESC;
