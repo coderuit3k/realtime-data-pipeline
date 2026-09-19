@@ -25,12 +25,16 @@ flowchart TD
     D -.-> J[CloudWatch Alarms]
     F -.-> J
 
-    G --> K[Lambda: rag_build_index]
+    G --> K[Lambda: rag_build_index<br/>hackernews/news/github only]
     K -->|Titan embeddings| L[S3 rag-index/index.json]
-    M[Question] --> N[Lambda: rag_query]
+
+    Q[Question] --> N[Lambda: rag_query<br/>CRAG pipeline]
     L --> N
-    N -->|Titan embed + cosine search| N
-    N -->|Claude Haiku| O[Answer + sources]
+    N -->|grade + fallback| R1[Answer + sources]
+
+    Q --> AG[Lambda: rag_agent<br/>tool-calling loop]
+    L --> AG
+    AG -->|LLM decides tools/retries| R2[Answer + sources]
 ```
 
 - `ingestion/` -- Lambda functions that pull from Hacker News (public,
