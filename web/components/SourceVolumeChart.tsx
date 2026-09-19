@@ -15,12 +15,14 @@ export function SourceVolumeChart({ sourceVolumes }: { sourceVolumes: SourceVolu
       <span className="text-sm font-semibold text-textPrimary">Khối lượng theo nguồn (hôm nay)</span>
       <div className="flex items-end gap-6 h-40">
         {sourceVolumes.map((s) => (
-          <div key={s.source} className="flex flex-col items-center gap-2 flex-1">
+          <div key={s.source} className="flex flex-col items-center gap-2 flex-1 h-full">
             <span className="font-mono text-xs text-textSecondary">{s.records}</span>
-            <div
-              className="w-full rounded-t bg-accent"
-              style={{ height: `${(s.records / max) * 100}%` }}
-            />
+            <div className="w-full flex-1 flex items-end">
+              <div
+                className="w-full rounded-t bg-accent"
+                style={{ height: `${(s.records / max) * 100}%` }}
+              />
+            </div>
             <span className="text-xs text-textMuted">{LABELS[s.source] ?? s.source}</span>
           </div>
         ))}
