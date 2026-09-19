@@ -145,15 +145,29 @@ def clean_news_record(record: dict) -> dict:
     return cleaned
 
 
+def clean_weather_record(record: dict) -> dict:
+    cleaned = dict(record)
+    cleaned["location"] = (cleaned.get("location") or "").strip()
+    return cleaned
+
+
 def transform_records(source: str, records: list[dict]) -> list[dict]:
     if source == "hackernews":
         cleaned = dedup_records([clean_hackernews_record(r) for r in records], "story_id")
+        return attach_keywords(cleaned, source)
     elif source == "news":
         cleaned = dedup_records([clean_news_record(r) for r in records], "article_id")
+        return attach_keywords(cleaned, source)
+    elif source == "weather":
+        # Numeric readings, no natural-language text -- LLM/regex keyword
+        # extraction doesn't apply. "keywords" is set (empty) purely so
+        # write_parquet's column access below doesn't need a source-specific branch.
+        cleaned = dedup_records([clean_weather_record(r) for r in records], "weather_id")
+        for record in cleaned:
+            record["keywords"] = []
+        return cleaned
     else:
         raise ValueError(f"Unknown source: {source}")
-
-    return attach_keywords(cleaned, source)
 
 
 def source_from_key(key: str) -> str:

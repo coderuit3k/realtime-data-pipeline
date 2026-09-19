@@ -63,4 +63,15 @@ UNION ALL
 SELECT 'news' AS source, year, month, day, COUNT(*) AS records
 FROM news_articles
 GROUP BY year, month, day
+UNION ALL
+SELECT 'weather' AS source, year, month, day, COUNT(*) AS records
+FROM weather_observations
+GROUP BY year, month, day
 ORDER BY year, month, day;
+
+-- 6. Latest weather reading per tracked location
+SELECT location, temperature_c, humidity_pct, precipitation_mm, wind_speed_kmh, observed_at
+FROM weather_observations
+WHERE year = '2026' AND month = '09' AND day = '19'
+ORDER BY observed_at DESC
+LIMIT 20;

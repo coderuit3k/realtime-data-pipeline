@@ -22,6 +22,10 @@ output "news_ingestion_function_name" {
   value = aws_lambda_function.news_ingestion.function_name
 }
 
+output "weather_ingestion_function_name" {
+  value = aws_lambda_function.weather_ingestion.function_name
+}
+
 output "transform_function_name" {
   value = aws_lambda_function.transform.function_name
 }

@@ -14,6 +14,19 @@ resource "aws_cloudwatch_event_target" "news_ingestion" {
   arn  = aws_lambda_function.news_ingestion.arn
 }
 
+resource "aws_cloudwatch_event_target" "weather_ingestion" {
+  rule = aws_cloudwatch_event_rule.ingestion_schedule.name
+  arn  = aws_lambda_function.weather_ingestion.arn
+}
+
+resource "aws_lambda_permission" "allow_eventbridge_weather" {
+  statement_id  = "AllowEventBridgeInvokeWeather"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.weather_ingestion.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.ingestion_schedule.arn
+}
+
 resource "aws_lambda_permission" "allow_eventbridge_hackernews" {
   statement_id  = "AllowEventBridgeInvokeHackernews"
   action        = "lambda:InvokeFunction"

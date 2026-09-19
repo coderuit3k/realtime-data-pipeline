@@ -13,6 +13,12 @@ data "archive_file" "news_ingestion" {
   output_path = "${path.module}/build/news_ingestion.zip"
 }
 
+data "archive_file" "weather_ingestion" {
+  type        = "zip"
+  source_dir  = "${path.module}/build/weather_ingestion"
+  output_path = "${path.module}/build/weather_ingestion.zip"
+}
+
 data "archive_file" "transform" {
   type        = "zip"
   source_dir  = "${path.module}/build/transform"
@@ -53,6 +59,23 @@ resource "aws_lambda_function" "news_ingestion" {
       RAW_BUCKET       = aws_s3_bucket.raw.bucket
       NEWS_SECRET_NAME = aws_secretsmanager_secret.news_api.name
       NEWS_QUERY       = var.news_query
+    }
+  }
+}
+
+resource "aws_lambda_function" "weather_ingestion" {
+  function_name    = "${local.name_prefix}-weather-ingestion"
+  role             = aws_iam_role.ingestion_lambda.arn
+  handler          = "weather_ingestion.lambda_handler"
+  runtime          = var.lambda_runtime
+  timeout          = 60
+  memory_size      = 256
+  filename         = data.archive_file.weather_ingestion.output_path
+  source_code_hash = data.archive_file.weather_ingestion.output_base64sha256
+
+  environment {
+    variables = {
+      RAW_BUCKET = aws_s3_bucket.raw.bucket
     }
   }
 }

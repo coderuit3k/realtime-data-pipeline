@@ -113,6 +113,22 @@ def test_transform_records_dedups_hackernews_by_story_id(monkeypatch):
     assert len(result) == 1
 
 
+def test_transform_records_dedups_weather_by_weather_id_no_llm_call(monkeypatch):
+    def fail_if_called(texts):
+        raise AssertionError("weather records should never trigger keyword extraction")
+
+    monkeypatch.setattr(transform, "extract_keywords_llm", fail_if_called)
+    records = [
+        {"weather_id": "hcmc-t1", "location": "Ho Chi Minh City", "temperature_c": 29.3},
+        {"weather_id": "hcmc-t1", "location": "Ho Chi Minh City", "temperature_c": 29.3},
+    ]
+
+    result = transform.transform_records("weather", records)
+
+    assert len(result) == 1
+    assert result[0]["keywords"] == []
+
+
 def test_transform_records_rejects_unknown_source():
     try:
         transform.transform_records("unknown", [])

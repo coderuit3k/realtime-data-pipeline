@@ -14,6 +14,15 @@ NEWS_QUERY = os.environ.get("NEWS_QUERY", "cryptocurrency OR technology")
 NEWS_PAGE_SIZE = int(os.environ.get("NEWS_PAGE_SIZE", "50"))
 NEWS_LANGUAGE = os.environ.get("NEWS_LANGUAGE", "en")
 
+# Open-Meteo needs no API key -- fixed list of locations tracked, not
+# env-configurable (a list of dicts doesn't map cleanly to a single env var).
+WEATHER_LOCATIONS = [
+    {"name": "Ho Chi Minh City", "latitude": 10.7769, "longitude": 106.7009},
+    {"name": "Vung Tau", "latitude": 10.4114, "longitude": 107.1362},
+    {"name": "Bien Hoa (Dong Nai)", "latitude": 10.9574, "longitude": 106.8426},
+    {"name": "Da Lat", "latitude": 11.9404, "longitude": 108.4583},
+]
+
 # When true (or when RAW_BUCKET is unset), records are written under ./local_output
 # instead of S3 -- lets the handlers run locally without any AWS resources.
 DRY_RUN = os.environ.get("DRY_RUN", "false").lower() == "true"
