@@ -77,4 +77,20 @@ describe("POST /api/explorer/query", () => {
     const body = await response.json();
     expect(body.error).toBe("Athena query failed: SYNTAX_ERROR: line 1:8: no such column");
   });
+
+  it("redacts an AWS authorization error instead of leaking the account ID / IAM ARN", async () => {
+    mockedCheckRateLimit.mockResolvedValue({ allowed: true, remaining: 2 });
+    mockedRun.mockRejectedValue(
+      new Error(
+        "Athena query failed: User: arn:aws:iam::123456789012:user/realtime-data-pipeline-dev-web-app is not authorized to perform: glue:GetTable on resource: arn:aws:glue:us-east-1:123456789012:table/other_db/t (Service: AWSGlue; Status Code: 400; Error Code: AccessDeniedException)"
+      )
+    );
+
+    const response = await POST(makeRequest({ sql: "SELECT * FROM other_db.t" }));
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.error).toBe("Không chạy được truy vấn (không có quyền truy cập bảng này).");
+    expect(body.error).not.toContain("arn:aws");
+    expect(body.error).not.toContain("123456789012");
+  });
 });

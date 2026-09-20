@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { SampleQueryGroup } from "@/lib/types";
+import type { ExplorerQueryResult, SampleQueryGroup } from "@/lib/types";
 
 type SamplesResponse = { workgroup: string; database: string; groups: SampleQueryGroup[] };
-type QueryResult = { columns: string[]; rows: (string | null)[][]; scannedBytes: number; elapsedMs: number; hasMoreRows: boolean };
 
 function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
@@ -14,7 +13,7 @@ export default function ExplorerPage() {
   const [samples, setSamples] = useState<SamplesResponse | null>(null);
   const [samplesError, setSamplesError] = useState<string | null>(null);
   const [sql, setSql] = useState("");
-  const [result, setResult] = useState<QueryResult | null>(null);
+  const [result, setResult] = useState<ExplorerQueryResult | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
@@ -122,8 +121,8 @@ export default function ExplorerPage() {
               <table className="font-mono w-full border-collapse text-xs">
                 <thead>
                   <tr>
-                    {result.columns.map((col) => (
-                      <th key={col} className="text-left text-textSecondary text-[10.5px] uppercase border-b border-border py-2 px-2.5">
+                    {result.columns.map((col, i) => (
+                      <th key={i} className="text-left text-textSecondary text-[10.5px] uppercase border-b border-border py-2 px-2.5">
                         {col}
                       </th>
                     ))}

@@ -34,3 +34,11 @@ export type CatalogTableMeta = {
 
 export type SampleQuery = { id: string; label: string; sql: string };
 export type SampleQueryGroup = { label: string; queries: SampleQuery[] };
+
+export type ExplorerQueryResult = {
+  columns: string[];
+  rows: (string | null)[][];
+  scannedBytes: number;
+  elapsedMs: number;
+  hasMoreRows: boolean;
+};

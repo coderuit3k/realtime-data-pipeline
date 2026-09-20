@@ -4,6 +4,7 @@ import { runAthenaQueryWithStats, parseAthenaRows } from "@/lib/athena";
 import { validateReadOnlySelect } from "@/lib/sqlGuard";
 import { checkRateLimit, getExplorerLimiter } from "@/lib/ratelimit";
 import { clientIp } from "@/lib/clientIp";
+import type { ExplorerQueryResult } from "@/lib/types";
 
 export const maxDuration = 60;
 
@@ -22,19 +23,25 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { columns, rows, stats, hasMoreRows } = await runAthenaQueryWithStats(getAthenaClient(), sql, 100);
+    const { columns, rows, stats, hasMoreRows } = await runAthenaQueryWithStats(getAthenaClient(), sql, 101);
     const dataRows = parseAthenaRows(rows, (cols) => cols);
 
-    return NextResponse.json({
+    const result: ExplorerQueryResult = {
       columns,
       rows: dataRows,
       scannedBytes: stats.dataScannedInBytes,
       elapsedMs: stats.engineExecutionTimeMs,
       hasMoreRows,
-    });
+    };
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Explorer query failed", error);
-    const message = error instanceof Error ? error.message : "Không chạy được truy vấn.";
+    const raw = error instanceof Error ? error.message : "";
+    const looksLikeAwsInternals = /arn:aws|not authorized|AccessDenied|\bUser: /i.test(raw);
+    const message =
+      !raw || looksLikeAwsInternals
+        ? "Không chạy được truy vấn (không có quyền truy cập bảng này)."
+        : raw;
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
