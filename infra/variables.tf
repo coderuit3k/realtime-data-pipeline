@@ -49,6 +49,16 @@ variable "ingestion_schedule" {
   default     = "rate(10 minutes)"
 }
 
+variable "news_ingestion_schedule" {
+  # NewsAPI's free "Developer" tier caps at 100 requests/day. Sharing the
+  # 10-minute rule (144 calls/day) blows through that partway through the
+  # day and 429s for the rest -- news_ingestion gets its own, slower rule.
+  # 20 minutes = 72 calls/day, comfortably under the 100/day cap.
+  description = "EventBridge schedule expression for news_ingestion (separate from the other 4 -- NewsAPI's free tier caps at 100 requests/day)"
+  type        = string
+  default     = "rate(20 minutes)"
+}
+
 variable "enable_ingestion_schedule" {
   description = "false disables the EventBridge rule (pauses ingestion) without destroying anything -- data already in S3/Glue/Athena stays queryable"
   type        = bool

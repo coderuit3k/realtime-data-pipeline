@@ -3,7 +3,9 @@
 Provisions: S3 raw + curated buckets, Secrets Manager secrets (NewsAPI key,
 Tavily key), IAM roles, the 3 pipeline Lambda functions + 2 on-demand RAG
 Lambdas (`rag_build_index`, `rag_query` -- see root README's "Agentic RAG
-demo"), an EventBridge schedule for ingestion, an S3 -> Lambda trigger for
+demo"), two EventBridge schedules for ingestion (news_ingestion runs on
+its own slower schedule -- NewsAPI's free tier caps at 100 requests/day),
+an S3 -> Lambda trigger for
 transform, a Glue Catalog database/tables + Athena workgroup over the
 curated zone, and CloudWatch log retention + error alarms.
 
