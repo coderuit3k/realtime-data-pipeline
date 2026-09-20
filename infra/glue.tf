@@ -310,6 +310,10 @@ resource "aws_athena_workgroup" "main" {
   configuration {
     enforce_workgroup_configuration    = true
     publish_cloudwatch_metrics_enabled = true
+    # Hard AWS-enforced cap so the Explorer page's free-form SQL can never
+    # scan more than ~1 GiB in a single query (~$0.005 at Athena's
+    # $5/TB-scanned rate), regardless of what SQL text produced it.
+    bytes_scanned_cutoff_per_query = 1073741824
 
     result_configuration {
       output_location = "s3://${aws_s3_bucket.curated.bucket}/athena-results/"
