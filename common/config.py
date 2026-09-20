@@ -17,9 +17,17 @@ NEWS_LANGUAGE = os.environ.get("NEWS_LANGUAGE", "en")
 # Open-Meteo needs no API key -- fixed list of locations tracked, not
 # env-configurable (a list of dicts doesn't map cleanly to a single env var).
 WEATHER_LOCATIONS = [
+    {"name": "Tay Ninh", "latitude": 11.3100, "longitude": 106.0989},
     {"name": "Ho Chi Minh City", "latitude": 10.7769, "longitude": 106.7009},
-    {"name": "Vung Tau", "latitude": 10.4114, "longitude": 107.1362},
+    {"name": "Thu Dau Mot (Binh Duong)", "latitude": 10.9804, "longitude": 106.6519},
+    {"name": "Long Xuyen (An Giang)", "latitude": 10.3860, "longitude": 105.4351},
     {"name": "Bien Hoa (Dong Nai)", "latitude": 10.9574, "longitude": 106.8426},
+    {"name": "Can Tho", "latitude": 10.0452, "longitude": 105.7469},
+    {"name": "My Tho (Tien Giang)", "latitude": 10.3600, "longitude": 106.3600},
+    {"name": "Soc Trang", "latitude": 9.6003, "longitude": 105.9800},
+    {"name": "Vung Tau", "latitude": 10.4114, "longitude": 107.1362},
+    {"name": "Rach Gia (Kien Giang)", "latitude": 10.0124, "longitude": 105.0809},
+    {"name": "Ca Mau", "latitude": 9.1769, "longitude": 105.1500},
     {"name": "Da Lat", "latitude": 11.9404, "longitude": 108.4583},
 ]
 
