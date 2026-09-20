@@ -20,6 +20,9 @@ export function partitionWhere({ year, month, day }: TodayParts): string {
   return `WHERE year='${year}' AND month='${month}' AND day='${day}'`;
 }
 
+// Returns bare `(...) OR (...) OR ...` with no enclosing parens and no
+// leading WHERE — callers combining this with AND in the same clause
+// must wrap it in parens themselves, e.g. `WHERE (${partitionPredicateAny(...)}) AND other_condition`.
 export function partitionPredicateAny(partsList: TodayParts[], alias?: string): string {
   const prefix = alias ? `${alias}.` : "";
   return partsList

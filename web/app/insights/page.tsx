@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { InsightsResponse } from "@/lib/types";
 
 type Range = "today" | "7d";
@@ -9,15 +9,19 @@ export default function InsightsPage() {
   const [range, setRange] = useState<Range>("today");
   const [data, setData] = useState<InsightsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const latestRangeRef = useRef<Range>("today");
 
   async function load(r: Range) {
+    latestRangeRef.current = r;
     setError(null);
     try {
       const res = await fetch(`/api/insights?range=${r}`);
       const body = await res.json();
+      if (latestRangeRef.current !== r) return; // a newer request superseded this one
       if (!res.ok) throw new Error(body.error ?? "Không tải được Insights.");
       setData(body);
     } catch (err) {
+      if (latestRangeRef.current !== r) return;
       setError(err instanceof Error ? err.message : "Không tải được Insights.");
     }
   }
