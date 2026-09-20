@@ -1,6 +1,7 @@
 import { AthenaClient } from "@aws-sdk/client-athena";
 import { LambdaClient } from "@aws-sdk/client-lambda";
 import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
+import { GlueClient } from "@aws-sdk/client-glue";
 
 export function requiredEnv(name: string): string {
   const value = process.env[name];
@@ -24,4 +25,10 @@ let cloudWatchClient: CloudWatchClient | undefined;
 export function getCloudWatchClient(): CloudWatchClient {
   if (!cloudWatchClient) cloudWatchClient = new CloudWatchClient({ region: requiredEnv("AWS_REGION") });
   return cloudWatchClient;
+}
+
+let glueClient: GlueClient | undefined;
+export function getGlueClient(): GlueClient {
+  if (!glueClient) glueClient = new GlueClient({ region: requiredEnv("AWS_REGION") });
+  return glueClient;
 }
