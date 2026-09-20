@@ -31,3 +31,6 @@ export type CatalogTableMeta = {
   cadence: string;
   columnNotes?: Record<string, string>;
 };
+
+export type SampleQuery = { id: string; label: string; sql: string };
+export type SampleQueryGroup = { label: string; queries: SampleQuery[] };
