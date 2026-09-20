@@ -43,8 +43,9 @@ aws secretsmanager put-secret-value \
 
 ## Web app IAM user (manual -- not managed by Terraform)
 
-The `web/` Next.js app (dashboard, RAG assistant, data catalog) needs its own AWS
-credentials, scoped read-only to Athena/Glue/S3/CloudWatch plus
+The `web/` Next.js app (dashboard, RAG assistant, data catalog, data
+explorer, insights, ops) needs its own AWS credentials, scoped read-only
+to Athena/Glue/S3/CloudWatch/EventBridge/CloudWatch Logs plus
 `lambda:InvokeFunction` on just the two RAG Lambdas. This user is created
 **manually via the AWS CLI**, not by `terraform apply` -- the GitHub Actions
 deploy role is deliberately scoped to manage IAM *roles* only (see
@@ -64,6 +65,18 @@ DATABASE="$(terraform output -raw glue_database_name)"
 CURATED_BUCKET_ARN="arn:aws:s3:::$(terraform output -raw curated_bucket_name)"
 RAG_QUERY_ARN="arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:$(terraform output -raw rag_query_function_name)"
 RAG_AGENT_ARN="arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:$(terraform output -raw rag_agent_function_name)"
+
+# Ops page (real CloudWatch metrics/schedule/logs) -- pipeline Lambda names
+# come from real terraform outputs, not string-guessed from $USER_NAME.
+HACKERNEWS_FN="$(terraform output -raw hackernews_ingestion_function_name)"
+NEWS_FN="$(terraform output -raw news_ingestion_function_name)"
+WEATHER_FN="$(terraform output -raw weather_ingestion_function_name)"
+CRYPTO_FN="$(terraform output -raw crypto_ingestion_function_name)"
+GITHUB_FN="$(terraform output -raw github_trending_ingestion_function_name)"
+TRANSFORM_FN="$(terraform output -raw transform_function_name)"
+# No terraform output exists for the EventBridge rule name -- derived the
+# same way $USER_NAME itself is named (local.name_prefix + a fixed suffix).
+INGESTION_SCHEDULE_ARN="arn:aws:events:${REGION}:${ACCOUNT_ID}:rule/${USER_NAME%-web-app}-ingestion-schedule"
 
 cat > /tmp/web-app-policy.json <<EOF
 {
@@ -102,6 +115,31 @@ cat > /tmp/web-app-policy.json <<EOF
       "Effect": "Allow",
       "Action": ["cloudwatch:DescribeAlarms"],
       "Resource": "*"
+    },
+    {
+      "Sid": "CloudWatchMetricsReadOnly",
+      "Effect": "Allow",
+      "Action": ["cloudwatch:GetMetricData"],
+      "Resource": "*"
+    },
+    {
+      "Sid": "EventBridgeReadSchedule",
+      "Effect": "Allow",
+      "Action": ["events:DescribeRule"],
+      "Resource": "${INGESTION_SCHEDULE_ARN}"
+    },
+    {
+      "Sid": "LogsInsightsReadOnly",
+      "Effect": "Allow",
+      "Action": ["logs:StartQuery", "logs:GetQueryResults", "logs:StopQuery"],
+      "Resource": [
+        "arn:aws:logs:${REGION}:${ACCOUNT_ID}:log-group:/aws/lambda/${HACKERNEWS_FN}:*",
+        "arn:aws:logs:${REGION}:${ACCOUNT_ID}:log-group:/aws/lambda/${NEWS_FN}:*",
+        "arn:aws:logs:${REGION}:${ACCOUNT_ID}:log-group:/aws/lambda/${WEATHER_FN}:*",
+        "arn:aws:logs:${REGION}:${ACCOUNT_ID}:log-group:/aws/lambda/${CRYPTO_FN}:*",
+        "arn:aws:logs:${REGION}:${ACCOUNT_ID}:log-group:/aws/lambda/${GITHUB_FN}:*",
+        "arn:aws:logs:${REGION}:${ACCOUNT_ID}:log-group:/aws/lambda/${TRANSFORM_FN}:*"
+      ]
     },
     {
       "Sid": "InvokeRagLambdas",
