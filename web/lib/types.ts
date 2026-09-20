@@ -42,3 +42,16 @@ export type ExplorerQueryResult = {
   elapsedMs: number;
   hasMoreRows: boolean;
 };
+
+export type TopKeyword = { keyword: string; mentions: number };
+export type CryptoMention = { coinId: string; priceUsd: number; change24hPct: number; mentionCount: number };
+export type GithubHnOverlap = { keyword: string; overlapCount: number };
+export type WeatherSnapshot = { location: string; temperatureC: number; humidityPct: number };
+
+export type InsightsResponse = {
+  range: "today" | "7d";
+  topKeywords: TopKeyword[];
+  cryptoMentions: CryptoMention[];
+  githubHnOverlap: GithubHnOverlap[];
+  weatherSnapshot: WeatherSnapshot[];
+};
