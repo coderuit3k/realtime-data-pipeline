@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { DescribeAlarmsCommand } from "@aws-sdk/client-cloudwatch";
 import { getAthenaClient, getCloudWatchClient, requiredEnv } from "@/lib/aws";
 import {
   runAthenaQuery,
@@ -8,6 +7,8 @@ import {
   buildRecentActivityQuery,
   parseAthenaRows,
 } from "@/lib/athena";
+import { getAlarmStatus } from "@/lib/cloudwatchAlarms";
+import { COST_ESTIMATE_USD } from "@/lib/opsMeta";
 import type { DashboardResponse, SourceVolume, ActivityItem } from "@/lib/types";
 
 export const revalidate = 60;
@@ -16,7 +17,6 @@ export const revalidate = 60;
 // 60 is Vercel's ceiling on non-Pro plans.
 export const maxDuration = 60;
 
-const COST_ESTIMATE_USD = 1.02;
 const SOURCES_TOTAL = 5;
 
 export async function GET() {
@@ -42,11 +42,10 @@ export async function GET() {
     const recordsToday = sourceVolumes.reduce((sum, s) => sum + s.records, 0);
     const sourcesHealthy = sourceVolumes.filter((s) => s.records > 0).length;
 
-    const alarms = await getCloudWatchClient().send(
-      new DescribeAlarmsCommand({ AlarmNamePrefix: requiredEnv("ALARM_NAME_PREFIX") })
+    const { alarmsBreaching, alarmsTotal } = await getAlarmStatus(
+      getCloudWatchClient(),
+      requiredEnv("ALARM_NAME_PREFIX")
     );
-    const alarmsTotal = alarms.MetricAlarms?.length ?? 0;
-    const alarmsBreaching = alarms.MetricAlarms?.filter((a) => a.StateValue === "ALARM").length ?? 0;
 
     const response: DashboardResponse = {
       recordsToday,
