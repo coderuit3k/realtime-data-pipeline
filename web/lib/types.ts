@@ -91,3 +91,24 @@ export type GithubRun = {
 };
 
 export type GithubJob = { name: string; status: string; conclusion: string | null };
+
+export type PipelineStage = {
+  name: string;
+  status: "success" | "failure" | "waiting" | "in_progress" | "pending" | "cancelled" | "skipped";
+  detail: string;
+};
+
+export type CicdRun = {
+  title: string;
+  sha: string;
+  branch: string;
+  conclusion: string | null;
+  durationMs: number | null;
+  htmlUrl: string;
+};
+
+export type CicdResponse = {
+  stages: PipelineStage[];
+  recentRuns: CicdRun[];
+  latestDeployRunUrl: string | null;
+};
