@@ -57,6 +57,39 @@ describe("GET /api/ops", () => {
       { category: "CloudWatch alarms", monthlyUsd: 0.6 },
       { category: "Lambda + S3", monthlyUsd: 0 },
     ]);
+
+    expect(mockedSchedule).toHaveBeenCalledWith(
+      expect.anything(),
+      "realtime-data-pipeline-dev-ingestion-schedule"
+    );
+
+    expect(mockedHealth).toHaveBeenCalledWith(
+      expect.anything(),
+      [
+        { fullName: "realtime-data-pipeline-dev-hackernews-ingestion", label: "hackernews_ingestion" },
+        { fullName: "realtime-data-pipeline-dev-news-ingestion", label: "news_ingestion" },
+        { fullName: "realtime-data-pipeline-dev-weather-ingestion", label: "weather_ingestion" },
+        { fullName: "realtime-data-pipeline-dev-crypto-ingestion", label: "crypto_ingestion" },
+        { fullName: "realtime-data-pipeline-dev-github-trending-ingestion", label: "github_trending_ingestion" },
+        { fullName: "realtime-data-pipeline-dev-transform", label: "transform" },
+      ]
+    );
+
+    expect(mockedLogs).toHaveBeenCalledWith(
+      expect.anything(),
+      [
+        "/aws/lambda/realtime-data-pipeline-dev-hackernews-ingestion",
+        "/aws/lambda/realtime-data-pipeline-dev-news-ingestion",
+        "/aws/lambda/realtime-data-pipeline-dev-weather-ingestion",
+        "/aws/lambda/realtime-data-pipeline-dev-crypto-ingestion",
+        "/aws/lambda/realtime-data-pipeline-dev-github-trending-ingestion",
+        "/aws/lambda/realtime-data-pipeline-dev-transform",
+      ],
+      5,
+      "realtime-data-pipeline-dev-"
+    );
+
+    expect(mockedAlarms).toHaveBeenCalledWith(expect.anything(), "realtime-data-pipeline-dev");
   });
 
   it("returns 500 with a safe message when any AWS call fails", async () => {
