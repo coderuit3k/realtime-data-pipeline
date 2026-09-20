@@ -120,10 +120,18 @@ all-or-nothing behavior.
 ## Testing
 
 - `web/lib/opsMeta.test.ts` — `PIPELINE_LAMBDAS` has exactly the 6 real
-  suffixes from `infra/lambda.tf`; `COST_BREAKDOWN` entries sum to the
-  same `~$1.02`-class total already used as `COST_ESTIMATE_USD` (a
-  sanity cross-check between the two independently-maintained numbers,
-  not a strict equality — both are "~" estimates).
+  suffixes from `infra/lambda.tf`; each `COST_BREAKDOWN` entry's value
+  matches its cited line in `infra/README.md`'s cost table (Secrets
+  Manager `0.80`, CloudWatch alarms `0.60`, Lambda+S3 `0`). This test
+  does NOT assert the breakdown sums to `COST_ESTIMATE_USD` — it
+  doesn't: `infra/README.md`'s own table (`0.80 + 0.60 = 1.40`, before
+  even adding the "pennies"-level S3/Logs/Athena rows) already exceeds
+  the `$1.02` figure `COST_ESTIMATE_USD` uses, and that figure's own
+  prose calls itself "roughly $1/month" — a soft, independently-chosen
+  rounding, not a sum of the table. The breakdown panel shows the two
+  named, priced cost drivers plus a real "~$0" bucket for the
+  free-tier items; it is not represented as an exhaustive decomposition
+  of the KPI card's total, and nothing in this spec claims otherwise.
 - `web/lib/cloudwatchMetrics.test.ts` — `getLambdaHealth` correctly
   reduces a mocked multi-series `GetMetricData` response into per-function
   rows; covers `ok`, `error` (errors > 0), and `idle` (zero invocations)
