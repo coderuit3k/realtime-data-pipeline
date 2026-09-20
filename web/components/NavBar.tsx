@@ -7,6 +7,7 @@ const LINKS = [
   { href: "/", label: "Tổng quan" },
   { href: "/assistant", label: "RAG Assistant" },
   { href: "/catalog", label: "Data Catalog" },
+  { href: "/explorer", label: "Data Explorer" },
 ];
 
 export function NavBar() {
