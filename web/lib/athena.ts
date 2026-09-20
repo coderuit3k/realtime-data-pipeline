@@ -3,6 +3,7 @@ import {
   StartQueryExecutionCommand,
   GetQueryExecutionCommand,
   GetQueryResultsCommand,
+  type GetQueryExecutionCommandOutput,
 } from "@aws-sdk/client-athena";
 
 export type TodayParts = { year: string; month: string; day: string };
@@ -15,7 +16,7 @@ export function todayUtcParts(now: Date = new Date()): TodayParts {
   };
 }
 
-function partitionWhere({ year, month, day }: TodayParts): string {
+export function partitionWhere({ year, month, day }: TodayParts): string {
   return `WHERE year='${year}' AND month='${month}' AND day='${day}'`;
 }
 
@@ -55,7 +56,12 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function runAthenaQuery(client: AthenaClient, sql: string): Promise<AthenaResultRow[]> {
+type PollOutcome = {
+  queryExecutionId: string;
+  statistics: { dataScannedInBytes: number; engineExecutionTimeMs: number };
+};
+
+async function startAndPollQuery(client: AthenaClient, sql: string): Promise<PollOutcome> {
   const workgroup = process.env.ATHENA_WORKGROUP;
   const database = process.env.ATHENA_DATABASE;
   if (!workgroup || !database) {
@@ -72,12 +78,12 @@ export async function runAthenaQuery(client: AthenaClient, sql: string): Promise
   const queryExecutionId = start.QueryExecutionId;
   if (!queryExecutionId) throw new Error("Athena did not return a QueryExecutionId");
 
-  let succeeded = false;
+  let finalStatus: GetQueryExecutionCommandOutput | undefined;
   for (let attempt = 0; attempt < 50; attempt++) {
     const status = await client.send(new GetQueryExecutionCommand({ QueryExecutionId: queryExecutionId }));
     const state = status.QueryExecution?.Status?.State;
     if (state === "SUCCEEDED") {
-      succeeded = true;
+      finalStatus = status;
       break;
     }
     if (state === "FAILED" || state === "CANCELLED") {
@@ -87,10 +93,40 @@ export async function runAthenaQuery(client: AthenaClient, sql: string): Promise
     await sleep(500);
   }
 
-  if (!succeeded) {
+  if (!finalStatus) {
     throw new Error("Athena query timed out waiting for SUCCEEDED state");
   }
 
+  return {
+    queryExecutionId,
+    statistics: {
+      dataScannedInBytes: finalStatus.QueryExecution?.Statistics?.DataScannedInBytes ?? 0,
+      engineExecutionTimeMs: finalStatus.QueryExecution?.Statistics?.EngineExecutionTimeInMillis ?? 0,
+    },
+  };
+}
+
+export async function runAthenaQuery(client: AthenaClient, sql: string): Promise<AthenaResultRow[]> {
+  const { queryExecutionId } = await startAndPollQuery(client, sql);
   const results = await client.send(new GetQueryResultsCommand({ QueryExecutionId: queryExecutionId }));
   return (results.ResultSet?.Rows ?? []) as AthenaResultRow[];
+}
+
+export type QueryStats = { dataScannedInBytes: number; engineExecutionTimeMs: number };
+
+export async function runAthenaQueryWithStats(
+  client: AthenaClient,
+  sql: string,
+  maxResults = 100
+): Promise<{ columns: string[]; rows: AthenaResultRow[]; stats: QueryStats; hasMoreRows: boolean }> {
+  const { queryExecutionId, statistics } = await startAndPollQuery(client, sql);
+  const results = await client.send(
+    new GetQueryResultsCommand({ QueryExecutionId: queryExecutionId, MaxResults: maxResults })
+  );
+  return {
+    columns: (results.ResultSet?.ResultSetMetadata?.ColumnInfo ?? []).map((c) => c.Name ?? ""),
+    rows: (results.ResultSet?.Rows ?? []) as AthenaResultRow[],
+    stats: statistics,
+    hasMoreRows: Boolean(results.NextToken),
+  };
 }

@@ -5,6 +5,8 @@ import {
   buildRecentActivityQuery,
   parseAthenaRows,
   runAthenaQuery,
+  partitionWhere,
+  runAthenaQueryWithStats,
 } from "./athena";
 
 describe("todayUtcParts", () => {
@@ -99,5 +101,82 @@ describe("runAthenaQuery", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("partitionWhere (exported)", () => {
+  it("is the same clause runAthenaQuery's internal queries already produce", () => {
+    const parts = { year: "2026", month: "09", day: "20" };
+    expect(partitionWhere(parts)).toBe("WHERE year='2026' AND month='09' AND day='20'");
+  });
+});
+
+describe("runAthenaQueryWithStats", () => {
+  it("returns columns, rows, stats, and hasMoreRows:false when there's no NextToken", async () => {
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce({ QueryExecutionId: "q-10" })
+      .mockResolvedValueOnce({
+        QueryExecution: {
+          Status: { State: "SUCCEEDED" },
+          Statistics: { DataScannedInBytes: 4200000, EngineExecutionTimeInMillis: 310 },
+        },
+      })
+      .mockResolvedValueOnce({
+        ResultSet: {
+          ResultSetMetadata: { ColumnInfo: [{ Name: "coin_id" }, { Name: "price_usd" }] },
+          Rows: [
+            { Data: [{ VarCharValue: "coin_id" }, { VarCharValue: "price_usd" }] },
+            { Data: [{ VarCharValue: "bitcoin" }, { VarCharValue: "81314.2" }] },
+          ],
+        },
+      });
+    const client = { send } as unknown as import("@aws-sdk/client-athena").AthenaClient;
+
+    process.env.ATHENA_WORKGROUP = "wg";
+    process.env.ATHENA_DATABASE = "db";
+    const result = await runAthenaQueryWithStats(client, "SELECT 1", 100);
+
+    expect(result.columns).toEqual(["coin_id", "price_usd"]);
+    expect(result.rows).toHaveLength(2);
+    expect(result.stats).toEqual({ dataScannedInBytes: 4200000, engineExecutionTimeMs: 310 });
+    expect(result.hasMoreRows).toBe(false);
+  });
+
+  it("passes maxResults through to GetQueryResultsCommand and reports hasMoreRows:true when NextToken is present", async () => {
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce({ QueryExecutionId: "q-11" })
+      .mockResolvedValueOnce({
+        QueryExecution: { Status: { State: "SUCCEEDED" }, Statistics: {} },
+      })
+      .mockResolvedValueOnce({
+        ResultSet: { ResultSetMetadata: { ColumnInfo: [] }, Rows: [] },
+        NextToken: "more-pages",
+      });
+    const client = { send } as unknown as import("@aws-sdk/client-athena").AthenaClient;
+
+    process.env.ATHENA_WORKGROUP = "wg";
+    process.env.ATHENA_DATABASE = "db";
+    const result = await runAthenaQueryWithStats(client, "SELECT 1", 5);
+
+    const resultsCall = send.mock.calls[2][0];
+    expect(resultsCall.input.MaxResults).toBe(5);
+    expect(result.hasMoreRows).toBe(true);
+    expect(result.stats).toEqual({ dataScannedInBytes: 0, engineExecutionTimeMs: 0 });
+  });
+
+  it("throws with the failure reason when the query fails, same as runAthenaQuery", async () => {
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce({ QueryExecutionId: "q-12" })
+      .mockResolvedValueOnce({
+        QueryExecution: { Status: { State: "FAILED", StateChangeReason: "table not found" } },
+      });
+    const client = { send } as unknown as import("@aws-sdk/client-athena").AthenaClient;
+
+    process.env.ATHENA_WORKGROUP = "wg";
+    process.env.ATHENA_DATABASE = "db";
+    await expect(runAthenaQueryWithStats(client, "SELECT 1")).rejects.toThrow("table not found");
   });
 });
