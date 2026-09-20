@@ -57,3 +57,7 @@ output "rag_query_function_name" {
 output "rag_agent_function_name" {
   value = aws_lambda_function.rag_agent.function_name
 }
+
+output "ingestion_schedule_rule_name" {
+  value = aws_cloudwatch_event_rule.ingestion_schedule.name
+}

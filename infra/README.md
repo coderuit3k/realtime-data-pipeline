@@ -74,9 +74,7 @@ WEATHER_FN="$(terraform output -raw weather_ingestion_function_name)"
 CRYPTO_FN="$(terraform output -raw crypto_ingestion_function_name)"
 GITHUB_FN="$(terraform output -raw github_trending_ingestion_function_name)"
 TRANSFORM_FN="$(terraform output -raw transform_function_name)"
-# No terraform output exists for the EventBridge rule name -- derived the
-# same way $USER_NAME itself is named (local.name_prefix + a fixed suffix).
-INGESTION_SCHEDULE_ARN="arn:aws:events:${REGION}:${ACCOUNT_ID}:rule/${USER_NAME%-web-app}-ingestion-schedule"
+INGESTION_SCHEDULE_ARN="arn:aws:events:${REGION}:${ACCOUNT_ID}:rule/$(terraform output -raw ingestion_schedule_rule_name)"
 
 cat > /tmp/web-app-policy.json <<EOF
 {
