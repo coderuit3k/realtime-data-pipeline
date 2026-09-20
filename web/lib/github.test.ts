@@ -14,7 +14,7 @@ const REAL_RUN = {
 };
 
 beforeEach(() => {
-  process.env.GITHUB_TOKEN = "test-token";
+  process.env.GITHUB_READ_TOKEN = "test-token";
   vi.restoreAllMocks();
 });
 

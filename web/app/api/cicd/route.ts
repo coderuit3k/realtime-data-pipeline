@@ -31,6 +31,16 @@ function buildStages(
   } else if (applyJob.status === "waiting") {
     approvalStatus = "waiting";
     applyStatus = "pending";
+  } else if (applyJob.status === "completed" && applyJob.conclusion === "skipped") {
+    // apply's `needs: plan` dependency failed, so apply never ran and the
+    // approval gate was never reached -- not the same as "passed"
+    approvalStatus = "pending";
+    applyStatus = "skipped";
+  } else if (applyJob.status === "completed" && applyJob.conclusion === "cancelled") {
+    // cancelled while waiting on the gate or while applying -- GitHub's
+    // API gives no way to tell which, so never claim the gate passed
+    approvalStatus = "cancelled";
+    applyStatus = "cancelled";
   } else {
     approvalStatus = "success";
     applyStatus = jobStatus(applyJob);

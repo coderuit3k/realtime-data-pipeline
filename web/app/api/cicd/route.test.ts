@@ -87,7 +87,7 @@ describe("GET /api/cicd", () => {
     expect(body.stages[3]).toEqual({ name: "Terraform Apply", status: "pending", detail: "-auto-approve tfplan" });
   });
 
-  it("shows later stages as pending when plan failed", async () => {
+  it("shows apply as skipped (not approved) when plan failed", async () => {
     mockedLatest.mockImplementation((file) =>
       Promise.resolve(file === "ci.yml" ? run({ id: 10 }) : run({ id: 20 }))
     );
@@ -95,7 +95,10 @@ describe("GET /api/cicd", () => {
       Promise.resolve(
         id === 10
           ? [{ name: "lint-and-test", status: "completed", conclusion: "success" }]
-          : [{ name: "plan", status: "completed", conclusion: "failure" }]
+          : [
+              { name: "plan", status: "completed", conclusion: "failure" },
+              { name: "apply", status: "completed", conclusion: "skipped" },
+            ]
       )
     );
     mockedRecent.mockResolvedValue([]);
@@ -104,7 +107,29 @@ describe("GET /api/cicd", () => {
     const body = await response.json();
     expect(body.stages[1]).toEqual({ name: "Terraform Plan", status: "failure", detail: "auto" });
     expect(body.stages[2]).toEqual({ name: "Chờ phê duyệt", status: "pending", detail: "environment: production" });
-    expect(body.stages[3]).toEqual({ name: "Terraform Apply", status: "pending", detail: "-auto-approve tfplan" });
+    expect(body.stages[3]).toEqual({ name: "Terraform Apply", status: "skipped", detail: "-auto-approve tfplan" });
+  });
+
+  it("shows a cancelled apply without claiming the gate was approved", async () => {
+    mockedLatest.mockImplementation((file) =>
+      Promise.resolve(file === "ci.yml" ? run({ id: 10 }) : run({ id: 20 }))
+    );
+    mockedJobs.mockImplementation((id) =>
+      Promise.resolve(
+        id === 10
+          ? [{ name: "lint-and-test", status: "completed", conclusion: "success" }]
+          : [
+              { name: "plan", status: "completed", conclusion: "success" },
+              { name: "apply", status: "completed", conclusion: "cancelled" },
+            ]
+      )
+    );
+    mockedRecent.mockResolvedValue([]);
+
+    const response = await GET();
+    const body = await response.json();
+    expect(body.stages[2]).toEqual({ name: "Chờ phê duyệt", status: "cancelled", detail: "environment: production" });
+    expect(body.stages[3]).toEqual({ name: "Terraform Apply", status: "cancelled", detail: "-auto-approve tfplan" });
   });
 
   it("returns 500 with a safe message when the GitHub API fails", async () => {

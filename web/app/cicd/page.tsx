@@ -8,6 +8,8 @@ function stageColor(status: PipelineStage["status"]): { ring: string; bg: string
   if (status === "waiting") return { ring: "border-warning", bg: "bg-warning/10", text: "text-warning" };
   if (status === "in_progress") return { ring: "border-accent", bg: "bg-accent/10", text: "text-accent" };
   if (status === "failure") return { ring: "border-error", bg: "bg-error/10", text: "text-error" };
+  if (status === "cancelled" || status === "skipped")
+    return { ring: "border-textMuted", bg: "bg-textMuted/10", text: "text-textMuted" };
   return { ring: "border-border", bg: "bg-surface", text: "text-textMuted" };
 }
 
@@ -114,7 +116,7 @@ export default function CicdPage() {
         <span className="text-xs font-semibold text-textPrimary">Lịch sử chạy gần đây</span>
         <div className="flex flex-col">
           {data.recentRuns.map((run) => (
-            <div key={run.sha} className="flex items-center gap-3.5 py-2.5 border-b border-border last:border-b-0">
+            <div key={run.htmlUrl} className="flex items-center gap-3.5 py-2.5 border-b border-border last:border-b-0">
               <span
                 className={`w-2 h-2 rounded-full flex-shrink-0 ${
                   run.conclusion === "success" ? "bg-success" : run.conclusion === null ? "bg-accent" : "bg-error"

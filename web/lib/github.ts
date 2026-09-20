@@ -18,7 +18,7 @@ type RawRun = {
 };
 
 async function githubRequest<T>(path: string): Promise<T> {
-  const token = requiredEnv("GITHUB_TOKEN");
+  const token = requiredEnv("GITHUB_READ_TOKEN");
   const response = await fetch(`${GITHUB_API_BASE}${path}`, {
     headers: {
       Authorization: `Bearer ${token}`,
