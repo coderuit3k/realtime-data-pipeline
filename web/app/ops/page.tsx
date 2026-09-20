@@ -26,8 +26,9 @@ function statusLabel(status: string): string {
 }
 
 function detectLogLevel(message: string): "ERROR" | "WARN" | "INFO" {
-  const match = message.match(/\b(ERROR|WARN|INFO)\b/);
-  return (match?.[1] as "ERROR" | "WARN" | "INFO") ?? "INFO";
+  const match = message.match(/\b(ERROR|WARN(?:ING)?|INFO)\b/);
+  if (!match) return "INFO";
+  return match[1] === "WARNING" ? "WARN" : (match[1] as "ERROR" | "WARN" | "INFO");
 }
 
 function logLevelColor(level: "ERROR" | "WARN" | "INFO"): string {
@@ -175,6 +176,9 @@ export default function OpsPage() {
                 </div>
               ))}
             </div>
+            <span className="text-[10.5px] text-textMuted">
+              2 hạng mục có giá cụ thể nhất -- không phải tổng đầy đủ, xem infra/README.md
+            </span>
           </div>
         </div>
       </div>

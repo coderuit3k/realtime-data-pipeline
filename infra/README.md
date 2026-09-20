@@ -179,7 +179,7 @@ for placeholder values and one-line comments):
 - `AWS_REGION` -- region the pipeline's resources live in
 - `ATHENA_WORKGROUP` -- Athena workgroup the dashboard queries against
 - `ATHENA_DATABASE` -- Glue/Athena database the dashboard queries against
-- `ALARM_NAME_PREFIX` -- CloudWatch alarm name prefix for the dashboard's alarm counts
+- `ALARM_NAME_PREFIX` -- CloudWatch alarm name prefix (dashboard) AND the exact pipeline name prefix (`local.name_prefix`) used to build Lambda/log-group/EventBridge-rule names for the Ops page -- must be exactly `local.name_prefix`, not just any valid alarm-matching prefix
 - `RAG_QUERY_FUNCTION_NAME` -- name of the `rag_query` (CRAG) Lambda
 - `RAG_AGENT_FUNCTION_NAME` -- name of the `rag_agent` Lambda
 - `UPSTASH_REDIS_REST_URL` -- Upstash Redis REST URL for assistant rate limiting
