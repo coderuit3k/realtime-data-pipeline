@@ -11,3 +11,23 @@ export type DashboardResponse = {
   costEstimateUsd: number;
   recentActivity: ActivityItem[];
 };
+
+export type CatalogColumn = { name: string; type: string; note?: string };
+
+export type CatalogTable = {
+  name: string;
+  columns: CatalogColumn[];
+  location: string;
+  ragIndexed: boolean;
+  sourceApi: string;
+  ingestionLambda: string;
+  cadence: string;
+};
+
+export type CatalogTableMeta = {
+  ragIndexed: boolean;
+  sourceApi: string;
+  ingestionLambda: string;
+  cadence: string;
+  columnNotes?: Record<string, string>;
+};
