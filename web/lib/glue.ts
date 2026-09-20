@@ -8,7 +8,10 @@ export async function listCuratedTables(client: GlueClient, database: string): P
   return (response.TableList ?? []).map((table) => ({
     name: table.Name ?? "",
     location: table.StorageDescriptor?.Location ?? "",
-    columns: (table.StorageDescriptor?.Columns ?? []).map((col) => ({
+    columns: [
+      ...(table.StorageDescriptor?.Columns ?? []),
+      ...(table.PartitionKeys ?? []),
+    ].map((col) => ({
       name: col.Name ?? "",
       type: col.Type ?? "",
     })),

@@ -93,10 +93,12 @@ export default function CatalogPage() {
                   {badgeLabel(current)}
                 </span>
               </div>
-              <span className="text-xs text-textMuted">
-                Ghi bởi <span className="font-mono">{current.ingestionLambda}</span> {current.cadence} · nguồn{" "}
-                <span className="font-mono">{current.sourceApi}</span>
-              </span>
+              {current.cadence && (
+                <span className="text-xs text-textMuted">
+                  Ghi bởi <span className="font-mono">{current.ingestionLambda}</span> {current.cadence} · nguồn{" "}
+                  <span className="font-mono">{current.sourceApi}</span>
+                </span>
+              )}
             </div>
 
             <div className="rounded-2xl border border-border bg-surface px-5 py-5 flex flex-col gap-2.5 flex-grow min-h-0 overflow-auto">

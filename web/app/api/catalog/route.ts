@@ -9,6 +9,7 @@ export const maxDuration = 60;
 export async function GET() {
   try {
     const database = requiredEnv("ATHENA_DATABASE");
+    const alarmPrefix = requiredEnv("ALARM_NAME_PREFIX");
     const bareTables = await listCuratedTables(getGlueClient(), database);
 
     const tables: CatalogTable[] = bareTables.map((table) => {
@@ -22,7 +23,7 @@ export async function GET() {
         })),
         ragIndexed: meta?.ragIndexed ?? false,
         sourceApi: meta?.sourceApi ?? "",
-        ingestionLambda: meta?.ingestionLambda ?? "",
+        ingestionLambda: meta ? `${alarmPrefix}-${meta.ingestionLambda}` : "",
         cadence: meta?.cadence ?? "",
       };
     });

@@ -4,6 +4,7 @@ vi.mock("@/lib/aws", () => ({
   getGlueClient: vi.fn(() => ({})),
   requiredEnv: vi.fn((name: string) => {
     if (name === "ATHENA_DATABASE") return "curated_db";
+    if (name === "ALARM_NAME_PREFIX") return "realtime-data-pipeline-dev";
     throw new Error(`unexpected requiredEnv(${name})`);
   }),
 }));
@@ -41,7 +42,7 @@ describe("GET /api/catalog", () => {
         columns: [{ name: "price_usd", type: "double", note: "ép float khi ingest (tránh HIVE_BAD_DATA vì CoinGecko trả số nguyên)" }],
         ragIndexed: false,
         sourceApi: "CoinGecko /simple/price",
-        ingestionLambda: "crypto-ingestion",
+        ingestionLambda: "realtime-data-pipeline-dev-crypto-ingestion",
         cadence: "mỗi 10 phút",
       },
     ]);
@@ -57,10 +58,39 @@ describe("GET /api/catalog", () => {
     const body = await response.json();
     expect(body[0].ragIndexed).toBe(false);
     expect(body[0].cadence).toBe("");
+    expect(body[0].sourceApi).toBe("");
+    expect(body[0].ingestionLambda).toBe("");
+  });
+
+  it("does not fabricate a note for a column absent from columnNotes", async () => {
+    mockedList.mockResolvedValueOnce([
+      {
+        name: "crypto_prices",
+        location: "s3://real-bucket/curated/source=crypto/",
+        columns: [{ name: "market_cap_usd", type: "double" }],
+      },
+    ]);
+
+    const response = await GET();
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body[0].columns[0].note).toBeUndefined();
   });
 
   it("returns 500 with a safe message when Glue fails", async () => {
     mockedList.mockRejectedValueOnce(new Error("AccessDenied"));
+
+    const response = await GET();
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.error).toBe("Không tải được Data Catalog, thử lại sau.");
+  });
+
+  it("returns 500 with a safe message when a required environment variable is missing", async () => {
+    const { requiredEnv } = await import("@/lib/aws");
+    vi.mocked(requiredEnv).mockImplementationOnce(() => {
+      throw new Error("Environment variable ATHENA_DATABASE is required but was not set");
+    });
 
     const response = await GET();
     expect(response.status).toBe(500);

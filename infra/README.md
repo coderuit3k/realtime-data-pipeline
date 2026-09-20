@@ -43,7 +43,7 @@ aws secretsmanager put-secret-value \
 
 ## Web app IAM user (manual -- not managed by Terraform)
 
-The `web/` Next.js app (dashboard + RAG assistant) needs its own AWS
+The `web/` Next.js app (dashboard, RAG assistant, data catalog) needs its own AWS
 credentials, scoped read-only to Athena/Glue/S3/CloudWatch plus
 `lambda:InvokeFunction` on just the two RAG Lambdas. This user is created
 **manually via the AWS CLI**, not by `terraform apply` -- the GitHub Actions
