@@ -2,6 +2,7 @@ import { AthenaClient } from "@aws-sdk/client-athena";
 import { LambdaClient } from "@aws-sdk/client-lambda";
 import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
 import { GlueClient } from "@aws-sdk/client-glue";
+import { EventBridgeClient } from "@aws-sdk/client-eventbridge";
 
 export function requiredEnv(name: string): string {
   const value = process.env[name];
@@ -31,4 +32,10 @@ let glueClient: GlueClient | undefined;
 export function getGlueClient(): GlueClient {
   if (!glueClient) glueClient = new GlueClient({ region: requiredEnv("AWS_REGION") });
   return glueClient;
+}
+
+let eventBridgeClient: EventBridgeClient | undefined;
+export function getEventBridgeClient(): EventBridgeClient {
+  if (!eventBridgeClient) eventBridgeClient = new EventBridgeClient({ region: requiredEnv("AWS_REGION") });
+  return eventBridgeClient;
 }
