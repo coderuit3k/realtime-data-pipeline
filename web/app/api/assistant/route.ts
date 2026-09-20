@@ -3,23 +3,13 @@ import { InvokeCommand } from "@aws-sdk/client-lambda";
 import { getLambdaClient, requiredEnv } from "@/lib/aws";
 import { checkRateLimit } from "@/lib/ratelimit";
 import { normalizeAssistantResult, type AssistantMode } from "@/lib/assistant";
+import { clientIp } from "@/lib/clientIp";
 
 // rag_agent's own Lambda timeout is 90s (see infra/rag.tf); 60 is Vercel's ceiling
 // on non-Pro plans, so this may still not be enough headroom on a Hobby plan.
 export const maxDuration = 60;
 
 const MAX_QUESTION_LENGTH = 500;
-
-function clientIp(request: NextRequest): string {
-  const h = request.headers;
-  const xff = h.get("x-forwarded-for")?.split(",").map((s) => s.trim()).filter(Boolean) ?? [];
-  return (
-    h.get("x-vercel-forwarded-for")?.trim() ||
-    h.get("x-real-ip")?.trim() ||
-    xff[xff.length - 1] ||
-    "unknown"
-  );
-}
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
