@@ -25,9 +25,14 @@ function statusLabel(status: string): string {
   return "● Chưa chạy";
 }
 
-function logLevelColor(message: string): string {
-  if (message.startsWith("ERROR")) return "text-error";
-  if (message.startsWith("WARN")) return "text-warning";
+function detectLogLevel(message: string): "ERROR" | "WARN" | "INFO" {
+  const match = message.match(/\b(ERROR|WARN|INFO)\b/);
+  return (match?.[1] as "ERROR" | "WARN" | "INFO") ?? "INFO";
+}
+
+function logLevelColor(level: "ERROR" | "WARN" | "INFO"): string {
+  if (level === "ERROR") return "text-error";
+  if (level === "WARN") return "text-warning";
   return "text-accent";
 }
 
@@ -146,11 +151,14 @@ export default function OpsPage() {
             <span className="text-xs font-semibold text-textPrimary">Logs gần đây</span>
             <div className="font-mono flex flex-col gap-1.5 text-[10.5px] text-textMuted">
               {data.recentLogs.length === 0 && <span>Chưa có log trong 24h qua.</span>}
-              {data.recentLogs.map((log, i) => (
-                <span key={i}>
-                  <span className={logLevelColor(log.message)}>{log.message.split(" ")[0]}</span> {log.source}: {log.message}
-                </span>
-              ))}
+              {data.recentLogs.map((log, i) => {
+                const level = detectLogLevel(log.message);
+                return (
+                  <span key={i}>
+                    <span className={logLevelColor(level)}>{level}</span> {log.source}: {log.message}
+                  </span>
+                );
+              })}
             </div>
           </div>
 
