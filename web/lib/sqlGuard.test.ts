@@ -43,6 +43,13 @@ describe("validateReadOnlySelect", () => {
     expect(result.ok).toBe(false);
   });
 
+  it("rejects a forbidden keyword smuggled inside a CTE under a legitimate WITH/SELECT prefix", () => {
+    const result = validateReadOnlySelect(
+      "WITH x AS (INSERT INTO crypto_prices VALUES (1)) SELECT * FROM x"
+    );
+    expect(result).toEqual({ ok: false, reason: "Câu lệnh chứa từ khoá không được phép (chỉ đọc dữ liệu)." });
+  });
+
   it("rejects a SELECT followed by a second statement", () => {
     const result = validateReadOnlySelect("SELECT 1; DROP TABLE crypto_prices");
     expect(result).toEqual({ ok: false, reason: "Không được nối nhiều câu lệnh bằng dấu ';'." });
