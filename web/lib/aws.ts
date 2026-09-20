@@ -3,6 +3,7 @@ import { LambdaClient } from "@aws-sdk/client-lambda";
 import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
 import { GlueClient } from "@aws-sdk/client-glue";
 import { EventBridgeClient } from "@aws-sdk/client-eventbridge";
+import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
 
 export function requiredEnv(name: string): string {
   const value = process.env[name];
@@ -38,4 +39,10 @@ let eventBridgeClient: EventBridgeClient | undefined;
 export function getEventBridgeClient(): EventBridgeClient {
   if (!eventBridgeClient) eventBridgeClient = new EventBridgeClient({ region: requiredEnv("AWS_REGION") });
   return eventBridgeClient;
+}
+
+let cloudWatchLogsClient: CloudWatchLogsClient | undefined;
+export function getCloudWatchLogsClient(): CloudWatchLogsClient {
+  if (!cloudWatchLogsClient) cloudWatchLogsClient = new CloudWatchLogsClient({ region: requiredEnv("AWS_REGION") });
+  return cloudWatchLogsClient;
 }
