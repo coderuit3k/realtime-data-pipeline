@@ -18,6 +18,22 @@ function getDefaultLimiter(): Ratelimit {
   return defaultLimiter;
 }
 
+let explorerLimiter: Ratelimit | undefined;
+export function getExplorerLimiter(): Ratelimit {
+  if (!explorerLimiter) {
+    const redis = new Redis({
+      url: requiredEnv("UPSTASH_REDIS_REST_URL"),
+      token: requiredEnv("UPSTASH_REDIS_REST_TOKEN"),
+    });
+    explorerLimiter = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(3, "1 m"),
+      prefix: "explorer-ratelimit",
+    });
+  }
+  return explorerLimiter;
+}
+
 export type RateLimitResult = { allowed: boolean; remaining: number };
 
 export async function checkRateLimit(
