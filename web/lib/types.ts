@@ -77,3 +77,17 @@ export type OpsResponse = {
   costBreakdown: CostBreakdownEntry[];
   recentLogs: LogEntry[];
 };
+
+export type GithubRun = {
+  id: number;
+  status: string;
+  conclusion: string | null;
+  displayTitle: string;
+  headSha: string;
+  headBranch: string;
+  runStartedAt: string | null;
+  updatedAt: string;
+  htmlUrl: string;
+};
+
+export type GithubJob = { name: string; status: string; conclusion: string | null };
