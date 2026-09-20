@@ -78,7 +78,7 @@ cat > /tmp/web-app-policy.json <<EOF
     {
       "Sid": "GlueReadCuratedDatabase",
       "Effect": "Allow",
-      "Action": ["glue:GetTable", "glue:GetDatabase", "glue:GetPartitions"],
+      "Action": ["glue:GetTable", "glue:GetTables", "glue:GetDatabase", "glue:GetPartitions"],
       "Resource": [
         "arn:aws:glue:${REGION}:${ACCOUNT_ID}:catalog",
         "arn:aws:glue:${REGION}:${ACCOUNT_ID}:database/${DATABASE}",
