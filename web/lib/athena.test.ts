@@ -7,6 +7,7 @@ import {
   runAthenaQuery,
   partitionWhere,
   runAthenaQueryWithStats,
+  partitionPredicateAny,
 } from "./athena";
 
 describe("todayUtcParts", () => {
@@ -178,5 +179,26 @@ describe("runAthenaQueryWithStats", () => {
     process.env.ATHENA_WORKGROUP = "wg";
     process.env.ATHENA_DATABASE = "db";
     await expect(runAthenaQueryWithStats(client, "SELECT 1")).rejects.toThrow("table not found");
+  });
+});
+
+describe("partitionPredicateAny", () => {
+  it("builds a single-day predicate with no alias", () => {
+    expect(partitionPredicateAny([{ year: "2026", month: "09", day: "20" }])).toBe(
+      "(year='2026' AND month='09' AND day='20')"
+    );
+  });
+
+  it("joins multiple days with OR", () => {
+    const result = partitionPredicateAny([
+      { year: "2026", month: "09", day: "20" },
+      { year: "2026", month: "09", day: "19" },
+    ]);
+    expect(result).toBe("(year='2026' AND month='09' AND day='20') OR (year='2026' AND month='09' AND day='19')");
+  });
+
+  it("prefixes each column with the given alias", () => {
+    const result = partitionPredicateAny([{ year: "2026", month: "09", day: "20" }], "c");
+    expect(result).toBe("(c.year='2026' AND c.month='09' AND c.day='20')");
   });
 });

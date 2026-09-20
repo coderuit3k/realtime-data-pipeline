@@ -20,6 +20,16 @@ export function partitionWhere({ year, month, day }: TodayParts): string {
   return `WHERE year='${year}' AND month='${month}' AND day='${day}'`;
 }
 
+export function partitionPredicateAny(partsList: TodayParts[], alias?: string): string {
+  const prefix = alias ? `${alias}.` : "";
+  return partsList
+    .map(
+      ({ year, month, day }) =>
+        `(${prefix}year='${year}' AND ${prefix}month='${month}' AND ${prefix}day='${day}')`
+    )
+    .join(" OR ");
+}
+
 export function buildSourceVolumeQuery(parts: TodayParts): string {
   const where = partitionWhere(parts);
   return [
