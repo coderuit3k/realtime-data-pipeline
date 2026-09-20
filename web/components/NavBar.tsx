@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/assistant", label: "RAG Assistant" },
   { href: "/catalog", label: "Data Catalog" },
   { href: "/explorer", label: "Data Explorer" },
+  { href: "/insights", label: "Insights" },
 ];
 
 export function NavBar() {
