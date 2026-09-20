@@ -74,12 +74,16 @@ GET /api/weather
 GET /api/weather/history?location=<name>
   → web/lib/weatherMeta.ts: WEATHER_LOCATION_NAMES whitelist check --
     400 with a safe error if `location` isn't one of the 12 real names
-  → web/lib/weatherQueries.ts: buildHistoryQuery(location, partsList)
+  → web/lib/weatherQueries.ts: buildHistoryQuery(location, partsList,
+    cutoffLocalIso) -- cutoffLocalIso from dateRange.ts's
+    hoursAgoAsObservedAtLocal(24), NOT SQL's current_timestamp (see
+    "Timezone correctness" below)
       SELECT date_trunc('hour', from_iso8601_timestamp(observed_at))
              AS hour_bucket, AVG(temperature_c) AS avg_temperature_c
       FROM weather_observations
       WHERE location = '<validated location>' AND <partition predicate>
-        AND observed_at >= <24h-ago ISO timestamp>
+        AND from_iso8601_timestamp(observed_at)
+            >= from_iso8601_timestamp('<cutoffLocalIso>')
       GROUP BY date_trunc('hour', from_iso8601_timestamp(observed_at))
       ORDER BY hour_bucket
   → web/lib/types.ts: WeatherHistoryResponse { location: string; points:
@@ -184,17 +188,41 @@ client-input-shape issue, not a backend failure); any other failure
   confirm the detail card + sparkline update, confirm the "Cập nhật N
   phút trước" badge reflects a real recent time.
 
+## Timezone correctness (verified during planning, not an assumption)
+
+`weather_ingestion.py` requests Open-Meteo with `timezone=Asia/Bangkok`
+for every one of the 12 locations. Open-Meteo's own docs state that when
+`timezone` is set, every timestamp it returns (including `current.time`)
+is **naive local time with no UTC offset suffix** (e.g. `2026-09-20T21:00`,
+not `...+07:00` or `...Z`). `normalize_current` stores this value verbatim
+as `observed_at` -- so every row in `weather_observations` is Vietnam
+local time (UTC+7, no DST), not UTC, even though it looks like a plain
+ISO-8601 string. (`ingested_at`, by contrast, IS real UTC --
+`datetime.now(timezone.utc).isoformat()` -- but that field reflects when
+the Lambda ran, not when the reading was taken, so it's the wrong field
+for "how recent is this weather.")
+
+This must never be compared against SQL's `current_timestamp` (real UTC)
+-- doing so would silently skew any "last 24h" cutoff by 7 hours. Instead:
+`web/lib/dateRange.ts` gains `hoursAgoAsObservedAtLocal(hours, now?):
+string`, which shifts the real `now` by the same +7h Vietnam offset before
+subtracting the window, producing a naive-local ISO string in the exact
+frame `observed_at` values are already in. The route computes this once
+and passes it into `buildHistoryQuery` as a plain string parameter --
+`from_iso8601_timestamp` is still used inside SQL (for `date_trunc('hour',
+...)` bucketing and for parsing both sides of the `>=` comparison so
+minute/second-precision differences don't break string comparison), but
+never compared against `current_timestamp`. As a side benefit, hourly
+buckets land on real Vietnam local hours, which is the more meaningful
+framing for a Vietnam weather page anyway.
+
 ## Open assumptions
 
-- `observed_at` is stored as an ISO-8601 string (confirmed in
-  `weather_ingestion.py`'s `normalize_current`) -- `from_iso8601_timestamp`
-  is the correct Presto/Athena function to parse it for `date_trunc` and
-  the 24h-ago comparison; this exact function is not yet used elsewhere
-  in this codebase's queries, so its behavior will be verified against
-  real data during Task 1 (the query-builder task) before being relied on
-  by the route.
 - A location's most recent reading could fall in yesterday's UTC
   partition (just before midnight) relative to "now" -- the current-
   readings query spans today + yesterday's partitions (2 `TodayParts`)
   to avoid ever showing 11 of 12 locations plus one stale/missing one.
-  The 24h-history query needs the same 2-day span for the same reason.
+  The 24h-history query needs the same 2-day span for the same reason
+  (partitions are written by UTC transform time, per `transform.py`'s
+  `write_parquet`, so this is independent of the `observed_at` timezone
+  issue above).
