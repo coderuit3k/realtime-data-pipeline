@@ -55,3 +55,25 @@ export type InsightsResponse = {
   githubHnOverlap: GithubHnOverlap[];
   weatherSnapshot: WeatherSnapshot[];
 };
+
+export type LambdaHealthRow = {
+  functionLabel: string;
+  status: "ok" | "error" | "idle";
+  lastInvocationAt: string | null;
+  errors24h: number;
+  avgDurationMs: number | null;
+};
+
+export type LogEntry = { timestamp: string; message: string; source: string };
+
+export type CostBreakdownEntry = { category: string; monthlyUsd: number };
+
+export type OpsResponse = {
+  lambdaHealth: LambdaHealthRow[];
+  schedule: { scheduleExpression: string; enabled: boolean };
+  alarmsBreaching: number;
+  alarmsTotal: number;
+  costEstimateUsd: number;
+  costBreakdown: CostBreakdownEntry[];
+  recentLogs: LogEntry[];
+};
