@@ -16,9 +16,10 @@ Reference mockup: Design canvas
 Unlike the other 7 pages, Landing has no live runtime state to fetch —
 its "real data" is architectural facts about the codebase/infrastructure,
 true at build/deploy time rather than changing minute to minute (no
-`/api/landing` route, no new AWS credential). Four numbers were
+`/api/landing` route, no new AWS credential). Five numbers were
 independently verified during brainstorming, not carried over from the
-mockup unchanged:
+mockup unchanged (plus corrected copy for ingestion cadence and the tech
+stack list, below):
 
 - **5 data sources** — `DATA_SOURCES.length` from `web/lib/settingsMeta.ts`
   (built for the Settings sub-project), reused rather than re-declared.
@@ -27,13 +28,18 @@ mockup unchanged:
   (hackernews/news/weather/crypto/github ingestion + transform) + 3 in
   `infra/rag.tf` (rag_build_index, rag_query, rag_agent). The mockup's
   "6" predates the RAG sub-project and undercounts.
-- **228 automated tests** — real combined total, verified today:
-  `.venv/bin/python -m pytest tests/ --collect-only -q` → 73 (exactly
-  matches the mockup's stale "73," which turns out to have been accurate
-  for the Python suite alone at the time it was drawn, before the web
-  app's own tests existed); `cd web && npx vitest run` → 155. Both are
-  real, currently-passing suites for this same project — the honest
-  portfolio metric is the sum, not the pre-web-app half.
+- **233 automated tests** — real combined total: `.venv/bin/python -m
+  pytest tests/ --collect-only -q` → 73 (exactly matches the mockup's
+  stale "73," which turns out to have been accurate for the Python suite
+  alone at the time it was drawn, before the web app's own tests
+  existed); `cd web && npx vitest run` → 160. Both are real,
+  currently-passing suites for this same project — the honest portfolio
+  metric is the sum, not the pre-web-app half. (An initial draft of this
+  number, 228, undercounted by exactly 5 -- it was measured before this
+  same feature's own `landingMeta.test.ts` existed, which is itself part
+  of the real vitest suite the number describes. Caught during Task 1's
+  review and corrected; re-verified clean at the final whole-branch
+  review.)
 - **$1/month** — reused directly from `web/lib/opsMeta.ts`'s existing
   `COST_ESTIMATE_USD = 1.02` (already real, already cited there),
   displayed rounded as `$1`. Not re-derived.
@@ -85,8 +91,8 @@ web/components/NavBar.tsx   (modified)
   (imported from `settingsMeta.ts`'s `DATA_SOURCES.length`),
   `WEATHER_LOCATION_COUNT` (imported from `weatherMeta.ts`'s
   `WEATHER_LOCATION_NAMES.length`), `LAMBDA_COUNT = 9` (hardcoded, cited
-  to the `infra/*.tf` grep above), `TEST_COUNT = 228` (hardcoded, cited
-  to the 73+155 breakdown above), `MONTHLY_COST_USD` (imported from
+  to the `infra/*.tf` grep above), `TEST_COUNT = 233` (hardcoded, cited
+  to the 73+160 breakdown above), `MONTHLY_COST_USD` (imported from
   `opsMeta.ts`'s `COST_ESTIMATE_USD`). Every hardcoded value carries an
   inline citation comment stating exactly how it was verified and when.
 - **`web/app/page.tsx` (new Landing, rewritten).** A static server
@@ -107,7 +113,7 @@ web/components/NavBar.tsx   (modified)
   4. 4 feature cards -- mockup's existing structure, with corrected copy:
      weather region count (12, not 4), ingestion cadence (10-20 min
      varies by source, not a blanket 10), and the second inline "73 test
-     tự động" mention (also corrected to the real 228), `id="features"`
+     tự động" mention (also corrected to the real 233), `id="features"`
      for the header's anchor link.
   5. Tech stack chip row -- original 8 chips + Next.js, TypeScript,
      Vercel.
@@ -145,12 +151,12 @@ runtime beyond what Next.js itself already handles for any static page.
   (moved, otherwise unchanged) Dashboard with the shared nav bar visible,
   including a working "Tổng quan" link back to `/dashboard` itself; every
   other existing page's nav still works; the hero stat row shows 5 / 9 /
-  228 / $1; the "Mã nguồn" and "Xem demo" links resolve to the real
+  233 / $1; the "Mã nguồn" and "Xem demo" links resolve to the real
   GitHub repo and `/dashboard` respectively.
 
 ## Open assumptions
 
-- The real Lambda and test counts (9, 228) are point-in-time facts as of
+- The real Lambda and test counts (9, 233) are point-in-time facts as of
   today (2026-09-21) -- like every other hardcoded static fact in this
   app (`opsMeta.ts`'s `COST_ESTIMATE_USD`, `PIPELINE_LAMBDAS`), they will
   go stale if the codebase grows further, and updating them is a manual
