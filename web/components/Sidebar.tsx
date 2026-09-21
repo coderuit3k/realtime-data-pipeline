@@ -112,6 +112,7 @@ function SidebarLink({ link, active }: { link: NavLink; active: boolean }) {
   return (
     <Link
       href={link.href}
+      aria-current={active ? "page" : undefined}
       className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] ${
         active ? "bg-accent/[0.12] text-accent font-semibold" : "text-textSecondary font-medium"
       }`}
@@ -122,11 +123,17 @@ function SidebarLink({ link, active }: { link: NavLink; active: boolean }) {
   );
 }
 
+function statusDotColor(health: HealthResponse | null): string {
+  if (!health) return "bg-textMuted";
+  return health.sourcesHealthy === health.sourcesTotal ? "bg-success" : "bg-warning";
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
   const [health, setHealth] = useState<HealthResponse | null>(null);
 
   useEffect(() => {
+    if (pathname === "/") return;
     fetch("/api/health")
       .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
       .then(({ ok, body }) => {
@@ -135,12 +142,12 @@ export default function Sidebar() {
       .catch(() => {
         /* decorative status only -- never block the sidebar's nav links */
       });
-  }, []);
+  }, [pathname]);
 
   if (pathname === "/") return null;
 
   return (
-    <aside className="w-[240px] flex-shrink-0 bg-sidebarBg border-r border-border flex flex-col px-[18px] py-5 gap-4 overflow-y-auto">
+    <aside className="w-[240px] flex-shrink-0 sticky top-0 h-screen bg-sidebarBg border-r border-border flex flex-col px-[18px] py-5 gap-4 overflow-y-auto">
       <div className="flex items-center gap-2.5 px-1.5">
         <svg
           width="26"
@@ -161,23 +168,25 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-1">
-        <span className="font-mono text-[10px] text-textFaint tracking-wide px-3 pt-1.5 pb-0.5">PHÂN TÍCH</span>
-        {ANALYTICS_LINKS.map((link) => (
-          <SidebarLink key={link.href} link={link} active={pathname === link.href} />
-        ))}
-      </div>
+      <nav className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
+          <span className="font-mono text-[10px] text-textFaint tracking-wide px-3 pt-1.5 pb-0.5">PHÂN TÍCH</span>
+          {ANALYTICS_LINKS.map((link) => (
+            <SidebarLink key={link.href} link={link} active={pathname === link.href} />
+          ))}
+        </div>
 
-      <div className="flex flex-col gap-1">
-        <span className="font-mono text-[10px] text-textFaint tracking-wide px-3 pt-1.5 pb-0.5">VẬN HÀNH</span>
-        {OPS_LINKS.map((link) => (
-          <SidebarLink key={link.href} link={link} active={pathname === link.href} />
-        ))}
-      </div>
+        <div className="flex flex-col gap-1">
+          <span className="font-mono text-[10px] text-textFaint tracking-wide px-3 pt-1.5 pb-0.5">VẬN HÀNH</span>
+          {OPS_LINKS.map((link) => (
+            <SidebarLink key={link.href} link={link} active={pathname === link.href} />
+          ))}
+        </div>
+      </nav>
 
       <div className="mt-auto flex flex-col gap-2.5">
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface border border-border">
-          <span className="w-[7px] h-[7px] rounded-full bg-success flex-shrink-0" />
+          <span className={`w-[7px] h-[7px] rounded-full flex-shrink-0 ${statusDotColor(health)}`} />
           <span className="font-mono text-[11px] text-textSecondary">
             {health ? `${health.sourcesHealthy}/${health.sourcesTotal} nguồn OK` : "—"}
           </span>
