@@ -1,11 +1,18 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { getCostExplorerClient } from "@/lib/aws";
 import { getMonthToDateCostUsd } from "@/lib/costExplorer";
+import { checkRateLimit, getCostLimiter } from "@/lib/ratelimit";
+import { clientIp } from "@/lib/clientIp";
 import type { CostResponse } from "@/lib/types";
 
 export const maxDuration = 60;
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const rateLimit = await checkRateLimit(clientIp(request), getCostLimiter());
+  if (!rateLimit.allowed) {
+    return NextResponse.json({ error: "Đợi một chút rồi thử lại." }, { status: 429 });
+  }
+
   try {
     const monthToDateCostUsd = await getMonthToDateCostUsd(getCostExplorerClient());
 

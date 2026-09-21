@@ -34,6 +34,22 @@ export function getExplorerLimiter(): Ratelimit {
   return explorerLimiter;
 }
 
+let costLimiter: Ratelimit | undefined;
+export function getCostLimiter(): Ratelimit {
+  if (!costLimiter) {
+    const redis = new Redis({
+      url: requiredEnv("UPSTASH_REDIS_REST_URL"),
+      token: requiredEnv("UPSTASH_REDIS_REST_TOKEN"),
+    });
+    costLimiter = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(5, "1 m"),
+      prefix: "cost-ratelimit",
+    });
+  }
+  return costLimiter;
+}
+
 export type RateLimitResult = { allowed: boolean; remaining: number };
 
 export async function checkRateLimit(

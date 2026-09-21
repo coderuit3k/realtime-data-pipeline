@@ -17,14 +17,16 @@ export const DATA_SOURCE_COUNT = DATA_SOURCES.length;
 export const LAMBDA_COUNT = 9;
 
 // Real combined automated test count, verified 2026-09-21 AFTER this
-// file's own test file (landingMeta.test.ts) was added -- that file is
-// itself part of the real vitest suite this constant describes, so the
-// count must include it, not the pre-this-commit vitest total:
+// same day's real-cost fix wave (which added lib/ratelimit.ts's
+// getCostLimiter() and a new 429 test in app/api/cost/route.test.ts)
+// was applied -- those additions are themselves part of the real
+// vitest suite this constant describes, so the count must include
+// them, not an earlier snapshot taken before they existed:
 //   .venv/bin/python -m pytest tests/ --collect-only -q   -> 73
-//   cd web && npx vitest run                              -> 160 (34 files)
-// 73 + 160 = 233. Both are real, currently-passing suites for this
+//   cd web && npx vitest run                              -> 169 (37 files)
+// 73 + 169 = 242. Both are real, currently-passing suites for this
 // same project (Python pipeline + TypeScript web app).
-export const TEST_COUNT = 233;
+export const TEST_COUNT = 242;
 
 // Reused directly from opsMeta.ts's existing, already-cited
 // COST_ESTIMATE_USD -- never re-derived separately.

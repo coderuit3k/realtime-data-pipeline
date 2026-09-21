@@ -31,7 +31,7 @@ export default function DashboardPage() {
     fetch("/api/cost")
       .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
       .then(({ ok, body }) => {
-        if (ok) setCost(body);
+        if (ok && typeof body?.monthToDateCostUsd === "number") setCost(body);
       })
       .catch(() => {
         /* cost is secondary -- never block the page over it */

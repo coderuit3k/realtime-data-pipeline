@@ -234,7 +234,7 @@ What's actually running, at this project's low volume:
 | S3 (raw + curated) | Pennies/month |
 | Secrets Manager (2 secrets: NewsAPI, Tavily -- Open-Meteo, CoinGecko, GitHub Search need no key) | ~$0.80/month |
 | CloudWatch alarms (6) | ~$0.60/month |
-| Cost Explorer API (1 real `GetCostAndUsage` call/day via the 24h cache, $0.01/call) | ~$0.30/month |
+| Cost Explorer API (~1 real `GetCostAndUsage` call/day per edge region via the 24h cache -- typically 1-2 for a low-traffic deployment, $0.01/call) | ~$0.30/month |
 | CloudWatch Logs (14-day retention) | Pennies/month |
 | Glue Data Catalog (5 tables) | Free (first 1M objects/month free) |
 | Athena (pay per query, tiny dataset) | Pennies per query |

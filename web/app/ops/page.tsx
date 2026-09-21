@@ -62,7 +62,7 @@ export default function OpsPage() {
     fetch("/api/cost")
       .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
       .then(({ ok, body }) => {
-        if (ok) setCost(body);
+        if (ok && typeof body?.monthToDateCostUsd === "number") setCost(body);
       })
       .catch(() => {
         /* cost is secondary -- never block the page over it */
@@ -125,7 +125,7 @@ export default function OpsPage() {
           </span>
         </div>
         <div className="rounded-2xl border border-border bg-surface px-4 py-4 flex flex-col gap-2">
-          <span className="text-[11.5px] text-textSecondary">Chi phí ước tính / tháng</span>
+          <span className="text-[11.5px] text-textSecondary">Chi phí tháng này (đến hôm nay)</span>
           <span className="font-mono text-xl text-textPrimary">
             {cost ? `$${cost.monthToDateCostUsd.toFixed(2)}` : "—"}
           </span>
@@ -191,7 +191,7 @@ export default function OpsPage() {
               ))}
             </div>
             <span className="text-[10.5px] text-textMuted">
-              2 hạng mục có giá cụ thể nhất -- không phải tổng đầy đủ, xem infra/README.md
+              3 hạng mục có giá cụ thể nhất -- không phải tổng đầy đủ, xem infra/README.md
             </span>
           </div>
         </div>
