@@ -26,7 +26,7 @@ const TECH_STACK = [
 
 function ArrowIcon() {
   return (
-    <svg width="26" height="14" viewBox="0 0 26 14" fill="none" stroke="#3D4874" strokeWidth={2}>
+    <svg width="26" height="14" viewBox="0 0 26 14" fill="none" stroke="currentColor" strokeWidth={2} className="text-border">
       <path d="M0 7h22M17 2l6 5-6 5" />
     </svg>
   );
@@ -91,9 +91,9 @@ export default function LandingPage() {
           Pipeline dữ liệu real-time, serverless, chạy thật trên AWS
         </h1>
         <p className="max-w-xl text-[15px] leading-relaxed text-textSecondary">
-          5 nguồn dị chủng đổ về S3 → Glue/Athena, cộng 2 kiến trúc RAG song song trên Bedrock — một pipeline cố
-          định (CRAG) và một agent tự quyết định gọi tool. Toàn bộ hạ tầng bằng Terraform, deploy qua GitHub
-          Actions với gate phê duyệt production.
+          {DATA_SOURCE_COUNT} nguồn dị chủng đổ về S3 → Glue/Athena, cộng 2 kiến trúc RAG song song trên Bedrock —
+          một pipeline cố định (CRAG) và một agent tự quyết định gọi tool. Toàn bộ hạ tầng bằng Terraform, deploy
+          qua GitHub Actions với gate phê duyệt production.
         </p>
         <div className="flex gap-3 mt-1.5">
           <Link href="/dashboard" className="rounded-lg bg-accent px-6 py-3 text-[13.5px] font-semibold text-bg">
@@ -160,7 +160,7 @@ export default function LandingPage() {
               <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
             </svg>
           }
-          title="5 nguồn dữ liệu dị chủng"
+          title={`${DATA_SOURCE_COUNT} nguồn dữ liệu dị chủng`}
           description={`Hacker News, News API, thời tiết Open-Meteo (${WEATHER_LOCATION_COUNT} khu vực), giá crypto CoinGecko, GitHub trending — ingest mỗi 10-20 phút tuỳ nguồn.`}
         />
         <FeatureCard
