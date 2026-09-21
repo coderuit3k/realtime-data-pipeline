@@ -26,8 +26,13 @@ current Dashboard moves to a new `/dashboard` route unchanged.
 - Real, verified numbers (not the mockup's stale ones): `DATA_SOURCE_COUNT`
   = 5 (from `settingsMeta.ts`'s `DATA_SOURCES.length`), `LAMBDA_COUNT` =
   9 (6 pipeline + 3 RAG, verified via `grep -n "^resource
-  \"aws_lambda_function\"" infra/*.tf`), `TEST_COUNT` = 228 (73 real
-  pytest + 155 real vitest, verified 2026-09-21), `MONTHLY_COST_USD`
+  \"aws_lambda_function\"" infra/*.tf`), `TEST_COUNT` = 233 (73 real
+  pytest + 160 real vitest -- the vitest count includes this feature's
+  own `landingMeta.test.ts`, since that file is part of the same
+  real, currently-passing suite it's describing; corrected during
+  Task 1's review after an initial count of 228 measured vitest
+  *before* that test file existed, undercounting by exactly the 5
+  tests the task itself adds; verified 2026-09-21), `MONTHLY_COST_USD`
   reused from `opsMeta.ts`'s `COST_ESTIMATE_USD` (1.02, displayed as
   `$1`), `WEATHER_LOCATION_COUNT` = 12 (from `weatherMeta.ts`'s
   `WEATHER_LOCATION_NAMES.length`). `DATA_SOURCE_COUNT` and
@@ -39,7 +44,7 @@ current Dashboard moves to a new `/dashboard` route unchanged.
   not a blanket "mỗi 10 phút" (News API has had its own separate,
   slower `rate(20 minutes)` rule since the Ops sub-project's real
   rate-limit incident fix); both inline "test tự động" mentions (hero
-  stat row and the IaC/CI-CD feature card) show the real 228, not the
+  stat row and the IaC/CI-CD feature card) show the real 233, not the
   mockup's stale 73.
 - Tech stack chips: the mockup's original 8 (Python, Terraform, AWS
   Lambda, S3, Glue, Athena, Bedrock, GitHub Actions) plus 3 real,
@@ -135,12 +140,15 @@ export const DATA_SOURCE_COUNT = DATA_SOURCES.length;
 // rag_agent) = 9.
 export const LAMBDA_COUNT = 9;
 
-// Real combined automated test count, verified 2026-09-21:
+// Real combined automated test count, verified 2026-09-21 AFTER this
+// file's own test file (landingMeta.test.ts) was added -- that file is
+// itself part of the real vitest suite this constant describes, so the
+// count must include it, not the pre-this-commit vitest total:
 //   .venv/bin/python -m pytest tests/ --collect-only -q   -> 73
-//   cd web && npx vitest run                              -> 155
-// 73 + 155 = 228. Both are real, currently-passing suites for this
+//   cd web && npx vitest run                              -> 160 (34 files)
+// 73 + 160 = 233. Both are real, currently-passing suites for this
 // same project (Python pipeline + TypeScript web app).
-export const TEST_COUNT = 228;
+export const TEST_COUNT = 233;
 
 // Reused directly from opsMeta.ts's existing, already-cited
 // COST_ESTIMATE_USD -- never re-derived separately.
