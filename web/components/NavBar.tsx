@@ -11,6 +11,7 @@ const LINKS = [
   { href: "/insights", label: "Insights" },
   { href: "/ops", label: "Ops" },
   { href: "/cicd", label: "CI/CD" },
+  { href: "/weather", label: "Thời tiết" },
 ];
 
 export function NavBar() {
