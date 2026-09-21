@@ -101,13 +101,15 @@ GET /api/settings
   `getSecretsManagerClient(): SecretsManagerClient`, same pattern as the
   existing client getters.
 - **`web/lib/settingsMeta.ts` (new).** Static per-data-source metadata:
-  `{ id: string; name: string; description: string; usesNewsSchedule:
-  boolean; detail: string }[]` for the 5 ingestion sources (Hacker News,
-  News API, Weather, Crypto, GitHub Trending), each `detail` string
-  citing its real source (query default, location count, coin list,
-  rate-limit note) as described above. `SECRET_LABELS` maps the 2 real
-  secret env-var-style names (`news-api-key`, `tavily-api-key`) to their
-  display labels, matching the mockup's naming.
+  `{ id: string; name: string; detail: string; usesNewsSchedule: boolean
+  }[]` for the 5 ingestion sources (Hacker News, News API, Weather,
+  Crypto, GitHub Trending) -- no separate `description` field, `detail`
+  alone carries the source-cited subtext (query default, location count,
+  coin list, rate-limit note) as described above; a second field would be
+  dead weight next to it. `SECRET_LABELS: string[]` holds the 2 real
+  secret display names (`news-api-key`, `tavily-api-key`), matching the
+  mockup's naming, in a fixed order a later task pairs positionally with
+  the 2 real secret status calls.
 - **`web/lib/types.ts` (modified, additive).** Adds `ScheduleStatus`,
   `SecretStatus`, `SettingsResponse` as shown above.
 - **`web/app/api/settings/route.ts` (new, GET).** `Promise.all` of the 4
