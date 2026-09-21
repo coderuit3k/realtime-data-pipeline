@@ -5,6 +5,7 @@ import { GlueClient } from "@aws-sdk/client-glue";
 import { EventBridgeClient } from "@aws-sdk/client-eventbridge";
 import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
 import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
+import { CostExplorerClient } from "@aws-sdk/client-cost-explorer";
 
 export function requiredEnv(name: string): string {
   const value = process.env[name];
@@ -52,4 +53,13 @@ let secretsManagerClient: SecretsManagerClient | undefined;
 export function getSecretsManagerClient(): SecretsManagerClient {
   if (!secretsManagerClient) secretsManagerClient = new SecretsManagerClient({ region: requiredEnv("AWS_REGION") });
   return secretsManagerClient;
+}
+
+// Cost Explorer's real API endpoint is fixed at us-east-1 regardless of
+// where the account's other resources live -- the one client getter in
+// this file that deliberately does NOT read AWS_REGION.
+let costExplorerClient: CostExplorerClient | undefined;
+export function getCostExplorerClient(): CostExplorerClient {
+  if (!costExplorerClient) costExplorerClient = new CostExplorerClient({ region: "us-east-1" });
+  return costExplorerClient;
 }
