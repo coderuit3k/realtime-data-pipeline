@@ -19,7 +19,7 @@ export const DATA_SOURCES: DataSourceMeta[] = [
   {
     id: "hackernews",
     name: "Hacker News",
-    detail: "Top stories · không cần API key",
+    detail: "newstories · top 50 · không cần API key",
     usesNewsSchedule: false,
   },
   {
@@ -43,7 +43,7 @@ export const DATA_SOURCES: DataSourceMeta[] = [
   {
     id: "github",
     name: "GitHub Trending",
-    detail: "created > 7 ngày · top 20 · giới hạn 10 req/phút (GitHub Search API, unauthenticated)",
+    detail: "created trong 7 ngày · top 20 · giới hạn 10 req/phút (GitHub Search API, unauthenticated)",
     usesNewsSchedule: false,
   },
 ];

@@ -20,9 +20,9 @@ describe("CATALOG_META", () => {
     expect(CATALOG_META.weather_observations.ragIndexed).toBe(false);
   });
 
-  it("gives every table the shared 10-minute ingestion cadence", () => {
-    for (const meta of Object.values(CATALOG_META)) {
-      expect(meta.cadence).toBe("mỗi 10 phút");
+  it("gives every table the shared 10-minute cadence, except news_articles on its own slower 20-minute cadence", () => {
+    for (const [id, meta] of Object.entries(CATALOG_META)) {
+      expect(meta.cadence).toBe(id === "news_articles" ? "mỗi 20 phút" : "mỗi 10 phút");
     }
   });
 

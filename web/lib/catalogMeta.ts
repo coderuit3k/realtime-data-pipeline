@@ -4,7 +4,8 @@ import type { CatalogTableMeta } from "./types";
 // docs/superpowers/specs/2026-09-20-catalog-page-design.md's
 // "Real data sources" table. Never add a fact that isn't traceable
 // to code.
-const CADENCE = "mỗi 10 phút"; // infra/eventbridge.tf: one shared rate(10 minutes) rule for all 5 ingestion Lambdas
+const CADENCE = "mỗi 10 phút"; // infra/eventbridge.tf: one shared rate(10 minutes) rule for hackernews/weather/crypto/github ingestion Lambdas
+const NEWS_CADENCE = "mỗi 20 phút"; // infra/eventbridge.tf: news_ingestion_schedule, its own slower rule -- NewsAPI's free tier caps at 100 req/day
 
 export const CATALOG_META: Record<string, CatalogTableMeta> = {
   hackernews_stories: {
@@ -17,7 +18,7 @@ export const CATALOG_META: Record<string, CatalogTableMeta> = {
     ragIndexed: true, // rag/build_index.py:102
     sourceApi: "NewsAPI /v2/everything",
     ingestionLambda: "news-ingestion",
-    cadence: CADENCE,
+    cadence: NEWS_CADENCE,
   },
   github_repos: {
     ragIndexed: true, // rag/build_index.py:103

@@ -46,7 +46,8 @@ aws secretsmanager put-secret-value \
 ## Web app IAM user (manual -- not managed by Terraform)
 
 The `web/` Next.js app (dashboard, RAG assistant, data catalog, data
-explorer, insights, ops) needs its own AWS credentials, scoped read-only
+explorer, insights, ops, CI/CD, weather, settings) needs its own AWS
+credentials, scoped read-only
 to Athena/Glue/S3/CloudWatch/EventBridge/CloudWatch Logs plus
 `lambda:InvokeFunction` on just the two RAG Lambdas. This user is created
 **manually via the AWS CLI**, not by `terraform apply` -- the GitHub Actions
@@ -54,6 +55,13 @@ deploy role is deliberately scoped to manage IAM *roles* only (see
 `infra-bootstrap/oidc.tf`), not IAM *users* or access keys, so a compromised
 CI run can never mint its own long-lived credentials. Run this once, with
 your own AWS credentials, after `infra`'s first apply:
+
+> **Already created the user?** Re-run only from the variable
+> assignments through `aws iam put-user-policy` (that command is a full
+> policy replace, safe to re-run any time a new grant is added below) —
+> skip `aws iam create-user` (harmless if re-run, but noise) and `aws
+> iam create-access-key` (re-running this mints an extra, unrotated
+> long-lived credential every time).
 
 ```bash
 cd infra
