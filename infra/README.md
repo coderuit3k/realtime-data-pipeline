@@ -56,6 +56,14 @@ deploy role is deliberately scoped to manage IAM *roles* only (see
 CI run can never mint its own long-lived credentials. Run this once, with
 your own AWS credentials, after `infra`'s first apply:
 
+> **New: Cost Explorer must be enabled first.** AWS Cost Explorer needs to
+> be turned on for the account once, via the AWS Billing console
+> (Billing and Cost Management → Cost Explorer → Enable Cost Explorer),
+> before `ce:GetCostAndUsage` returns real data — if it has never been
+> enabled, the first real API call may fail or return an empty result.
+> This is a one-time, manual, real AWS Console step; it cannot be
+> scripted or done by Terraform.
+
 > **Already created the user?** Re-run only from the variable
 > assignments through `aws iam put-user-policy` (that command is a full
 > policy replace, safe to re-run any time a new grant is added below) —
@@ -163,6 +171,12 @@ cat > /tmp/web-app-policy.json <<EOF
       "Effect": "Allow",
       "Action": ["secretsmanager:DescribeSecret"],
       "Resource": ["${NEWS_SECRET_ARN}", "${TAVILY_SECRET_ARN}"]
+    },
+    {
+      "Sid": "CostExplorerReadOnly",
+      "Effect": "Allow",
+      "Action": ["ce:GetCostAndUsage"],
+      "Resource": "*"
     }
   ]
 }
@@ -220,6 +234,7 @@ What's actually running, at this project's low volume:
 | S3 (raw + curated) | Pennies/month |
 | Secrets Manager (2 secrets: NewsAPI, Tavily -- Open-Meteo, CoinGecko, GitHub Search need no key) | ~$0.80/month |
 | CloudWatch alarms (6) | ~$0.60/month |
+| Cost Explorer API (1 real `GetCostAndUsage` call/day via the 24h cache, $0.01/call) | ~$0.30/month |
 | CloudWatch Logs (14-day retention) | Pennies/month |
 | Glue Data Catalog (5 tables) | Free (first 1M objects/month free) |
 | Athena (pay per query, tiny dataset) | Pennies per query |
