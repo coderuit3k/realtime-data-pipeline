@@ -8,7 +8,6 @@ import {
   parseAthenaRows,
 } from "@/lib/athena";
 import { getAlarmStatus } from "@/lib/cloudwatchAlarms";
-import { COST_ESTIMATE_USD } from "@/lib/opsMeta";
 import { DATA_SOURCES } from "@/lib/settingsMeta";
 import type { DashboardResponse, SourceVolume, ActivityItem } from "@/lib/types";
 
@@ -53,7 +52,6 @@ export async function GET() {
       sourcesTotal: DATA_SOURCES.length,
       alarmsBreaching,
       alarmsTotal,
-      costEstimateUsd: COST_ESTIMATE_USD,
       recentActivity,
     };
     return NextResponse.json(response, {

@@ -26,4 +26,5 @@ export const COST_BREAKDOWN: CostBreakdownEntry[] = [
   { category: "Secrets Manager", monthlyUsd: 0.8 },
   { category: "CloudWatch alarms", monthlyUsd: 0.6 },
   { category: "Lambda + S3", monthlyUsd: 0 },
+  { category: "Cost Explorer API", monthlyUsd: 0.3 },
 ];

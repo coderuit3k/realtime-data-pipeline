@@ -4,7 +4,7 @@ import { getScheduleStatus } from "@/lib/eventbridge";
 import { getLambdaHealth } from "@/lib/cloudwatchMetrics";
 import { queryRecentLogs } from "@/lib/cloudwatchLogs";
 import { getAlarmStatus } from "@/lib/cloudwatchAlarms";
-import { PIPELINE_LAMBDAS, COST_ESTIMATE_USD, COST_BREAKDOWN } from "@/lib/opsMeta";
+import { PIPELINE_LAMBDAS, COST_BREAKDOWN } from "@/lib/opsMeta";
 import type { OpsResponse } from "@/lib/types";
 
 export const maxDuration = 60;
@@ -31,7 +31,6 @@ export async function GET() {
       schedule,
       alarmsBreaching: alarmStatus.alarmsBreaching,
       alarmsTotal: alarmStatus.alarmsTotal,
-      costEstimateUsd: COST_ESTIMATE_USD,
       costBreakdown: COST_BREAKDOWN,
       recentLogs,
     };

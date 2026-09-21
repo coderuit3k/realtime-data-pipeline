@@ -56,7 +56,6 @@ describe("GET /api/dashboard", () => {
     expect(body.sourcesTotal).toBe(5);
     expect(body.alarmsBreaching).toBe(1);
     expect(body.alarmsTotal).toBe(3);
-    expect(body.costEstimateUsd).toBe(1.02);
     expect(body.recentActivity).toHaveLength(1);
   });
 

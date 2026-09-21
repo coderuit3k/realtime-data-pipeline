@@ -8,7 +8,6 @@ export type DashboardResponse = {
   sourcesTotal: number;
   alarmsBreaching: number;
   alarmsTotal: number;
-  costEstimateUsd: number;
   recentActivity: ActivityItem[];
 };
 
@@ -73,7 +72,6 @@ export type OpsResponse = {
   schedule: { scheduleExpression: string; enabled: boolean };
   alarmsBreaching: number;
   alarmsTotal: number;
-  costEstimateUsd: number;
   costBreakdown: CostBreakdownEntry[];
   recentLogs: LogEntry[];
 };
@@ -145,4 +143,8 @@ export type HealthResponse = {
   sourcesTotal: number;
   region: string;
   environment: string;
+};
+
+export type CostResponse = {
+  monthToDateCostUsd: number;
 };

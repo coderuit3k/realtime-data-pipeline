@@ -32,11 +32,12 @@ describe("COST_ESTIMATE_USD", () => {
 });
 
 describe("COST_BREAKDOWN", () => {
-  it("has the 3 real categories cited in infra/README.md's cost table", () => {
+  it("has the 4 real categories cited in infra/README.md's cost table", () => {
     expect(COST_BREAKDOWN).toEqual([
       { category: "Secrets Manager", monthlyUsd: 0.8 },
       { category: "CloudWatch alarms", monthlyUsd: 0.6 },
       { category: "Lambda + S3", monthlyUsd: 0 },
+      { category: "Cost Explorer API", monthlyUsd: 0.3 },
     ]);
   });
 });

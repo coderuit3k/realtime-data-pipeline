@@ -51,11 +51,11 @@ describe("GET /api/ops", () => {
     expect(body.recentLogs).toHaveLength(1);
     expect(body.alarmsBreaching).toBe(1);
     expect(body.alarmsTotal).toBe(3);
-    expect(body.costEstimateUsd).toBe(1.02);
     expect(body.costBreakdown).toEqual([
       { category: "Secrets Manager", monthlyUsd: 0.8 },
       { category: "CloudWatch alarms", monthlyUsd: 0.6 },
       { category: "Lambda + S3", monthlyUsd: 0 },
+      { category: "Cost Explorer API", monthlyUsd: 0.3 },
     ]);
 
     expect(mockedSchedule).toHaveBeenCalledWith(
