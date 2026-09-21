@@ -77,6 +77,9 @@ CRYPTO_FN="$(terraform output -raw crypto_ingestion_function_name)"
 GITHUB_FN="$(terraform output -raw github_trending_ingestion_function_name)"
 TRANSFORM_FN="$(terraform output -raw transform_function_name)"
 INGESTION_SCHEDULE_ARN="arn:aws:events:${REGION}:${ACCOUNT_ID}:rule/$(terraform output -raw ingestion_schedule_rule_name)"
+NEWS_INGESTION_SCHEDULE_ARN="arn:aws:events:${REGION}:${ACCOUNT_ID}:rule/$(terraform output -raw news_ingestion_schedule_rule_name)"
+NEWS_SECRET_ARN="$(terraform output -raw news_secret_arn)"
+TAVILY_SECRET_ARN="$(terraform output -raw tavily_secret_arn)"
 
 cat > /tmp/web-app-policy.json <<EOF
 {
@@ -126,7 +129,7 @@ cat > /tmp/web-app-policy.json <<EOF
       "Sid": "EventBridgeReadSchedule",
       "Effect": "Allow",
       "Action": ["events:DescribeRule"],
-      "Resource": "${INGESTION_SCHEDULE_ARN}"
+      "Resource": ["${INGESTION_SCHEDULE_ARN}", "${NEWS_INGESTION_SCHEDULE_ARN}"]
     },
     {
       "Sid": "LogsInsightsReadOnly",
@@ -146,6 +149,12 @@ cat > /tmp/web-app-policy.json <<EOF
       "Effect": "Allow",
       "Action": ["lambda:InvokeFunction"],
       "Resource": ["${RAG_QUERY_ARN}", "${RAG_AGENT_ARN}"]
+    },
+    {
+      "Sid": "SecretsManagerDescribeOnly",
+      "Effect": "Allow",
+      "Action": ["secretsmanager:DescribeSecret"],
+      "Resource": ["${NEWS_SECRET_ARN}", "${TAVILY_SECRET_ARN}"]
     }
   ]
 }
@@ -184,6 +193,8 @@ for placeholder values and one-line comments):
 - `RAG_AGENT_FUNCTION_NAME` -- name of the `rag_agent` Lambda
 - `UPSTASH_REDIS_REST_URL` -- Upstash Redis REST URL for assistant rate limiting
 - `UPSTASH_REDIS_REST_TOKEN` -- Upstash Redis REST token for assistant rate limiting
+- `NEWS_SECRET_NAME` -- name of the News API secret (Settings page's real, metadata-only "configured" check)
+- `TAVILY_SECRET_NAME` -- name of the Tavily secret (same check)
 
 ## Updating Lambda code
 

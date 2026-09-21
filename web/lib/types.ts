@@ -129,3 +129,13 @@ export type WeatherResponse = { locations: WeatherLocation[] };
 export type WeatherHistoryPoint = { hourBucket: string; avgTemperatureC: number };
 
 export type WeatherHistoryResponse = { location: string; points: WeatherHistoryPoint[] };
+
+export type ScheduleStatus = { scheduleExpression: string; enabled: boolean };
+
+export type SecretStatus = { name: string; configured: boolean };
+
+export type SettingsResponse = {
+  sharedSchedule: ScheduleStatus;
+  newsSchedule: ScheduleStatus;
+  secrets: SecretStatus[];
+};

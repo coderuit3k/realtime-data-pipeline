@@ -61,3 +61,15 @@ output "rag_agent_function_name" {
 output "ingestion_schedule_rule_name" {
   value = aws_cloudwatch_event_rule.ingestion_schedule.name
 }
+
+output "news_ingestion_schedule_rule_name" {
+  value = aws_cloudwatch_event_rule.news_ingestion_schedule.name
+}
+
+output "news_secret_arn" {
+  value = aws_secretsmanager_secret.news_api.arn
+}
+
+output "tavily_secret_arn" {
+  value = aws_secretsmanager_secret.tavily_api.arn
+}

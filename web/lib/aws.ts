@@ -4,6 +4,7 @@ import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
 import { GlueClient } from "@aws-sdk/client-glue";
 import { EventBridgeClient } from "@aws-sdk/client-eventbridge";
 import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
+import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 
 export function requiredEnv(name: string): string {
   const value = process.env[name];
@@ -45,4 +46,10 @@ let cloudWatchLogsClient: CloudWatchLogsClient | undefined;
 export function getCloudWatchLogsClient(): CloudWatchLogsClient {
   if (!cloudWatchLogsClient) cloudWatchLogsClient = new CloudWatchLogsClient({ region: requiredEnv("AWS_REGION") });
   return cloudWatchLogsClient;
+}
+
+let secretsManagerClient: SecretsManagerClient | undefined;
+export function getSecretsManagerClient(): SecretsManagerClient {
+  if (!secretsManagerClient) secretsManagerClient = new SecretsManagerClient({ region: requiredEnv("AWS_REGION") });
+  return secretsManagerClient;
 }
