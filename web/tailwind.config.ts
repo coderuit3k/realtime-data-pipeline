@@ -15,6 +15,8 @@ const config: Config = {
         success: "#34D399",
         warning: "#F5A524",
         error: "#F0576B",
+        sidebarBg: "#0E1626",
+        textFaint: "#3D4874",
       },
       fontFamily: {
         heading: ["var(--font-space-grotesk)"],

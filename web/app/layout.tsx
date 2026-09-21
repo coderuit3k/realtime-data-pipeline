@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, Work_Sans, IBM_Plex_Mono } from "next/font/google";
-import { NavBar } from "@/components/NavBar";
+import Sidebar from "@/components/Sidebar";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -28,8 +28,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="vi" className={`${spaceGrotesk.variable} ${workSans.variable} ${ibmPlexMono.variable}`}>
       <body>
-        <NavBar />
-        {children}
+        <div className="flex min-h-screen">
+          <Sidebar />
+          <main className="flex-1 overflow-auto">{children}</main>
+        </div>
       </body>
     </html>
   );
