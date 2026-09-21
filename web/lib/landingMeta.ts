@@ -16,12 +16,15 @@ export const DATA_SOURCE_COUNT = DATA_SOURCES.length;
 // rag_agent) = 9.
 export const LAMBDA_COUNT = 9;
 
-// Real combined automated test count, verified 2026-09-21:
+// Real combined automated test count, verified 2026-09-21 AFTER this
+// file's own test file (landingMeta.test.ts) was added -- that file is
+// itself part of the real vitest suite this constant describes, so the
+// count must include it, not the pre-this-commit vitest total:
 //   .venv/bin/python -m pytest tests/ --collect-only -q   -> 73
-//   cd web && npx vitest run                              -> 155
-// 73 + 155 = 228. Both are real, currently-passing suites for this
+//   cd web && npx vitest run                              -> 160 (34 files)
+// 73 + 160 = 233. Both are real, currently-passing suites for this
 // same project (Python pipeline + TypeScript web app).
-export const TEST_COUNT = 228;
+export const TEST_COUNT = 233;
 
 // Reused directly from opsMeta.ts's existing, already-cited
 // COST_ESTIMATE_USD -- never re-derived separately.
