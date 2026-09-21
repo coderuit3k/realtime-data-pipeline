@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { OpsResponse } from "@/lib/types";
+import type { OpsResponse, CostResponse } from "@/lib/types";
 
 function relativeTime(iso: string | null, now: Date = new Date()): string {
   if (!iso) return "chưa có dữ liệu";
@@ -40,6 +40,7 @@ function logLevelColor(level: "ERROR" | "WARN" | "INFO"): string {
 export default function OpsPage() {
   const [data, setData] = useState<OpsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cost, setCost] = useState<CostResponse | null>(null);
 
   async function load() {
     setError(null);
@@ -55,6 +56,17 @@ export default function OpsPage() {
 
   useEffect(() => {
     load();
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/cost")
+      .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
+      .then(({ ok, body }) => {
+        if (ok) setCost(body);
+      })
+      .catch(() => {
+        /* cost is secondary -- never block the page over it */
+      });
   }, []);
 
   if (error) {
@@ -114,7 +126,9 @@ export default function OpsPage() {
         </div>
         <div className="rounded-2xl border border-border bg-surface px-4 py-4 flex flex-col gap-2">
           <span className="text-[11.5px] text-textSecondary">Chi phí ước tính / tháng</span>
-          <span className="font-mono text-xl text-textPrimary">${data.costEstimateUsd.toFixed(2)}</span>
+          <span className="font-mono text-xl text-textPrimary">
+            {cost ? `$${cost.monthToDateCostUsd.toFixed(2)}` : "—"}
+          </span>
         </div>
       </div>
 

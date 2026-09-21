@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import { KpiCard } from "@/components/KpiCard";
 import { SourceVolumeChart } from "@/components/SourceVolumeChart";
 import { ActivityFeed } from "@/components/ActivityFeed";
-import type { DashboardResponse } from "@/lib/types";
+import type { DashboardResponse, CostResponse } from "@/lib/types";
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cost, setCost] = useState<CostResponse | null>(null);
 
   async function load() {
     setError(null);
@@ -24,6 +25,17 @@ export default function DashboardPage() {
 
   useEffect(() => {
     load();
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/cost")
+      .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
+      .then(({ ok, body }) => {
+        if (ok) setCost(body);
+      })
+      .catch(() => {
+        /* cost is secondary -- never block the page over it */
+      });
   }, []);
 
   if (error) {
@@ -70,7 +82,11 @@ export default function DashboardPage() {
           value={String(data.alarmsBreaching)}
           hint={`trong ${data.alarmsTotal} alarm`}
         />
-        <KpiCard label="Chi phí ước tính" value={`$${data.costEstimateUsd.toFixed(2)}`} hint="tháng này" />
+        <KpiCard
+          label="Chi phí ước tính"
+          value={cost ? `$${cost.monthToDateCostUsd.toFixed(2)}` : "—"}
+          hint="tháng này"
+        />
       </div>
       <div className="grid grid-cols-[1.4fr_1fr] gap-4">
         <SourceVolumeChart sourceVolumes={data.sourceVolumes} />
