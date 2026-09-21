@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const LINKS = [
-  { href: "/", label: "Tổng quan" },
+  { href: "/dashboard", label: "Tổng quan" },
   { href: "/assistant", label: "RAG Assistant" },
   { href: "/catalog", label: "Data Catalog" },
   { href: "/explorer", label: "Data Explorer" },
@@ -17,6 +17,7 @@ const LINKS = [
 
 export function NavBar() {
   const pathname = usePathname();
+  if (pathname === "/") return null;
 
   return (
     <nav className="flex items-center gap-6 border-b border-border px-9 py-4">
