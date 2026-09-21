@@ -12,6 +12,7 @@ const LINKS = [
   { href: "/ops", label: "Ops" },
   { href: "/cicd", label: "CI/CD" },
   { href: "/weather", label: "Thời tiết" },
+  { href: "/settings", label: "Settings" },
 ];
 
 export function NavBar() {
