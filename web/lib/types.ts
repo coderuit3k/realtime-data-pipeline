@@ -112,3 +112,20 @@ export type CicdResponse = {
   recentRuns: CicdRun[];
   latestDeployRunUrl: string | null;
 };
+
+export type WeatherLocation = {
+  location: string;
+  latitude: number;
+  longitude: number;
+  temperatureC: number;
+  humidityPct: number;
+  precipitationMm: number;
+  windSpeedKmh: number;
+  observedAt: string;
+};
+
+export type WeatherResponse = { locations: WeatherLocation[] };
+
+export type WeatherHistoryPoint = { hourBucket: string; avgTemperatureC: number };
+
+export type WeatherHistoryResponse = { location: string; points: WeatherHistoryPoint[] };
