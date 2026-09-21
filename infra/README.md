@@ -203,6 +203,7 @@ for placeholder values and one-line comments):
 - `UPSTASH_REDIS_REST_TOKEN` -- Upstash Redis REST token for assistant rate limiting
 - `NEWS_SECRET_NAME` -- name of the News API secret (Settings page's real, metadata-only "configured" check)
 - `TAVILY_SECRET_NAME` -- name of the Tavily secret (same check)
+- `DEPLOY_ENVIRONMENT` -- real deployment environment name (matches Terraform's `environment` variable, e.g. `dev`); backs the sidebar's status footer
 
 ## Updating Lambda code
 

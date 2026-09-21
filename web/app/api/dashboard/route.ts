@@ -9,6 +9,7 @@ import {
 } from "@/lib/athena";
 import { getAlarmStatus } from "@/lib/cloudwatchAlarms";
 import { COST_ESTIMATE_USD } from "@/lib/opsMeta";
+import { DATA_SOURCES } from "@/lib/settingsMeta";
 import type { DashboardResponse, SourceVolume, ActivityItem } from "@/lib/types";
 
 export const revalidate = 60;
@@ -16,8 +17,6 @@ export const revalidate = 60;
 // rag_query/rag_agent aren't invoked here, but Athena queries can be slow;
 // 60 is Vercel's ceiling on non-Pro plans.
 export const maxDuration = 60;
-
-const SOURCES_TOTAL = 5;
 
 export async function GET() {
   try {
@@ -51,7 +50,7 @@ export async function GET() {
       recordsToday,
       sourceVolumes,
       sourcesHealthy,
-      sourcesTotal: SOURCES_TOTAL,
+      sourcesTotal: DATA_SOURCES.length,
       alarmsBreaching,
       alarmsTotal,
       costEstimateUsd: COST_ESTIMATE_USD,

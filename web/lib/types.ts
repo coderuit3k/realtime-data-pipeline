@@ -139,3 +139,10 @@ export type SettingsResponse = {
   newsSchedule: ScheduleStatus;
   secrets: SecretStatus[];
 };
+
+export type HealthResponse = {
+  sourcesHealthy: number;
+  sourcesTotal: number;
+  region: string;
+  environment: string;
+};
