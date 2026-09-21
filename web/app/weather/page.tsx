@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { WeatherLocation, WeatherResponse, WeatherHistoryResponse } from "@/lib/types";
+import type { WeatherResponse, WeatherHistoryResponse } from "@/lib/types";
 import { projectLatLng, WEATHER_BOUNDS } from "@/lib/mapProjection";
-import { temperatureBand } from "@/lib/weatherMeta";
+import { temperatureBand, VIETNAM_UTC_OFFSET_HOURS } from "@/lib/weatherMeta";
 
 const VIEW_BOX = { width: 600, height: 600 };
 const PADDING = 40;
@@ -26,8 +26,10 @@ function formatMinutesAgo(observedAt: string): string {
   // parsing it with a "Z" suffix gives an instant 7h ahead of its real
   // UTC instant, so shift that back out before diffing against the real
   // current time. Same convention as dateRange.ts's hoursAgoAsObservedAtLocal.
-  const observedUtcMs = new Date(`${observedAt}Z`).getTime() - 7 * 60 * 60 * 1000;
-  const minutes = Math.max(0, Math.round((Date.now() - observedUtcMs) / 60000));
+  const observedUtcMs = new Date(`${observedAt}Z`).getTime() - VIETNAM_UTC_OFFSET_HOURS * 60 * 60 * 1000;
+  const diffMs = Date.now() - observedUtcMs;
+  if (Number.isNaN(diffMs)) return "Không rõ thời gian cập nhật";
+  const minutes = Math.max(0, Math.round(diffMs / 60000));
   return `Cập nhật ${minutes} phút trước`;
 }
 
@@ -104,7 +106,7 @@ export default function WeatherPage() {
         <div>
           <h1 className="font-heading text-2xl font-semibold text-textPrimary">Thời tiết miền Nam</h1>
           <p className="mt-1.5 text-sm text-textSecondary">
-            12 tỉnh/thành · Open-Meteo, không cần API key · làm mới mỗi 10 phút
+            {data.locations.length} tỉnh/thành · Open-Meteo, không cần API key · làm mới mỗi 10 phút
           </p>
         </div>
         {mostRecentObservedAt && (
@@ -120,7 +122,7 @@ export default function WeatherPage() {
             <svg viewBox={`0 0 ${VIEW_BOX.width} ${VIEW_BOX.height}`} className="w-full h-full block">
               <rect x="0" y="0" width={VIEW_BOX.width} height={VIEW_BOX.height} fill="#0A1730" />
               <path d={LAND_PATH} fill="#152238" />
-              {ranked.map((loc) => {
+              {[...ranked.filter((loc) => loc.location !== selected), ...ranked.filter((loc) => loc.location === selected)].map((loc) => {
                 const p = projectLatLng(loc, WEATHER_BOUNDS, VIEW_BOX, PADDING);
                 const band = temperatureBand(loc.temperatureC);
                 const isSelected = loc.location === selected;
@@ -203,7 +205,7 @@ export default function WeatherPage() {
           )}
 
           <div className="rounded-2xl border border-border bg-surface px-5 py-4 flex flex-col gap-1 flex-grow min-h-0 overflow-auto">
-            <span className="text-xs font-semibold text-textPrimary mb-1.5">12 tỉnh/thành · xếp theo nhiệt độ</span>
+            <span className="text-xs font-semibold text-textPrimary mb-1.5">{data.locations.length} tỉnh/thành · xếp theo nhiệt độ</span>
             {ranked.map((loc) => {
               const isSelected = loc.location === selected;
               return (

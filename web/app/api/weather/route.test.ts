@@ -27,8 +27,8 @@ describe("GET /api/weather", () => {
   it("returns the mapped, sorted list of current readings", async () => {
     mockedRun.mockResolvedValue(
       athenaRows([
-        ["Tay Ninh", "11.31", "106.0989", "32", "60", "0", "10", "2026-09-20T18:00:00"],
-        ["Da Lat", "11.9404", "108.4583", "19", "85", "1.2", "8", "2026-09-20T18:00:00"],
+        ["Tay Ninh", "11.31", "106.0989", "32", "60", "0", "10", "2026-09-20T18:00"],
+        ["Da Lat", "11.9404", "108.4583", "19", "85", "1.2", "8", "2026-09-20T18:00"],
       ])
     );
 
@@ -44,7 +44,7 @@ describe("GET /api/weather", () => {
         humidityPct: 60,
         precipitationMm: 0,
         windSpeedKmh: 10,
-        observedAt: "2026-09-20T18:00:00",
+        observedAt: "2026-09-20T18:00",
       },
       {
         location: "Da Lat",
@@ -54,7 +54,7 @@ describe("GET /api/weather", () => {
         humidityPct: 85,
         precipitationMm: 1.2,
         windSpeedKmh: 8,
-        observedAt: "2026-09-20T18:00:00",
+        observedAt: "2026-09-20T18:00",
       },
     ]);
   });

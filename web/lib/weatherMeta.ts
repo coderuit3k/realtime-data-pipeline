@@ -17,6 +17,16 @@ export const WEATHER_LOCATION_NAMES: string[] = [
   "Da Lat",
 ];
 
+// weather_ingestion.py requests Open-Meteo with timezone=Asia/Bangkok for
+// every one of the 12 real locations (all within Vietnam, UTC+7, no DST).
+// Open-Meteo's docs: when timezone= is set, returned timestamps are naive
+// local time with NO UTC offset suffix -- observed_at is stored exactly
+// as returned, so every value in weather_observations is Vietnam local
+// time, not UTC. Single source of truth for this offset -- both
+// dateRange.ts (server-side cutoff computation) and page.tsx (client-side
+// "N minutes ago" display) must use this exact constant, never their own copy.
+export const VIETNAM_UTC_OFFSET_HOURS = 7;
+
 // The only client-influenced value that reaches SQL in this feature --
 // MUST be validated with this before ever being interpolated into a
 // query string. Same non-negotiable rule as every other user-influenced
