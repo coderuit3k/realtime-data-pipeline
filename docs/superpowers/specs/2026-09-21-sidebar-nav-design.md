@@ -64,7 +64,21 @@ web/app/layout.tsx
       <main class="flex-1 overflow-auto">{children}</main>
     </div>
   </body>
+```
 
+`Sidebar`'s own root element MUST be `sticky top-0 h-screen` (in
+addition to its width/background/flex-column classes) -- inside the
+`flex min-h-screen` wrapper above, a plain `<aside>` with no height
+class stretches to match its flex container's height, which on any page
+taller than the viewport is the page's full content height, not the
+viewport. Without `sticky`/`h-screen`, the nav links scroll away with
+the page and the `mt-auto` status footer (this feature's real health
+check + real region/environment) lands at the bottom of the document
+instead of staying visible -- caught by this sub-project's own final
+whole-branch review after an earlier draft of this spec omitted it, not
+a hypothetical.
+
+```
 GET /api/health
   → web/lib/athena.ts: buildSourceVolumeQuery(todayUtcParts()), runAthenaQuery
   → web/lib/settingsMeta.ts: DATA_SOURCES.length (sourcesTotal)
