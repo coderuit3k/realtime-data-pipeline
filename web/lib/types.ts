@@ -9,6 +9,13 @@ export type DashboardResponse = {
   alarmsBreaching: number;
   alarmsTotal: number;
   recentActivity: ActivityItem[];
+  lambdaHealth: LambdaHealthRow[];
+  schedule: { scheduleExpression: string; enabled: boolean };
+  recentLogs: LogEntry[];
+  costBreakdown: CostBreakdownEntry[];
+  rawStorage: StorageStats;
+  curatedStorage: StorageStats;
+  athenaAvgQueryMs: number | null;
 };
 
 export type CatalogColumn = { name: string; type: string; note?: string };
