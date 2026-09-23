@@ -98,6 +98,8 @@ export type GithubCommit = {
   htmlUrl: string;
 };
 
+export type CommitsResponse = { commits: GithubCommit[] };
+
 export type PipelineStage = {
   name: string;
   status: "success" | "failure" | "waiting" | "in_progress" | "pending" | "cancelled" | "skipped";
