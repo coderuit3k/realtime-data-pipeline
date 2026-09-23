@@ -1,5 +1,5 @@
 import { requiredEnv } from "./aws";
-import type { GithubRun, GithubJob } from "./types";
+import type { GithubRun, GithubJob, GithubCommit } from "./types";
 
 const GITHUB_OWNER = "coderuit3k";
 const GITHUB_REPO = "realtime-data-pipeline";
@@ -14,6 +14,12 @@ type RawRun = {
   head_branch: string;
   run_started_at: string | null;
   updated_at: string;
+  html_url: string;
+};
+
+type RawCommit = {
+  sha: string;
+  commit: { author: { name: string; date: string } | null; message: string };
   html_url: string;
 };
 
@@ -46,6 +52,16 @@ function mapRun(run: RawRun): GithubRun {
   };
 }
 
+function mapCommit(raw: RawCommit): GithubCommit {
+  return {
+    sha: raw.sha,
+    message: raw.commit.message.split("\n")[0],
+    authorName: raw.commit.author?.name ?? "unknown",
+    date: raw.commit.author?.date ?? "",
+    htmlUrl: raw.html_url,
+  };
+}
+
 export async function getLatestWorkflowRun(workflowFile: string): Promise<GithubRun | null> {
   const data = await githubRequest<{ workflow_runs: RawRun[] }>(
     `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${workflowFile}/runs?branch=main&per_page=1`
@@ -66,4 +82,11 @@ export async function getRecentRuns(workflowFile: string, limit: number): Promis
     `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${workflowFile}/runs?branch=main&per_page=${limit}`
   );
   return data.workflow_runs.map(mapRun);
+}
+
+export async function getRecentCommits(limit: number): Promise<GithubCommit[]> {
+  const data = await githubRequest<RawCommit[]>(
+    `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits?per_page=${limit}`
+  );
+  return data.map(mapCommit);
 }

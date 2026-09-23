@@ -90,6 +90,14 @@ export type GithubRun = {
 
 export type GithubJob = { name: string; status: string; conclusion: string | null };
 
+export type GithubCommit = {
+  sha: string;
+  message: string;
+  authorName: string;
+  date: string;
+  htmlUrl: string;
+};
+
 export type PipelineStage = {
   name: string;
   status: "success" | "failure" | "waiting" | "in_progress" | "pending" | "cancelled" | "skipped";

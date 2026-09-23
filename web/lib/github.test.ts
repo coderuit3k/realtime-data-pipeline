@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { getLatestWorkflowRun, getRunJobs, getRecentRuns } from "./github";
+import { getLatestWorkflowRun, getRunJobs, getRecentRuns, getRecentCommits } from "./github";
 
 const REAL_RUN = {
   id: 35519882317,
@@ -115,5 +115,64 @@ describe("getRecentRuns", () => {
     expect(url).toBe(
       "https://api.github.com/repos/coderuit3k/realtime-data-pipeline/actions/workflows/deploy.yml/runs?branch=main&per_page=5"
     );
+  });
+});
+
+describe("getRecentCommits", () => {
+  const REAL_COMMIT = {
+    sha: "d566a7154738a4ae790b89ed0bea0265cdfebcd9",
+    commit: {
+      author: { name: "coderuit3k", date: "2026-09-23T03:08:05Z" },
+      message: "feat: restyle web app to Terminal Obsidian design system",
+    },
+    html_url:
+      "https://github.com/coderuit3k/realtime-data-pipeline/commit/d566a7154738a4ae790b89ed0bea0265cdfebcd9",
+  };
+
+  it("maps the real GitHub commit shape into GithubCommit, using only the message subject line", async () => {
+    const multilineCommit = {
+      ...REAL_COMMIT,
+      sha: "abc0000000000000000000000000000000000000",
+      commit: {
+        ...REAL_COMMIT.commit,
+        message: "fix: rate-limit /api/cost\n\nAlso corrects stale ops labels.",
+      },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve([REAL_COMMIT, multilineCommit]),
+      })
+    );
+
+    const commits = await getRecentCommits(5);
+
+    expect(commits).toEqual([
+      {
+        sha: "d566a7154738a4ae790b89ed0bea0265cdfebcd9",
+        message: "feat: restyle web app to Terminal Obsidian design system",
+        authorName: "coderuit3k",
+        date: "2026-09-23T03:08:05Z",
+        htmlUrl:
+          "https://github.com/coderuit3k/realtime-data-pipeline/commit/d566a7154738a4ae790b89ed0bea0265cdfebcd9",
+      },
+      {
+        sha: "abc0000000000000000000000000000000000000",
+        message: "fix: rate-limit /api/cost",
+        authorName: "coderuit3k",
+        date: "2026-09-23T03:08:05Z",
+        htmlUrl:
+          "https://github.com/coderuit3k/realtime-data-pipeline/commit/d566a7154738a4ae790b89ed0bea0265cdfebcd9",
+      },
+    ]);
+    const [url] = vi.mocked(fetch).mock.calls[0];
+    expect(url).toBe("https://api.github.com/repos/coderuit3k/realtime-data-pipeline/commits?per_page=5");
+  });
+
+  it("returns an empty array when the repo has no commits in range", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) }));
+    const commits = await getRecentCommits(5);
+    expect(commits).toEqual([]);
   });
 });
