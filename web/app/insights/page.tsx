@@ -49,7 +49,7 @@ export default function InsightsPage() {
     return (
       <div className="p-9 grid grid-cols-2 grid-rows-2 gap-4">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="h-64 rounded-2xl border border-border bg-surface animate-pulse" />
+          <div key={i} className="h-64 rounded-lg border border-border bg-surface animate-pulse" />
         ))}
       </div>
     );
@@ -86,7 +86,7 @@ export default function InsightsPage() {
       </div>
 
       <div className="grid grid-cols-2 grid-rows-2 gap-4 flex-grow min-h-0">
-        <div className="rounded-2xl border border-border bg-surface px-5 py-5 flex flex-col gap-3 min-h-0">
+        <div className="rounded-lg border border-border bg-surface px-5 py-5 flex flex-col gap-3 min-h-0">
           <span className="text-[13px] font-semibold text-textPrimary">Từ khoá nổi bật (HN + News)</span>
           <div className="flex flex-col gap-2.5">
             {data.topKeywords.map((k, i) => (
@@ -104,7 +104,7 @@ export default function InsightsPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border bg-surface px-5 py-5 flex flex-col gap-3 min-h-0">
+        <div className="rounded-lg border border-border bg-surface px-5 py-5 flex flex-col gap-3 min-h-0">
           <span className="text-[13px] font-semibold text-textPrimary">Crypto: mentions ↔ biến động giá</span>
           <div className="flex flex-col gap-3">
             {data.cryptoMentions.map((c) => (
@@ -120,7 +120,7 @@ export default function InsightsPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border bg-surface px-5 py-5 flex flex-col gap-3 min-h-0">
+        <div className="rounded-lg border border-border bg-surface px-5 py-5 flex flex-col gap-3 min-h-0">
           <span className="text-[13px] font-semibold text-textPrimary">GitHub Trending ↔ HN overlap</span>
           <div className="flex flex-col gap-2.5">
             {data.githubHnOverlap.map((o) => (
@@ -138,7 +138,7 @@ export default function InsightsPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border bg-surface px-5 py-5 flex flex-col gap-3 min-h-0 overflow-hidden">
+        <div className="rounded-lg border border-border bg-surface px-5 py-5 flex flex-col gap-3 min-h-0 overflow-hidden">
           <span className="text-[13px] font-semibold text-textPrimary">
             Thời tiết · {data.weatherSnapshot.length} khu vực
           </span>

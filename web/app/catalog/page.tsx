@@ -46,8 +46,8 @@ export default function CatalogPage() {
   if (!tables) {
     return (
       <div className="p-9 grid grid-cols-[270px_1fr] gap-4">
-        <div className="h-96 rounded-2xl border border-border bg-surface animate-pulse" />
-        <div className="h-96 rounded-2xl border border-border bg-surface animate-pulse" />
+        <div className="h-96 rounded-lg border border-border bg-surface animate-pulse" />
+        <div className="h-96 rounded-lg border border-border bg-surface animate-pulse" />
       </div>
     );
   }
@@ -63,7 +63,7 @@ export default function CatalogPage() {
         </p>
       </div>
       <div className="flex gap-4 flex-grow min-h-0">
-        <div className="w-[270px] shrink-0 rounded-2xl border border-border bg-surface p-3.5 flex flex-col gap-1.5 overflow-auto">
+        <div className="w-[270px] shrink-0 rounded-lg border border-border bg-surface p-3.5 flex flex-col gap-1.5 overflow-auto">
           {tables.map((table) => (
             <button
               key={table.name}
@@ -84,7 +84,7 @@ export default function CatalogPage() {
 
         {current && (
           <div className="flex-grow flex flex-col gap-4 min-h-0">
-            <div className="rounded-2xl border border-border bg-surface px-5 py-5 flex flex-col gap-2.5">
+            <div className="rounded-lg border border-border bg-surface px-5 py-5 flex flex-col gap-2.5">
               <div className="flex items-center justify-between">
                 <span className="font-heading text-[15px] font-semibold text-textPrimary">
                   {current.name}
@@ -101,7 +101,7 @@ export default function CatalogPage() {
               )}
             </div>
 
-            <div className="rounded-2xl border border-border bg-surface px-5 py-5 flex flex-col gap-2.5 flex-grow min-h-0 overflow-auto">
+            <div className="rounded-lg border border-border bg-surface px-5 py-5 flex flex-col gap-2.5 flex-grow min-h-0 overflow-auto">
               <span className="text-[12.5px] font-semibold text-textPrimary">Schema</span>
               <table className="font-mono w-full border-collapse text-xs">
                 <thead>

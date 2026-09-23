@@ -51,7 +51,7 @@ export default function AssistantPage() {
       </div>
       <ModeToggle mode={mode} onChange={setMode} />
       <div className="grid grid-cols-[1.5fr_1fr] gap-5">
-        <div className="rounded-2xl border border-border bg-surface p-6 flex flex-col gap-4">
+        <div className="rounded-lg border border-border bg-surface p-6 flex flex-col gap-4">
           <ChatThread question={question} result={result} loading={loading} />
           {notice && <p className="text-xs text-warning">{notice}</p>}
           <div className="mt-auto flex gap-2 items-center border border-border rounded-xl px-3 py-2">

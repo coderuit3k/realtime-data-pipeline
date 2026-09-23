@@ -11,7 +11,7 @@ const LABELS: Record<string, string> = {
 export function SourceVolumeChart({ sourceVolumes }: { sourceVolumes: SourceVolume[] }) {
   const max = Math.max(1, ...sourceVolumes.map((s) => s.records));
   return (
-    <div className="rounded-2xl border border-border bg-surface p-6 flex flex-col gap-4">
+    <div className="rounded-lg border border-border bg-surface p-6 flex flex-col gap-4">
       <span className="text-sm font-semibold text-textPrimary">Khối lượng theo nguồn (hôm nay)</span>
       <div className="flex items-end gap-6 h-40">
         {sourceVolumes.map((s) => (

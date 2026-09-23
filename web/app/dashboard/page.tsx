@@ -56,7 +56,7 @@ export default function DashboardPage() {
     return (
       <div className="p-9 grid grid-cols-4 gap-4">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="h-24 rounded-2xl border border-border bg-surface animate-pulse" />
+          <div key={i} className="h-24 rounded-lg border border-border bg-surface animate-pulse" />
         ))}
       </div>
     );

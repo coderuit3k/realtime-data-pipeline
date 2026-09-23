@@ -75,7 +75,7 @@ export default function WeatherPage() {
   if (!data) {
     return (
       <div className="p-9 flex flex-col gap-4">
-        <div className="h-[600px] rounded-2xl border border-border bg-surface animate-pulse" />
+        <div className="h-[600px] rounded-lg border border-border bg-surface animate-pulse" />
       </div>
     );
   }
@@ -117,11 +117,11 @@ export default function WeatherPage() {
       </div>
 
       <div className="flex gap-4 flex-grow min-h-0">
-        <div className="flex-[1.55] rounded-2xl border border-border bg-surface p-5 flex flex-col gap-3 min-h-0">
+        <div className="flex-[1.55] rounded-lg border border-border bg-surface p-5 flex flex-col gap-3 min-h-0">
           <div className="relative flex-grow rounded-xl bg-bg overflow-hidden">
             <svg viewBox={`0 0 ${VIEW_BOX.width} ${VIEW_BOX.height}`} className="w-full h-full block">
-              <rect x="0" y="0" width={VIEW_BOX.width} height={VIEW_BOX.height} fill="#0A1730" />
-              <path d={LAND_PATH} fill="#152238" />
+              <rect x="0" y="0" width={VIEW_BOX.width} height={VIEW_BOX.height} fill="#0A0E16" />
+              <path d={LAND_PATH} fill="#111827" />
               {[...ranked.filter((loc) => loc.location !== selected), ...ranked.filter((loc) => loc.location === selected)].map((loc) => {
                 const p = projectLatLng(loc, WEATHER_BOUNDS, VIEW_BOX, PADDING);
                 const band = temperatureBand(loc.temperatureC);
@@ -129,9 +129,9 @@ export default function WeatherPage() {
                 return (
                   <g key={loc.location} onClick={() => setSelected(loc.location)} style={{ cursor: "pointer" }}>
                     {isSelected && <circle cx={p.x} cy={p.y} r={15} fill={BAND_COLOR[band]} fillOpacity={0.14} />}
-                    <circle cx={p.x} cy={p.y} r={isSelected ? 7 : 5} fill={BAND_COLOR[band]} stroke="#0A1730" strokeWidth={1} />
+                    <circle cx={p.x} cy={p.y} r={isSelected ? 7 : 5} fill={BAND_COLOR[band]} stroke="#0A0E16" strokeWidth={1} />
                     {isSelected && (
-                      <text x={p.x} y={p.y - 14} textAnchor="middle" fill="#F2F5FB" fontSize="12.5">
+                      <text x={p.x} y={p.y - 14} textAnchor="middle" fill="#DFE2EE" fontSize="12.5">
                         {loc.location} · {loc.temperatureC.toFixed(0)}°C
                       </text>
                     )}
@@ -141,7 +141,7 @@ export default function WeatherPage() {
             </svg>
             {/* Decorative chrome only, matching the mockup -- no pan/zoom logic (see plan's Global Constraints) */}
             <div className="absolute top-3.5 right-3.5 w-[30px] h-[30px] rounded-lg bg-surface border border-border flex items-center justify-center">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#93A0C2" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#BCC9CD" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 19V5M5 12l7-7 7 7" />
               </svg>
             </div>
@@ -172,7 +172,7 @@ export default function WeatherPage() {
 
         <div className="flex-1 flex flex-col gap-4 min-h-0">
           {selectedReading && (
-            <div className="rounded-2xl border border-border bg-surface px-5 py-5 flex flex-col gap-3.5">
+            <div className="rounded-lg border border-border bg-surface px-5 py-5 flex flex-col gap-3.5">
               <div className="flex justify-between items-baseline">
                 <span className="text-sm font-semibold text-textPrimary">{selectedReading.location}</span>
                 <span className="font-mono text-2xl text-accent">{selectedReading.temperatureC.toFixed(0)}°C</span>
@@ -204,7 +204,7 @@ export default function WeatherPage() {
             </div>
           )}
 
-          <div className="rounded-2xl border border-border bg-surface px-5 py-4 flex flex-col gap-1 flex-grow min-h-0 overflow-auto">
+          <div className="rounded-lg border border-border bg-surface px-5 py-4 flex flex-col gap-1 flex-grow min-h-0 overflow-auto">
             <span className="text-xs font-semibold text-textPrimary mb-1.5">{data.locations.length} tỉnh/thành · xếp theo nhiệt độ</span>
             {ranked.map((loc) => {
               const isSelected = loc.location === selected;

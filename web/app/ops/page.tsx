@@ -84,7 +84,7 @@ export default function OpsPage() {
     return (
       <div className="p-9 grid grid-cols-4 gap-4">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="h-24 rounded-2xl border border-border bg-surface animate-pulse" />
+          <div key={i} className="h-24 rounded-lg border border-border bg-surface animate-pulse" />
         ))}
       </div>
     );
@@ -103,13 +103,13 @@ export default function OpsPage() {
       </div>
 
       <div className="grid grid-cols-4 gap-4">
-        <div className="rounded-2xl border border-border bg-surface px-4 py-4 flex flex-col gap-2">
+        <div className="rounded-lg border border-border bg-surface px-4 py-4 flex flex-col gap-2">
           <span className="text-[11.5px] text-textSecondary">Lambda functions</span>
           <span className="font-mono text-xl text-textPrimary">
             {okCount} / {data.lambdaHealth.length} <span className="text-xs text-success">OK</span>
           </span>
         </div>
-        <div className="rounded-2xl border border-border bg-surface px-4 py-4 flex flex-col gap-2">
+        <div className="rounded-lg border border-border bg-surface px-4 py-4 flex flex-col gap-2">
           <span className="text-[11.5px] text-textSecondary">EventBridge schedule</span>
           <span className="font-mono text-sm text-textPrimary">
             {data.schedule.scheduleExpression}{" "}
@@ -118,13 +118,13 @@ export default function OpsPage() {
             </span>
           </span>
         </div>
-        <div className="rounded-2xl border border-border bg-surface px-4 py-4 flex flex-col gap-2">
+        <div className="rounded-lg border border-border bg-surface px-4 py-4 flex flex-col gap-2">
           <span className="text-[11.5px] text-textSecondary">CloudWatch alarms</span>
           <span className="font-mono text-xl text-textPrimary">
             {data.alarmsBreaching} / {data.alarmsTotal} <span className="text-xs text-textMuted">breaching</span>
           </span>
         </div>
-        <div className="rounded-2xl border border-border bg-surface px-4 py-4 flex flex-col gap-2">
+        <div className="rounded-lg border border-border bg-surface px-4 py-4 flex flex-col gap-2">
           <span className="text-[11.5px] text-textSecondary">Chi phí tháng này (đến hôm nay)</span>
           <span className="font-mono text-xl text-textPrimary">
             {cost ? `$${cost.monthToDateCostUsd.toFixed(2)}` : "—"}
@@ -133,7 +133,7 @@ export default function OpsPage() {
       </div>
 
       <div className="flex gap-4 flex-grow min-h-0">
-        <div className="flex-[1.6] rounded-2xl border border-border bg-surface px-5 py-5 flex flex-col gap-3 min-h-0 overflow-auto">
+        <div className="flex-[1.6] rounded-lg border border-border bg-surface px-5 py-5 flex flex-col gap-3 min-h-0 overflow-auto">
           <span className="text-[13px] font-semibold text-textPrimary">Lambda health</span>
           <table className="font-mono w-full border-collapse text-xs">
             <thead>
@@ -162,7 +162,7 @@ export default function OpsPage() {
         </div>
 
         <div className="flex-1 flex flex-col gap-4 min-h-0">
-          <div className="flex-[1.2] rounded-2xl border border-border bg-surface px-5 py-4 flex flex-col gap-2.5 min-h-0 overflow-auto">
+          <div className="flex-[1.2] rounded-lg border border-border bg-surface px-5 py-4 flex flex-col gap-2.5 min-h-0 overflow-auto">
             <span className="text-xs font-semibold text-textPrimary">Logs gần đây</span>
             <div className="font-mono flex flex-col gap-1.5 text-[10.5px] text-textMuted">
               {data.recentLogs.length === 0 && <span>Chưa có log trong 24h qua.</span>}
@@ -177,7 +177,7 @@ export default function OpsPage() {
             </div>
           </div>
 
-          <div className="flex-1 rounded-2xl border border-border bg-surface px-5 py-4 flex flex-col gap-2.5 min-h-0">
+          <div className="flex-1 rounded-lg border border-border bg-surface px-5 py-4 flex flex-col gap-2.5 min-h-0">
             <span className="text-xs font-semibold text-textPrimary">Chi phí theo hạng mục</span>
             <div className="flex flex-col gap-2">
               {data.costBreakdown.map((c) => (

@@ -15,14 +15,14 @@ export function ChatThread({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <div className="max-w-[70%] rounded-2xl rounded-br-sm bg-[#1B2540] px-4 py-3">
+        <div className="max-w-[70%] rounded-lg rounded-br-sm bg-[#1B2540] px-4 py-3">
           <span className="text-sm text-textPrimary">{question}</span>
         </div>
       </div>
       {loading && <span className="text-xs text-textMuted">Đang xử lý…</span>}
       {result && (
         <div className="flex justify-start">
-          <div className="max-w-[80%] rounded-2xl rounded-bl-sm border border-border bg-[#0F1728] px-4 py-3 flex flex-col gap-3">
+          <div className="max-w-[80%] rounded-lg rounded-bl-sm border border-border bg-[#0F1728] px-4 py-3 flex flex-col gap-3">
             <span className="text-sm leading-relaxed text-textSecondary">{result.answer}</span>
             <div className="flex flex-wrap gap-2">
               {result.sources.map((s, i) => (

@@ -61,8 +61,8 @@ export default function CicdPage() {
   if (!data) {
     return (
       <div className="p-9 flex flex-col gap-4">
-        <div className="h-40 rounded-2xl border border-border bg-surface animate-pulse" />
-        <div className="h-64 rounded-2xl border border-border bg-surface animate-pulse" />
+        <div className="h-40 rounded-lg border border-border bg-surface animate-pulse" />
+        <div className="h-64 rounded-lg border border-border bg-surface animate-pulse" />
       </div>
     );
   }
@@ -76,7 +76,7 @@ export default function CicdPage() {
         </p>
       </div>
 
-      <div className="rounded-2xl border border-border bg-surface px-6 py-5 flex flex-col gap-4">
+      <div className="rounded-lg border border-border bg-surface px-6 py-5 flex flex-col gap-4">
         <span className="text-xs font-semibold text-textPrimary">Pipeline hiện tại</span>
         <div className="flex items-center">
           {data.stages.map((stage, i) => {
@@ -112,7 +112,7 @@ export default function CicdPage() {
         )}
       </div>
 
-      <div className="rounded-2xl border border-border bg-surface px-5 py-5 flex flex-col gap-3 flex-grow min-h-0 overflow-auto">
+      <div className="rounded-lg border border-border bg-surface px-5 py-5 flex flex-col gap-3 flex-grow min-h-0 overflow-auto">
         <span className="text-xs font-semibold text-textPrimary">Lịch sử chạy gần đây</span>
         <div className="flex flex-col">
           {data.recentRuns.map((run) => (

@@ -7,7 +7,7 @@ type KpiCardProps = {
 
 export function KpiCard({ label, value, hint, hintColor = "muted" }: KpiCardProps) {
   return (
-    <div className="rounded-2xl border border-border bg-surface p-5 flex flex-col gap-2">
+    <div className="rounded-lg border border-border bg-surface p-5 flex flex-col gap-2">
       <span className="text-xs text-textSecondary">{label}</span>
       <span className="font-mono text-2xl text-textPrimary">{value}</span>
       {hint && (

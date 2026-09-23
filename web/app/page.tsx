@@ -34,7 +34,7 @@ function ArrowIcon() {
 
 function FeatureCard({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
   return (
-    <div className="rounded-2xl border border-border bg-surface px-6 py-[22px] flex flex-col gap-2">
+    <div className="rounded-lg border border-border bg-surface px-6 py-[22px] flex flex-col gap-2">
       {icon}
       <span className="text-sm font-semibold text-textPrimary">{title}</span>
       <span className="text-[12.5px] leading-relaxed text-textSecondary">{description}</span>
@@ -133,21 +133,21 @@ export default function LandingPage() {
           Kiến trúc trong một dòng
         </span>
         <div className="flex items-center justify-center gap-3.5 flex-wrap">
-          <div className="rounded-2xl border border-border bg-surface px-4 py-3.5 flex flex-col items-center gap-1 w-[120px]">
+          <div className="rounded-lg border border-border bg-surface px-4 py-3.5 flex flex-col items-center gap-1 w-[120px]">
             <span className="text-[11.5px] text-textPrimary">HN · News</span>
             <span className="text-[11.5px] text-textPrimary">Weather · Crypto</span>
             <span className="text-[11.5px] text-textPrimary">GitHub</span>
           </div>
           <ArrowIcon />
-          <div className="rounded-2xl border border-border bg-surface px-[18px] py-3.5 text-center w-[160px]">
+          <div className="rounded-lg border border-border bg-surface px-[18px] py-3.5 text-center w-[160px]">
             <span className="font-mono text-[11.5px] text-textPrimary">S3 raw → curated</span>
           </div>
           <ArrowIcon />
-          <div className="rounded-2xl border border-border bg-surface px-[18px] py-3.5 text-center w-[160px]">
+          <div className="rounded-lg border border-border bg-surface px-[18px] py-3.5 text-center w-[160px]">
             <span className="font-mono text-[11.5px] text-textPrimary">Glue Catalog + Athena</span>
           </div>
           <ArrowIcon />
-          <div className="rounded-2xl border border-accent bg-surface px-[18px] py-3.5 text-center w-[170px]">
+          <div className="rounded-lg border border-accent bg-surface px-[18px] py-3.5 text-center w-[170px]">
             <span className="font-mono text-[11.5px] text-accent">RAG: CRAG + Agent</span>
           </div>
         </div>
@@ -156,7 +156,7 @@ export default function LandingPage() {
       <section id="features" className="px-14 py-[52px] grid grid-cols-2 gap-4 border-b border-border">
         <FeatureCard
           icon={
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2DD4BF" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#06B6D4" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
               <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
             </svg>
           }
@@ -165,7 +165,7 @@ export default function LandingPage() {
         />
         <FeatureCard
           icon={
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2DD4BF" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#06B6D4" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="7" height="9" rx="1.5" />
               <rect x="14" y="3" width="7" height="5" rx="1.5" />
               <rect x="14" y="12" width="7" height="9" rx="1.5" />
@@ -177,7 +177,7 @@ export default function LandingPage() {
         />
         <FeatureCard
           icon={
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2DD4BF" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#06B6D4" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
             </svg>
           }
@@ -186,7 +186,7 @@ export default function LandingPage() {
         />
         <FeatureCard
           icon={
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2DD4BF" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#06B6D4" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
               <line x1="6" y1="3" x2="6" y2="15" />
               <circle cx="18" cy="6" r="3" />
               <circle cx="6" cy="18" r="3" />

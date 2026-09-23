@@ -38,7 +38,7 @@ export default function SettingsPage() {
   if (!data) {
     return (
       <div className="p-9 flex flex-col gap-4">
-        <div className="h-96 rounded-2xl border border-border bg-surface animate-pulse" />
+        <div className="h-96 rounded-lg border border-border bg-surface animate-pulse" />
       </div>
     );
   }
@@ -51,7 +51,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid grid-cols-[1.4fr_1fr] gap-4 flex-grow min-h-0">
-        <div className="rounded-2xl border border-border bg-surface px-5 py-5 flex flex-col gap-3.5 overflow-auto">
+        <div className="rounded-lg border border-border bg-surface px-5 py-5 flex flex-col gap-3.5 overflow-auto">
           <span className="text-xs font-semibold text-textPrimary">Nguồn dữ liệu</span>
           <div className="flex flex-col gap-2.5">
             {DATA_SOURCES.map((source) => {
@@ -75,7 +75,7 @@ export default function SettingsPage() {
           <p className="text-[10.5px] text-textMuted">Chỉnh sửa nguồn dữ liệu qua common/config.py + redeploy.</p>
         </div>
 
-        <div className="rounded-2xl border border-border bg-surface px-5 py-5 flex flex-col gap-3">
+        <div className="rounded-lg border border-border bg-surface px-5 py-5 flex flex-col gap-3">
           <span className="text-xs font-semibold text-textPrimary">Secrets Manager</span>
           {data.secrets.map((secret) => (
             <div key={secret.name} className="flex justify-between items-center">

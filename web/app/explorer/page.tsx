@@ -74,7 +74,7 @@ export default function ExplorerPage() {
       </div>
 
       <div className="flex gap-4 flex-grow min-h-0">
-        <div className="w-[270px] shrink-0 rounded-2xl border border-border bg-surface p-4 flex flex-col gap-4 overflow-auto">
+        <div className="w-[270px] shrink-0 rounded-lg border border-border bg-surface p-4 flex flex-col gap-4 overflow-auto">
           <span className="text-xs font-semibold text-textPrimary">Truy vấn mẫu</span>
           {samples?.groups.map((group) => (
             <div key={group.label} className="flex flex-col gap-1.5">
@@ -95,7 +95,7 @@ export default function ExplorerPage() {
         </div>
 
         <div className="flex-grow flex flex-col gap-4 min-h-0">
-          <div className="rounded-2xl border border-border bg-surface px-5 py-4 flex flex-col gap-3">
+          <div className="rounded-lg border border-border bg-surface px-5 py-4 flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-textPrimary">SQL</span>
               <button
@@ -116,7 +116,7 @@ export default function ExplorerPage() {
           </div>
 
           {result && (
-            <div className="rounded-2xl border border-border bg-surface px-5 py-4 flex flex-col gap-3 flex-grow min-h-0 overflow-auto">
+            <div className="rounded-lg border border-border bg-surface px-5 py-4 flex flex-col gap-3 flex-grow min-h-0 overflow-auto">
               <span className="text-xs font-semibold text-textPrimary">Kết quả</span>
               <table className="font-mono w-full border-collapse text-xs">
                 <thead>

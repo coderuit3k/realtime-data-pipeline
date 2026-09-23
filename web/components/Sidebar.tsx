@@ -125,7 +125,9 @@ function SidebarLink({ link, active }: { link: NavLink; active: boolean }) {
 
 function statusDotColor(health: HealthResponse | null): string {
   if (!health) return "bg-textMuted";
-  return health.sourcesHealthy === health.sourcesTotal ? "bg-success" : "bg-warning";
+  return health.sourcesHealthy === health.sourcesTotal
+    ? "bg-success shadow-[0_0_8px_theme(colors.success)]"
+    : "bg-warning shadow-[0_0_8px_theme(colors.warning)]";
 }
 
 export default function Sidebar() {
