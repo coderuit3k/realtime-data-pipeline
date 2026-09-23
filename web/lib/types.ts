@@ -67,6 +67,8 @@ export type LogEntry = { timestamp: string; message: string; source: string };
 
 export type CostBreakdownEntry = { category: string; monthlyUsd: number };
 
+export type StorageStats = { sizeBytes: number | null; objectCount: number | null };
+
 export type OpsResponse = {
   lambdaHealth: LambdaHealthRow[];
   schedule: { scheduleExpression: string; enabled: boolean };
