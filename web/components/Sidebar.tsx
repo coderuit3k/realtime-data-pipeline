@@ -52,21 +52,12 @@ const NAV_LINKS: NavLink[] = [
 ];
 
 // Temporary secondary nav for pages the 4-item IA collapse (an earlier
-// task on this branch) silently dropped: /ops, /cicd, /explorer, and
+// task on this branch) silently dropped: /cicd, /explorer, and
 // /insights are real, fully-working pages with real data -- not part of
 // the intentional settings/weather removal. Keep them reachable here
 // until later sub-projects fold their content into the 4-item IA, then
 // delete this group.
 const LEGACY_LINKS: NavLink[] = [
-  {
-    href: "/ops",
-    label: "Ops & Monitoring",
-    icon: (
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-      </svg>
-    ),
-  },
   {
     href: "/cicd",
     label: "CI/CD",

@@ -64,6 +64,14 @@ your own AWS credentials, after `infra`'s first apply:
 > This is a one-time, manual, real AWS Console step; it cannot be
 > scripted or done by Terraform.
 
+> **Prerequisite for the Live Metrics & Ops dashboard:** the web app reads real S3 bucket storage size via CloudWatch (`AWS/S3` `BucketSizeBytes`/`NumberOfObjects` metrics), which requires two plain (non-secret) environment variables on Vercel: `RAW_BUCKET` and `CURATED_BUCKET`. Get their real values with:
+> ```bash
+> cd infra
+> terraform output raw_bucket_name
+> terraform output curated_bucket_name
+> ```
+> Paste each into Vercel's environment variables UI. No new IAM permission is required — `cloudwatch:GetMetricData` is already granted with `Resource: "*"` in the policy below, and CloudWatch metric reads are not ARN-scoped.
+
 > **Already created the user?** Re-run only from the variable
 > assignments through `aws iam put-user-policy` (that command is a full
 > policy replace, safe to re-run any time a new grant is added below) —
