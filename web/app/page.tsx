@@ -135,9 +135,9 @@ export default function LandingPage() {
             Pipeline dữ liệu real-time, serverless, chạy thật trên AWS
           </h1>
           <p className="max-w-xl text-[14.5px] leading-relaxed text-textSecondary">
-            {DATA_SOURCE_COUNT} nguồn dị chủng đổ về S3 → Glue/Athena, cộng 2 kiến trúc RAG song song trên Bedrock —
-            một pipeline cố định (CRAG) và một agent tự quyết định gọi tool. Toàn bộ hạ tầng bằng Terraform, deploy
-            qua GitHub Actions với gate phê duyệt production.
+            {DATA_SOURCE_COUNT} nguồn dị chủng đổ về S3 → Glue/Athena, cộng một agent Agentic RAG thật trên Bedrock —
+            tự quyết định gọi tool truy xuất dữ liệu đã ingest hoặc tìm trên web. Toàn bộ hạ tầng bằng Terraform,
+            deploy qua GitHub Actions với gate phê duyệt production.
           </p>
           <div className="flex gap-3 mt-1.5">
             <Link href="/dashboard" className="rounded-lg bg-accent px-6 py-3 text-[13.5px] font-semibold text-bg">
@@ -193,7 +193,7 @@ export default function LandingPage() {
             </div>
             <ArrowIcon />
             <div className="rounded-lg border border-accent bg-bg px-[18px] py-3.5 text-center w-[170px]">
-              <span className="font-mono text-[11.5px] text-accent">RAG: CRAG + Agent</span>
+              <span className="font-mono text-[11.5px] text-accent">Agentic RAG</span>
             </div>
           </div>
         </section>
@@ -226,8 +226,8 @@ export default function LandingPage() {
                 <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
               </svg>
             }
-            title="RAG kép: CRAG + Agentic"
-            description="So sánh trực tiếp pipeline CRAG cố định với một agent thật tự gọi tool qua Bedrock Converse API."
+            title="Agentic RAG thật"
+            description="Agent tự quyết định gọi tool search_knowledge_base hoặc search_web (Tavily) qua Bedrock Converse API, không phải pipeline retrieve → generate cố định."
           />
           <FeatureCard
             icon={

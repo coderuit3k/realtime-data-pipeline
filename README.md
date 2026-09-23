@@ -28,11 +28,7 @@ flowchart TD
     G --> K[Lambda: rag_build_index<br/>hackernews/news/github only]
     K -->|Titan embeddings| L[S3 rag-index/index.json]
 
-    Q[Question] --> N[Lambda: rag_query<br/>CRAG pipeline]
-    L --> N
-    N -->|grade + fallback| R1[Answer + sources]
-
-    Q --> AG[Lambda: rag_agent<br/>tool-calling loop]
+    Q[Question] --> AG[Lambda: rag_agent<br/>tool-calling loop]
     L --> AG
     AG -->|LLM decides tools/retries| R2[Answer + sources]
 ```
@@ -47,8 +43,8 @@ flowchart TD
   zone.
 - `transform/` -- Lambda triggered by new raw objects; cleans, dedups, extracts
   keywords, writes Parquet to the S3 curated zone.
-- `rag/` -- on-demand serverless RAG over the curated zone (see
-  [Agentic RAG demo](#agentic-rag-demo) below).
+- `rag/` -- on-demand serverless Agentic RAG over the curated zone (see
+  [Agentic RAG](#agentic-rag) below).
 - `common/` -- shared config/secrets/S3 helpers used by both.
 - `infra/` -- Terraform for the buckets, Lambdas, EventBridge schedule, S3
   trigger, Secrets Manager, IAM roles, CloudWatch alarms, the Glue
@@ -113,23 +109,12 @@ API keywords, crypto keyword mentions against that coin's same-day price
 change, and trending GitHub repo keywords against Hacker News keywords on
 the same day.
 
-## RAG demos: fixed pipeline + tool-calling agent
+## Agentic RAG
 
 `rag/` retrieves-and-generates over the curated zone using Amazon Bedrock --
 no vector database (e.g. OpenSearch Serverless): at this dataset's size,
 Lambda-memory cosine similarity is plenty, and it avoids a service that bills
-24/7 even idle. Two Lambdas answer questions over the same index, for
-comparison:
-
-- `rag/query.py` -- a **fixed pipeline**: retrieve, grade with CRAG, and
-  fall back through 3 hardcoded tiers (local KB -> web search -> model
-  knowledge). The orchestration logic lives in Python if/else branches; the
-  LLM only grades and generates.
-- `rag/agent.py` -- a genuine **tool-calling agent**: the LLM itself decides
-  whether/when to call `search_knowledge_base` and `search_web`, how to
-  reformulate the query, and when it has enough to answer -- via Bedrock's
-  Converse API with function calling, not hardcoded branching. See
-  [Agentic RAG: tool-calling agent](#agentic-rag-tool-calling-agent) below.
+24/7 even idle.
 
 - `rag/build_index.py` (Lambda `<project>-rag-build-index`, on-demand): reads
   every curated Parquet record from the three text-bearing sources --
@@ -137,69 +122,21 @@ comparison:
   Titan (`amazon.titan-embed-text-v2:0`), writes
   `s3://<curated-bucket>/rag-index/index.json`. `weather_observations` and
   `crypto_prices` are deliberately excluded: numeric telemetry with no
-  natural-language text isn't a fit for semantic search (see their
-  transform-side handling below). **Incremental**: caches by document id +
-  text, so a re-run only embeds new/changed records (verified: a second run
-  over the same 359 docs re-embedded 0, all served from cache).
-- `rag/query.py` (Lambda `<project>-rag-query`, on-demand): embeds the
-  question, does in-memory cosine similarity against that index, then runs
-  **CRAG** (Corrective RAG) before generating, with a real 3-tier fallback:
-  1. `grade_matches` -- one batched Claude Haiku call grades each retrieved
-     doc `relevant` / `ambiguous` / `irrelevant` to the question.
-  2. `classify_matches` -- keeps `relevant`/`ambiguous` docs, drops
-     `irrelevant` ones (`discarded_low_relevance` in the response, for
-     transparency).
-  3. `choose_answer_source` picks where the answer comes from:
-     - Anything survived grading -> **`local_knowledge_base`**: generate the
-       normal cited answer (`grounded: true`).
-     - Nothing survived -> **`web_search`**: search the web via Tavily and
-       generate a cited answer from those results instead (`grounded:
-       false`, but still sourced -- not a guess).
-     - Web search also empty/failing -> **`model_knowledge`**: answer from
-       Claude's own knowledge, explicitly flagged as unsourced.
-
-  Verified all three branches live: an in-domain question ("AI safety")
-  graded 5/5 relevant and cited the local dataset
-  (`answer_source: local_knowledge_base`). An out-of-domain one ("Paris
-  weather forecast") graded 5/5 local docs irrelevant, fell through to a
-  real Tavily search, and answered from 5 real web results with URLs
-  (`answer_source: web_search`) -- including correctly noting the sources
-  disagreed with each other. Bedrock's own native Web Search tool exists
-  but currently only supports OpenAI models on Bedrock, not Anthropic's, so
-  this uses Tavily instead (a Secrets Manager secret, same pattern as
-  NewsAPI) rather than switching model families for one fallback branch.
-
-```bash
-# 1. (Re)build the index after new data lands
-aws lambda invoke --function-name realtime-data-pipeline-dev-rag-build-index \
-  --cli-read-timeout 300 /tmp/out.json && cat /tmp/out.json
-
-# 2. Ask a question
-aws lambda invoke --function-name realtime-data-pipeline-dev-rag-query \
-  --cli-binary-format raw-in-base64-out \
-  --payload '{"question": "What is trending in AI right now?"}' \
-  /tmp/answer.json && cat /tmp/answer.json
-```
-
-Anthropic models on Bedrock need one extra one-time step beyond enabling
-"Model access": submitting the **use case details form** (Bedrock console ->
-Model access/catalog -> the Anthropic model -> "Submit use case details").
-Amazon's own models (Titan) don't need this. Allow up to ~15 minutes for it
-to propagate before retrying.
-
-### Agentic RAG: tool-calling agent
-
-`rag/agent.py` (Lambda `<project>-rag-agent`, on-demand) replaces the fixed
-CRAG branching above with a real agent loop over Bedrock's **Converse API**
-tool use: the model gets two tools, `search_knowledge_base` (the local
-index) and `search_web` (Tavily), and on each turn decides for itself
-whether to call one, which query to search with, whether to reformulate and
-search again, or to stop and answer. The loop runs until the model returns
-a plain text turn (no more tool calls) or `MAX_ITERATIONS` (6) is hit, at
-which point one final call asks for a best-effort answer with tools
-withdrawn. Every tool call is recorded in the response's `tool_calls` trace
--- unlike the pipeline version, this isn't knowable in advance from the
-code; it's whatever the model chose to do for that specific question.
+  natural-language text isn't a fit for semantic search. **Incremental**:
+  caches by document id + text, so a re-run only embeds new/changed records
+  (verified: a second run over the same 359 docs re-embedded 0, all served
+  from cache).
+- `rag/agent.py` (Lambda `<project>-rag-agent`, on-demand): a genuine
+  **tool-calling agent** over Bedrock's **Converse API** -- the model gets
+  two tools, `search_knowledge_base` (the local index above) and
+  `search_web` (Tavily), and on each turn decides for itself whether to
+  call one, which query to search with, whether to reformulate and search
+  again, or to stop and answer. The loop runs until the model returns a
+  plain text turn (no more tool calls) or `MAX_ITERATIONS` (6) is hit, at
+  which point one final call asks for a best-effort answer with tools
+  withdrawn. Every tool call is recorded in the response's `tool_calls`
+  trace -- this isn't knowable in advance from the code; it's whatever the
+  model chose to do for that specific question.
 
 Verified live, two real runs against the same index:
 - **In-domain** ("What is trending in AI safety and regulation right
@@ -214,6 +151,11 @@ Verified live, two real runs against the same index:
   hardcoded domain check.
 
 ```bash
+# 1. (Re)build the index after new data lands
+aws lambda invoke --function-name realtime-data-pipeline-dev-rag-build-index \
+  --cli-read-timeout 300 /tmp/out.json && cat /tmp/out.json
+
+# 2. Ask a question
 aws lambda invoke --function-name realtime-data-pipeline-dev-rag-agent \
   --cli-binary-format raw-in-base64-out \
   --payload '{"question": "What is trending in AI right now?"}' \
@@ -221,23 +163,27 @@ aws lambda invoke --function-name realtime-data-pipeline-dev-rag-agent \
   /tmp/agent-answer.json && cat /tmp/agent-answer.json
 ```
 
+Anthropic models on Bedrock need one extra one-time step beyond enabling
+"Model access": submitting the **use case details form** (Bedrock console ->
+Model access/catalog -> the Anthropic model -> "Submit use case details").
+Amazon's own models (Titan) don't need this. Allow up to ~15 minutes for it
+to propagate before retrying.
+
 ### Evaluating it: RAGAS
 
-`eval/run_ragas.py` scores the real retrieve -> CRAG -> generate pipeline
-(imported directly from `rag/query.py`, not mocked) on faithfulness, answer
-relevancy, and context precision, judged by Bedrock. Dev-only tool (heavy
-`langchain`/`ragas` deps, never deployed to Lambda) -- see
-[`eval/README.md`](eval/README.md) for setup (the dependency pins matter --
-`ragas`'s latest release has a real import-compatibility bug) and how to
-read the results.
+`eval/run_ragas.py` scores the real agent pipeline (imported directly from
+`rag/agent.py`, not mocked) on faithfulness, answer relevancy, and context
+precision, judged by Bedrock. Dev-only tool (heavy `langchain`/`ragas`
+deps, never deployed to Lambda) -- see [`eval/README.md`](eval/README.md)
+for setup (the dependency pins matter -- `ragas`'s latest release has a
+real import-compatibility bug) and how to read the results.
 
-Two clean runs over the 6 mixed in/out-of-domain questions:
-`faithfulness: 0.44`, `answer_relevancy: 0.60-0.61`, `context_precision:
-0.00-0.17` (near-zero both times). Faithfulness and relevancy tracked
-CRAG's grounded/ungrounded split correctly (high on the 3 in-domain
-questions, near-zero on the 3 out-of-domain ones). Context precision's
-near-zero score is a **documented metric limitation, not a retrieval
-bug** -- verified by direct testing it penalizes our answers' abstractive
-multi-source synthesis style rather than measuring retrieval quality; see
-[`eval/README.md`](eval/README.md#known-limitation-context-precision-reads-near-zero-here-verified-not-a-bug)
-for the evidence.
+A real run over the 6 mixed in/out-of-domain questions: `faithfulness:
+0.8052`, `answer_relevancy: 0.9156`, `llm_context_precision_without_reference:
+0.5275`. An earlier version of this project ran a second, fixed
+retrieve-then-generate pipeline (CRAG) alongside the agent for direct
+comparison before retiring it in favor of the agent alone -- on the same 6
+questions, CRAG scored 0.5474/0.5925/0.0000. The agent's own tool-use (it
+can always fall back to a live web search when its knowledge base has
+nothing relevant) means it almost always has something real to ground an
+answer in, which the numbers above reflect.
