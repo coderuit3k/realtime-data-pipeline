@@ -246,7 +246,7 @@ What's actually running, at this project's low volume:
 | Glue Data Catalog (5 tables) | Free (first 1M objects/month free) |
 | Athena (pay per query, tiny dataset) | Pennies per query |
 | RAG Lambdas + Bedrock (on-demand only, no schedule) | $0 when not invoked; pennies per build/query when it is |
-| Tavily web search (CRAG fallback, free tier) | $0 up to 1,000 searches/month |
+| Tavily web search (agent's search_web fallback tool, free tier) | $0 up to 1,000 searches/month |
 
 So leaving it running costs roughly **$1/month**, not zero. Two ways to cut
 that further:
