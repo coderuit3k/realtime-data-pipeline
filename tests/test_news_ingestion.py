@@ -1,4 +1,6 @@
-from ingestion.news_ingestion import normalize_article
+from unittest.mock import MagicMock, patch
+
+from ingestion.news_ingestion import fetch_articles, normalize_article
 
 
 def test_normalize_article_maps_fields():
@@ -27,3 +29,22 @@ def test_normalize_article_handles_missing_source():
     result = normalize_article(article)
 
     assert result["provider"] is None
+
+
+@patch("ingestion.news_ingestion.requests.get")
+@patch("ingestion.news_ingestion.get_secret")
+def test_fetch_articles_sends_api_key_as_a_header_not_a_query_param(mock_get_secret, mock_get):
+    # A leaked query string (e.g. in an exception message, an access log, or
+    # -- as happened before this test -- a CloudWatch log line surfaced on
+    # the public landing page) exposes the real key. NewsAPI supports the
+    # same auth via the X-Api-Key header, which never appears in a URL.
+    mock_get_secret.return_value = {"api_key": "real-secret-key"}
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"articles": []}
+    mock_get.return_value = mock_response
+
+    fetch_articles()
+
+    _, kwargs = mock_get.call_args
+    assert kwargs["headers"]["X-Api-Key"] == "real-secret-key"
+    assert "apiKey" not in kwargs["params"]

@@ -35,9 +35,12 @@ def fetch_articles() -> list[dict]:
         "language": config.NEWS_LANGUAGE,
         "pageSize": config.NEWS_PAGE_SIZE,
         "sortBy": "publishedAt",
-        "apiKey": api_key,
     }
-    response = requests.get(NEWS_API_URL, params=params, timeout=10)
+    # The key travels in a header, never the query string -- a URL can end up
+    # in an exception message or an access/CloudWatch log line, a header value
+    # normally doesn't. NewsAPI supports this as a documented alternative to
+    # the apiKey query param.
+    response = requests.get(NEWS_API_URL, params=params, headers={"X-Api-Key": api_key}, timeout=10)
     response.raise_for_status()
     payload = response.json()
     return [normalize_article(article) for article in payload.get("articles", [])]

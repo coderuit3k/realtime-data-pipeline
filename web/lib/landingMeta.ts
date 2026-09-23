@@ -16,20 +16,19 @@ export const DATA_SOURCE_COUNT = DATA_SOURCES.length;
 // rag_agent) = 9.
 export const LAMBDA_COUNT = 9;
 
-// Real combined automated test count, verified 2026-09-23 AFTER this
-// branch's sidebar/showcase redesign fix wave was applied -- that wave
-// added 5 new vitest tests since the constant was last set: 2 in
-// lib/github.test.ts for getRecentCommits, 2 in
-// app/api/commits/route.test.ts, and 1 in lib/cloudwatchLogs.test.ts
-// for the apiKey/api_key/token redaction added to queryRecentLogs.
-// Those additions are themselves part of the real vitest suite this
-// constant describes, so the count must include them, not an earlier
-// snapshot taken before they existed:
-//   .venv/bin/python -m pytest tests/ --collect-only -q   -> 73
+// Real combined automated test count, verified 2026-09-23 AFTER
+// tests/test_news_ingestion.py gained a new pytest test locking in the
+// NewsAPI-key-in-header fix (fetch_articles() now sends the key via the
+// X-Api-Key header instead of the apiKey query param, so it can't leak
+// through an exception message into a CloudWatch log line). That
+// addition is itself part of the real pytest suite this constant
+// describes, so the count must include it, not the snapshot taken
+// before it existed:
+//   .venv/bin/python -m pytest tests/ --collect-only -q   -> 74
 //   cd web && npx vitest run                              -> 174 (38 files)
-// 73 + 174 = 247. Both are real, currently-passing suites for this
+// 74 + 174 = 248. Both are real, currently-passing suites for this
 // same project (Python pipeline + TypeScript web app).
-export const TEST_COUNT = 247;
+export const TEST_COUNT = 248;
 
 // Reused directly from opsMeta.ts's existing, already-cited
 // COST_ESTIMATE_USD -- never re-derived separately.
