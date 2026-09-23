@@ -1,7 +1,7 @@
-"""Offline RAGAS evaluation of the rag_query pipeline (including its CRAG
-correction step). Dev-only: run locally with `aws configure` credentials,
-never deployed to Lambda -- see eval/README.md for why (dependency weight)
-and how to run this.
+"""Offline RAGAS evaluation of the rag_agent pipeline (Bedrock Converse
+tool-calling agent: search_knowledge_base + search_web). Dev-only: run
+locally with `aws configure` credentials, never deployed to Lambda -- see
+eval/README.md for why (dependency weight) and how to run this.
 """
 
 import json
@@ -24,49 +24,36 @@ from ragas.metrics import (  # noqa: E402
 from ragas.run_config import RunConfig  # noqa: E402
 
 from common import config  # noqa: E402
-from rag.query import (  # noqa: E402
-    classify_matches,
-    embed_text,
-    generate_answer,
-    generate_ungrounded_answer,
-    grade_matches,
-    load_index,
-    top_matches,
-)
+from rag.agent import load_index, run_agent  # noqa: E402
 
 
 def load_questions() -> list[dict]:
     return json.loads((Path(__file__).parent / "questions.json").read_text())
 
 
-def run_rag_query(question: str) -> dict:
-    """Runs the exact same retrieve -> CRAG grade -> generate pipeline as the
-    deployed rag_query Lambda, so the eval measures real behavior."""
-    documents = load_index()
-    question_embedding = embed_text(question)
-    matches = top_matches(question_embedding, documents, config.RAG_TOP_K)
-
-    try:
-        grades = grade_matches(question, matches)
-    except Exception:
-        grades = ["relevant"] * len(matches)
-
-    used, _discarded = classify_matches(matches, grades)
-    grounded = bool(used)
-    answer = generate_answer(question, used) if grounded else generate_ungrounded_answer(question)
+def run_rag_agent(question: str, documents: list[dict]) -> dict:
+    """Runs the exact same tool-calling agent loop as the deployed rag_agent
+    Lambda (rag.agent.run_agent), so the eval measures real behavior.
+    `documents` is the RAG index, loaded once for the whole run by main()
+    -- not re-fetched from S3 per question (the ~27MB index doesn't change
+    between questions in one run, and re-downloading it per question was
+    slow enough to trip a real S3 read timeout during testing)."""
+    result = run_agent(question, documents)
+    contexts = [s["text"] for s in result["sources"] if s.get("text")]
+    grounded = bool(result["sources"])
 
     return {
-        "answer": answer,
-        "contexts": [m["text"] for m in used] or ["(no relevant context -- answered ungrounded)"],
+        "answer": result["answer"],
+        "contexts": contexts or ["(no relevant context -- answered ungrounded)"],
         "grounded": grounded,
     }
 
 
-def build_dataset(questions: list[dict]) -> tuple[EvaluationDataset, list[bool]]:
+def build_dataset(questions: list[dict], documents: list[dict]) -> tuple[EvaluationDataset, list[bool]]:
     rows = []
     grounded_flags = []
     for q in questions:
-        result = run_rag_query(q["question"])
+        result = run_rag_agent(q["question"], documents)
         rows.append(
             {
                 "user_input": q["question"],
@@ -81,8 +68,10 @@ def build_dataset(questions: list[dict]) -> tuple[EvaluationDataset, list[bool]]
 
 def main():
     questions = load_questions()
-    print(f"Running {len(questions)} questions through rag_query (retrieve -> CRAG -> generate)...")
-    dataset, grounded_flags = build_dataset(questions)
+    print("Loading RAG index from S3 (once for this run)...")
+    documents = load_index()
+    print(f"Running {len(questions)} questions through rag_agent (tool-calling loop)...")
+    dataset, grounded_flags = build_dataset(questions, documents)
 
     judge_llm = LangchainLLMWrapper(
         ChatBedrockConverse(model=config.BEDROCK_TEXT_MODEL_ID, region_name=config.AWS_REGION)
