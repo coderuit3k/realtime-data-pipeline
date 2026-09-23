@@ -95,7 +95,8 @@ function CommitsPanel({ commits }: { commits: GithubCommit[] }) {
 
 export default function LandingPage() {
   const [commits, setCommits] = useState<GithubCommit[]>([]);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [logs, setLogs] = useState<LogEntry[] | null>(null);
+  const [logsError, setLogsError] = useState(false);
 
   useEffect(() => {
     fetch("/api/commits")
@@ -112,16 +113,20 @@ export default function LandingPage() {
     fetch("/api/ops")
       .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
       .then(({ ok, body }) => {
-        if (ok && Array.isArray(body?.recentLogs)) setLogs(body.recentLogs);
+        if (ok && Array.isArray(body?.recentLogs)) {
+          setLogs(body.recentLogs);
+        } else {
+          setLogsError(true);
+        }
       })
       .catch(() => {
-        /* log footer is secondary -- never block the landing page over it */
+        setLogsError(true);
       });
   }, []);
 
   return (
     <div className="flex gap-4 p-9">
-      <div className="flex-[2.6] flex flex-col gap-5">
+      <div className="flex-[2.6] min-w-0 flex flex-col gap-5">
         <section className="rounded-lg border border-border bg-surface px-10 py-12 flex flex-col items-center text-center gap-5">
           <span className="font-mono text-[11px] tracking-wide text-accent bg-accent/10 px-3.5 py-1.5 rounded-full">
             PORTFOLIO PROJECT · DATA ENGINEERING
@@ -254,21 +259,24 @@ export default function LandingPage() {
         </section>
       </div>
 
-      <div className="flex-1 flex flex-col gap-4 min-h-0">
+      <div className="flex-1 min-w-0 flex flex-col gap-4 min-h-0">
         <CommitsPanel commits={commits} />
 
         <div className="flex-1 rounded-lg border border-border bg-surface px-4 py-4 flex flex-col gap-2 min-h-0 overflow-auto">
           <span className="text-xs font-semibold text-textPrimary">Log gần đây</span>
           <div className="font-mono flex flex-col gap-1.5 text-[10.5px] text-textMuted">
-            {logs.length === 0 && <span>Chưa có log trong 24h qua.</span>}
-            {logs.map((log, i) => {
-              const level = detectLogLevel(log.message);
-              return (
-                <span key={i}>
-                  <span className={logLevelColor(level)}>{level}</span> {log.source}: {log.message}
-                </span>
-              );
-            })}
+            {logs === null && !logsError && <span>Đang tải log…</span>}
+            {logsError && <span>Không tải được log.</span>}
+            {logs !== null && logs.length === 0 && <span>Chưa có log trong 24h qua.</span>}
+            {logs !== null &&
+              logs.map((log, i) => {
+                const level = detectLogLevel(log.message);
+                return (
+                  <span key={i} className="break-all">
+                    <span className={logLevelColor(level)}>{level}</span> {log.source}: {log.message}
+                  </span>
+                );
+              })}
           </div>
         </div>
       </div>

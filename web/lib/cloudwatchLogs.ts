@@ -24,6 +24,10 @@ function stripLogGroupPrefix(log: string, prefixToStrip: string): string {
   return log.slice(index + marker.length);
 }
 
+function redactSecrets(message: string): string {
+  return message.replace(/(apiKey|api_key|token)=[^&\s]+/gi, "$1=[REDACTED]");
+}
+
 export async function queryRecentLogs(
   client: CloudWatchLogsClient,
   logGroupNames: string[],
@@ -60,7 +64,7 @@ export async function queryRecentLogs(
 
   return results.map((row) => ({
     timestamp: field(row, "@timestamp"),
-    message: field(row, "@message"),
+    message: redactSecrets(field(row, "@message")),
     source: stripLogGroupPrefix(field(row, "@log"), prefixToStrip),
   }));
 }

@@ -51,6 +51,55 @@ const NAV_LINKS: NavLink[] = [
   },
 ];
 
+// Temporary secondary nav for pages the 4-item IA collapse (an earlier
+// task on this branch) silently dropped: /ops, /cicd, /explorer, and
+// /insights are real, fully-working pages with real data -- not part of
+// the intentional settings/weather removal. Keep them reachable here
+// until later sub-projects fold their content into the 4-item IA, then
+// delete this group.
+const LEGACY_LINKS: NavLink[] = [
+  {
+    href: "/ops",
+    label: "Ops & Monitoring",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+      </svg>
+    ),
+  },
+  {
+    href: "/cicd",
+    label: "CI/CD",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+        <line x1="6" y1="3" x2="6" y2="15" />
+        <circle cx="18" cy="6" r="3" />
+        <circle cx="6" cy="18" r="3" />
+        <path d="M18 9a9 9 0 0 1-9 9" />
+      </svg>
+    ),
+  },
+  {
+    href: "/explorer",
+    label: "Data Explorer",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="m7 9 3 3-3 3M13 15h4" />
+      </svg>
+    ),
+  },
+  {
+    href: "/insights",
+    label: "Insights",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 17 9 11 13 15 21 7M21 7h-6M21 7v6" />
+      </svg>
+    ),
+  },
+];
+
 function SidebarLink({ link, active }: { link: NavLink; active: boolean }) {
   return (
     <Link
@@ -78,7 +127,6 @@ export default function Sidebar() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
 
   useEffect(() => {
-    if (pathname === "/") return;
     fetch("/api/health")
       .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
       .then(({ ok, body }) => {
@@ -113,6 +161,10 @@ export default function Sidebar() {
 
       <nav className="flex flex-col gap-1">
         {NAV_LINKS.map((link) => (
+          <SidebarLink key={link.href} link={link} active={pathname === link.href} />
+        ))}
+        <span className="font-mono text-[10px] text-textFaint tracking-wide px-3 pt-3 pb-0.5">TRANG KHÁC</span>
+        {LEGACY_LINKS.map((link) => (
           <SidebarLink key={link.href} link={link} active={pathname === link.href} />
         ))}
       </nav>

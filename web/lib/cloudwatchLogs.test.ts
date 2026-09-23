@@ -65,4 +65,28 @@ describe("queryRecentLogs", () => {
       "CloudWatch Logs Insights query failed: Failed"
     );
   });
+
+  it("redacts apiKey/api_key/token query params from the message before returning it", async () => {
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce({ queryId: "q-4" })
+      .mockResolvedValueOnce({
+        status: "Complete",
+        results: [
+          resultRow(
+            "t",
+            "ERROR HTTPError: 429 Client Error for url: https://newsapi.org/v2/everything?apiKey=sk_live_abc123&q=test",
+            "123:/aws/lambda/proj-news-ingestion"
+          ),
+        ],
+      });
+    const client = { send } as unknown as import("@aws-sdk/client-cloudwatch-logs").CloudWatchLogsClient;
+
+    const entries = await queryRecentLogs(client, ["/aws/lambda/proj-news-ingestion"], 5, "proj-");
+
+    expect(entries[0].message).toBe(
+      "ERROR HTTPError: 429 Client Error for url: https://newsapi.org/v2/everything?apiKey=[REDACTED]&q=test"
+    );
+    expect(entries[0].message).not.toContain("sk_live_abc123");
+  });
 });
