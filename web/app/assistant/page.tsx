@@ -2,13 +2,11 @@
 "use client";
 
 import { useState } from "react";
-import { ModeToggle } from "@/components/ModeToggle";
 import { ChatThread } from "@/components/ChatThread";
 import { ToolTrace } from "@/components/ToolTrace";
-import type { AssistantMode, AssistantResult } from "@/lib/assistant";
+import type { AssistantResult } from "@/lib/assistant";
 
 export default function AssistantPage() {
-  const [mode, setMode] = useState<AssistantMode>("crag");
   const [input, setInput] = useState("");
   const [question, setQuestion] = useState<string | null>(null);
   const [result, setResult] = useState<AssistantResult | null>(null);
@@ -26,7 +24,7 @@ export default function AssistantPage() {
       const res = await fetch("/api/assistant", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ question: trimmed, mode }),
+        body: JSON.stringify({ question: trimmed }),
       });
       const body = await res.json();
       if (res.status === 429) {
@@ -48,8 +46,10 @@ export default function AssistantPage() {
     <div className="p-9 flex flex-col gap-5">
       <div>
         <h1 className="font-heading text-2xl font-semibold text-textPrimary">RAG Assistant</h1>
+        <p className="mt-1.5 text-sm text-textSecondary">
+          Agentic RAG — agent tự quyết định gọi tool truy xuất dữ liệu đã ingest hoặc tìm trên web.
+        </p>
       </div>
-      <ModeToggle mode={mode} onChange={setMode} />
       <div className="grid grid-cols-[1.5fr_1fr] gap-5">
         <div className="rounded-lg border border-border bg-surface p-6 flex flex-col gap-4">
           <ChatThread question={question} result={result} loading={loading} />

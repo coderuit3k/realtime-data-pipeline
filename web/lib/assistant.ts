@@ -1,5 +1,3 @@
-export type AssistantMode = "crag" | "agent";
-
 export type AssistantSource = {
   title: string;
   url: string;
@@ -9,22 +7,11 @@ export type AssistantSource = {
 };
 
 export type AssistantResult = {
-  mode: AssistantMode;
   question: string;
   answer: string;
   grounded: boolean;
   sources: AssistantSource[];
-  cragDetail?: { answerSource: string; discarded: Array<{ title: string; grade: string }> };
-  agentDetail?: { toolCalls: unknown[] };
-};
-
-type RawCragPayload = {
-  question: string;
-  answer: string;
-  grounded: boolean;
-  answer_source: string;
-  sources: AssistantSource[];
-  discarded_low_relevance: Array<{ title: string; grade: string }>;
+  toolCalls: unknown[];
 };
 
 type RawAgentPayload = {
@@ -35,28 +22,13 @@ type RawAgentPayload = {
   sources: AssistantSource[];
 };
 
-export function normalizeAssistantResult(mode: AssistantMode, raw: unknown): AssistantResult {
-  const base = raw as { question: string; answer: string; grounded: boolean; sources: AssistantSource[] };
-  const shared = {
-    mode,
-    question: base.question,
-    answer: typeof base.answer === "string" ? base.answer : "",
-    grounded: base.grounded,
-    sources: Array.isArray(base.sources) ? base.sources : [],
-  };
-  if (mode === "crag") {
-    const cragRaw = raw as RawCragPayload;
-    return {
-      ...shared,
-      cragDetail: {
-        answerSource: cragRaw.answer_source,
-        discarded: Array.isArray(cragRaw.discarded_low_relevance) ? cragRaw.discarded_low_relevance : [],
-      },
-    };
-  }
-  const agentRaw = raw as RawAgentPayload;
+export function normalizeAssistantResult(raw: unknown): AssistantResult {
+  const payload = raw as RawAgentPayload;
   return {
-    ...shared,
-    agentDetail: { toolCalls: Array.isArray(agentRaw.tool_calls) ? agentRaw.tool_calls : [] },
+    question: payload.question,
+    answer: typeof payload.answer === "string" ? payload.answer : "",
+    grounded: payload.grounded,
+    sources: Array.isArray(payload.sources) ? payload.sources : [],
+    toolCalls: Array.isArray(payload.tool_calls) ? payload.tool_calls : [],
   };
 }
