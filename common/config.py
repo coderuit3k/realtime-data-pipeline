@@ -59,5 +59,6 @@ BEDROCK_TEXT_MODEL_ID = os.environ.get(
 RAG_TOP_K = int(os.environ.get("RAG_TOP_K", "5"))
 RAG_INDEX_KEY = os.environ.get("RAG_INDEX_KEY", "rag-index/index.json")
 
-# Web search fallback for CRAG's "incorrect" branch (Tavily -- api.tavily.com).
+# Web search tool for the agent (Tavily -- api.tavily.com), used when it
+# decides the knowledge base has nothing relevant.
 TAVILY_SECRET_NAME = os.environ.get("TAVILY_SECRET_NAME", "data-pipeline/tavily-api")

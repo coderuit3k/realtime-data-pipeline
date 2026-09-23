@@ -10,7 +10,7 @@ resource "aws_secretsmanager_secret" "news_api" {
   name = "${local.name_prefix}/news-api"
 }
 
-# Tavily (web search fallback for CRAG's "incorrect" branch, in rag/query.py).
+# Tavily (web search fallback tool for the agent, in rag/agent.py).
 resource "aws_secretsmanager_secret" "tavily_api" {
   name = "${local.name_prefix}/tavily-api"
 }

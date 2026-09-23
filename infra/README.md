@@ -2,8 +2,8 @@
 
 Provisions: S3 raw + curated buckets, Secrets Manager secrets (NewsAPI key,
 Tavily key), IAM roles, the 3 pipeline Lambda functions + 2 on-demand RAG
-Lambdas (`rag_build_index`, `rag_query` -- see root README's "Agentic RAG
-demo"), two EventBridge schedules for ingestion (news_ingestion runs on
+Lambdas (`rag_build_index`, `rag_agent` -- see root README's "Agentic RAG"
+section), two EventBridge schedules for ingestion (news_ingestion runs on
 its own slower schedule -- NewsAPI's free tier caps at 100 requests/day),
 an S3 -> Lambda trigger for
 transform, a Glue Catalog database/tables + Athena workgroup over the
@@ -37,7 +37,7 @@ aws secretsmanager put-secret-value \
   --secret-id "$(terraform output -raw news_secret_name)" \
   --secret-string '{"api_key":"..."}'
 
-# Only needed for CRAG's web-search fallback in rag_query (tavily.com, free tier)
+# Only needed for the agent's search_web fallback tool (Tavily, tavily.com, free tier)
 aws secretsmanager put-secret-value \
   --secret-id "$(terraform output -raw tavily_secret_name)" \
   --secret-string '{"api_key":"..."}'
@@ -89,7 +89,6 @@ REGION=us-east-1
 WORKGROUP_ARN="arn:aws:athena:${REGION}:${ACCOUNT_ID}:workgroup/$(terraform output -raw athena_workgroup_name)"
 DATABASE="$(terraform output -raw glue_database_name)"
 CURATED_BUCKET_ARN="arn:aws:s3:::$(terraform output -raw curated_bucket_name)"
-RAG_QUERY_ARN="arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:$(terraform output -raw rag_query_function_name)"
 RAG_AGENT_ARN="arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:$(terraform output -raw rag_agent_function_name)"
 
 # Ops page (real CloudWatch metrics/schedule/logs) -- pipeline Lambda names
@@ -172,7 +171,7 @@ cat > /tmp/web-app-policy.json <<EOF
       "Sid": "InvokeRagLambdas",
       "Effect": "Allow",
       "Action": ["lambda:InvokeFunction"],
-      "Resource": ["${RAG_QUERY_ARN}", "${RAG_AGENT_ARN}"]
+      "Resource": ["${RAG_AGENT_ARN}"]
     },
     {
       "Sid": "SecretsManagerDescribeOnly",
@@ -219,7 +218,6 @@ for placeholder values and one-line comments):
 - `ATHENA_WORKGROUP` -- Athena workgroup the dashboard queries against
 - `ATHENA_DATABASE` -- Glue/Athena database the dashboard queries against
 - `ALARM_NAME_PREFIX` -- CloudWatch alarm name prefix (dashboard) AND the exact pipeline name prefix (`local.name_prefix`) used to build Lambda/log-group/EventBridge-rule names for the Ops page -- must be exactly `local.name_prefix`, not just any valid alarm-matching prefix
-- `RAG_QUERY_FUNCTION_NAME` -- name of the `rag_query` (CRAG) Lambda
 - `RAG_AGENT_FUNCTION_NAME` -- name of the `rag_agent` Lambda
 - `UPSTASH_REDIS_REST_URL` -- Upstash Redis REST URL for assistant rate limiting
 - `UPSTASH_REDIS_REST_TOKEN` -- Upstash Redis REST token for assistant rate limiting
