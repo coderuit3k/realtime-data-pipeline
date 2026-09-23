@@ -111,8 +111,8 @@ export default function DashboardPage() {
 
   if (!data) {
     return (
-      <div className="p-9 grid grid-cols-4 gap-4">
-        {[0, 1, 2, 3].map((i) => (
+      <div className="p-9 grid grid-cols-3 gap-4">
+        {[0, 1, 2].map((i) => (
           <div key={i} className="h-24 rounded-lg border border-border bg-surface animate-pulse" />
         ))}
       </div>
@@ -134,8 +134,11 @@ export default function DashboardPage() {
       <div>
         <h1 className="font-heading text-2xl font-semibold text-textPrimary">Live Metrics & Ops</h1>
         <p className="mt-1.5 text-sm text-textSecondary">
-          {data.sourcesHealthy}/{data.sourcesTotal} nguồn OK · EventBridge {data.schedule.scheduleExpression} ·{" "}
-          {data.alarmsTotal} CloudWatch alarm
+          {data.sourcesHealthy}/{data.sourcesTotal} nguồn OK · EventBridge {data.schedule.scheduleExpression}{" "}
+          <span className={data.schedule.enabled ? "text-success" : "text-error"}>
+            {data.schedule.enabled ? "ENABLED" : "DISABLED"}
+          </span>{" "}
+          · {data.alarmsTotal} CloudWatch alarm
         </p>
       </div>
 
@@ -156,6 +159,9 @@ export default function DashboardPage() {
 
       <div className="rounded-lg border border-border bg-surface px-5 py-4 flex flex-col gap-3">
         <span className="text-[13px] font-semibold text-textPrimary">Realtime Ingestion Streams (5 nguồn dị chủng)</span>
+        <span className="text-[10.5px] text-textMuted">
+          ● OK nghĩa là Lambda chạy không lỗi -- một nguồn có thể OK nhưng ghi 0 bản ghi hôm nay nếu không có dữ liệu mới.
+        </span>
         <div className="grid grid-cols-5 gap-3">
           {SOURCES.map(({ sourceId, label, lambdaLabel }) => {
             const health = healthBySource.get(lambdaLabel);
@@ -205,7 +211,7 @@ export default function DashboardPage() {
           <div className="flex flex-col gap-1 pt-1 border-t border-border">
             <span className="text-[11px] text-textSecondary">Partition projection</span>
             <span className="font-mono text-[10.5px] text-textMuted">
-              year/month/day/hour, injected (Glue Catalog, infra/glue.tf)
+              year/month/day, integer projection (Glue Catalog, infra/glue.tf)
             </span>
           </div>
         </div>
@@ -248,6 +254,9 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
+          <span className="text-[10.5px] text-textMuted">
+            4 hạng mục có giá cụ thể nhất -- ước tính tĩnh/tháng từ infra/README.md, không phải số liệu Cost Explorer theo thời gian thực. Xem infra/README.md.
+          </span>
         </div>
 
         <div className="rounded-lg border border-border bg-surface px-5 py-4 flex flex-col gap-2.5">

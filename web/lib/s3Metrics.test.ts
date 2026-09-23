@@ -7,13 +7,13 @@ describe("getBucketStorageStats", () => {
       MetricDataResults: [
         {
           Id: "sizeBytes",
-          Values: [104857600, 115343360],
-          Timestamps: [new Date("2026-09-21T00:00:00Z"), new Date("2026-09-22T00:00:00Z")],
+          Values: [115343360, 104857600],
+          Timestamps: [new Date("2026-09-22T00:00:00Z"), new Date("2026-09-21T00:00:00Z")],
         },
         {
           Id: "objectCount",
-          Values: [412, 430],
-          Timestamps: [new Date("2026-09-21T00:00:00Z"), new Date("2026-09-22T00:00:00Z")],
+          Values: [430, 412],
+          Timestamps: [new Date("2026-09-22T00:00:00Z"), new Date("2026-09-21T00:00:00Z")],
         },
       ],
     });
