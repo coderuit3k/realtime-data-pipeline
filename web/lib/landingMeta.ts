@@ -18,8 +18,8 @@ export const DATA_SOURCE_COUNT = DATA_SOURCES.length;
 export const LAMBDA_COUNT = 8;
 
 // Real combined automated test count, verified 2026-09-23 AFTER the
-// single-Agentic-RAG plan's deletions (tests/test_rag_query.py removed,
-// app/api/assistant/route.test.ts's CRAG-mode cases removed) --
+// single-Agentic-RAG plan's deletions (tests/test_rag_query.py removed;
+// web/lib/assistant.test.ts's CRAG-mode cases removed, 4 -> 2 tests) --
 // recomputed from a fresh run, not carried over from an earlier snapshot:
 //   .venv/bin/python -m pytest tests/ --collect-only -q   -> 59
 //   cd web && npx vitest run                              -> 176 (40 files)

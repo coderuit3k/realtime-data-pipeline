@@ -49,7 +49,7 @@ The `web/` Next.js app (dashboard, RAG assistant, data catalog, data
 explorer, insights, ops, CI/CD, weather, settings) needs its own AWS
 credentials, scoped read-only
 to Athena/Glue/S3/CloudWatch/EventBridge/CloudWatch Logs plus
-`lambda:InvokeFunction` on just the two RAG Lambdas. This user is created
+`lambda:InvokeFunction` on just the `rag_agent` Lambda. This user is created
 **manually via the AWS CLI**, not by `terraform apply` -- the GitHub Actions
 deploy role is deliberately scoped to manage IAM *roles* only (see
 `infra-bootstrap/oidc.tf`), not IAM *users* or access keys, so a compromised

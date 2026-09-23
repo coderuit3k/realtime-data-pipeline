@@ -2,8 +2,6 @@ export type AssistantSource = {
   title: string;
   url: string;
   source: string;
-  score?: number | null;
-  grade?: string;
 };
 
 export type AssistantResult = {

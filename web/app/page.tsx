@@ -135,7 +135,7 @@ export default function LandingPage() {
             Pipeline dữ liệu real-time, serverless, chạy thật trên AWS
           </h1>
           <p className="max-w-xl text-[14.5px] leading-relaxed text-textSecondary">
-            {DATA_SOURCE_COUNT} nguồn dị chủng đổ về S3 → Glue/Athena, cộng một agent Agentic RAG thật trên Bedrock —
+            {DATA_SOURCE_COUNT} nguồn dị chủng đổ về S3 → Glue/Athena, cộng một pipeline Agentic RAG thật trên Bedrock —
             tự quyết định gọi tool truy xuất dữ liệu đã ingest hoặc tìm trên web. Toàn bộ hạ tầng bằng Terraform,
             deploy qua GitHub Actions với gate phê duyệt production.
           </p>

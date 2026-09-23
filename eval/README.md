@@ -60,12 +60,15 @@ when it isn't or comes back empty. A healthy run looks like:
 **Real run (2026-09-23):** `faithfulness: 0.7271`,
 `answer_relevancy: 0.8870`,
 `llm_context_precision_without_reference: 0.5511`. (For
-reference only, not to be copied without reproducing it yourself: a run
-during this script's single-pipeline simplification measured
+reference only, not to be copied without reproducing it yourself: an
+earlier run, from when this script still evaluated both the agent and the
+now-retired CRAG pipeline side by side, measured the agent at
 `faithfulness: 0.8052`, `answer_relevancy: 0.9156`,
-`llm_context_precision_without_reference: 0.5275` -- expect a similar
-ballpark, not necessarily identical values, since the judge LLM and the
-agent's own tool-use decisions both have real run-to-run variance.)
+`llm_context_precision_without_reference: 0.5275` -- see
+[`README.md`](../README.md#agentic-rag) for that comparison. Expect a
+similar ballpark run to run, not necessarily identical values, since the
+judge LLM and the agent's own tool-use decisions both have real
+variance.)
 
 **Cost/time note:** each metric makes multiple Bedrock calls per question
 (faithfulness in particular decomposes the answer into statements and

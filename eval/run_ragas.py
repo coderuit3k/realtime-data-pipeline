@@ -49,7 +49,9 @@ def run_rag_agent(question: str, documents: list[dict]) -> dict:
     }
 
 
-def build_dataset(questions: list[dict], documents: list[dict]) -> tuple[EvaluationDataset, list[bool]]:
+def build_dataset(
+    questions: list[dict], documents: list[dict]
+) -> tuple[EvaluationDataset, list[bool]]:
     rows = []
     grounded_flags = []
     for q in questions:

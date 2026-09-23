@@ -178,12 +178,18 @@ deps, never deployed to Lambda) -- see [`eval/README.md`](eval/README.md)
 for setup (the dependency pins matter -- `ragas`'s latest release has a
 real import-compatibility bug) and how to read the results.
 
-A real run over the 6 mixed in/out-of-domain questions: `faithfulness:
-0.8052`, `answer_relevancy: 0.9156`, `llm_context_precision_without_reference:
-0.5275`. An earlier version of this project ran a second, fixed
-retrieve-then-generate pipeline (CRAG) alongside the agent for direct
-comparison before retiring it in favor of the agent alone -- on the same 6
-questions, CRAG scored 0.5474/0.5925/0.0000. The agent's own tool-use (it
-can always fall back to a live web search when its knowledge base has
-nothing relevant) means it almost always has something real to ground an
-answer in, which the numbers above reflect.
+A real side-by-side comparison run over the 6 mixed in/out-of-domain
+questions, from when this project still had both pipelines: the agent
+scored `faithfulness: 0.8052`, `answer_relevancy: 0.9156`,
+`llm_context_precision_without_reference: 0.5275`; the fixed
+retrieve-then-generate pipeline (CRAG), before it was retired, scored
+0.5474/0.5925/0.0000 on the same questions. That comparison's CRAG side
+used only its local-knowledge-base path -- not the deployed Lambda's real
+Tavily web-search fallback tier -- so treat it as a lower bound on what
+CRAG could have scored, not a claim that CRAG had no web-search option at
+all. The agent, by contrast, always has both `search_knowledge_base` and
+`search_web` available as tools it can choose on every question, which the
+numbers above still meaningfully favor it on. See
+[`eval/README.md`](eval/README.md) for the latest run of today's
+single-pipeline script (numbers move slightly run to run; the judge LLM
+and the agent's own tool-use choices both have real variance).
