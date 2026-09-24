@@ -7,9 +7,14 @@ const config: Config = {
       colors: {
         bg: "#0B0F17",
         surface: "#111827",
+        surfaceHigh: "#1C2028",
+        surfaceHighest: "#262A33",
         border: "rgba(255, 255, 255, 0.08)",
+        borderStrong: "rgba(255, 255, 255, 0.12)",
         accent: "#06B6D4",
+        accentBright: "#4CD7F6",
         secondary: "#6366F1",
+        secondaryBright: "#8B5CF6",
         textPrimary: "#DFE2EE",
         textSecondary: "#BCC9CD",
         textMuted: "#869397",
@@ -18,6 +23,12 @@ const config: Config = {
         error: "#EF4444",
         sidebarBg: "#0A0E16",
         textFaint: "#3D494C",
+      },
+      boxShadow: {
+        glowCyan: "0 0 16px rgba(6, 182, 212, 0.4)",
+        glowIndigo: "0 0 14px rgba(99, 102, 241, 0.4)",
+        glowEmerald: "0 0 12px rgba(16, 185, 129, 0.35)",
+        glassPanel: "0 8px 32px rgba(0, 0, 0, 0.5)",
       },
       fontFamily: {
         heading: ["var(--font-inter)"],
