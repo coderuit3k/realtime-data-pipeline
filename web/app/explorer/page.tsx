@@ -74,8 +74,13 @@ export default function ExplorerPage() {
       </div>
 
       <div className="flex gap-4 flex-grow min-h-0">
-        <div className="w-[270px] shrink-0 rounded-lg border border-border bg-surface p-4 flex flex-col gap-4 overflow-auto">
-          <span className="text-xs font-semibold text-textPrimary">Truy vấn mẫu</span>
+        <div className="w-[270px] shrink-0 rounded-lg border border-border bg-surface/75 backdrop-blur-md p-4 flex flex-col gap-4 overflow-auto">
+          <div className="flex items-center gap-2">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-accent">
+              <path d="M6 3h12v18l-6-4-6 4V3Z" />
+            </svg>
+            <span className="text-xs font-semibold text-textPrimary">Truy vấn mẫu</span>
+          </div>
           {samples?.groups.map((group) => (
             <div key={group.label} className="flex flex-col gap-1.5">
               <span className="font-mono text-[10px] uppercase text-textMuted">{group.label}</span>
@@ -95,15 +100,22 @@ export default function ExplorerPage() {
         </div>
 
         <div className="flex-grow flex flex-col gap-4 min-h-0">
-          <div className="rounded-lg border border-border bg-surface px-5 py-4 flex flex-col gap-3">
+          <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-4 flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-textPrimary">SQL</span>
               <button
                 onClick={runQuery}
                 disabled={running}
-                className="rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-bg disabled:opacity-50"
+                className="rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-bg disabled:opacity-50 transition-shadow hover:shadow-glowCyan flex items-center gap-2"
               >
-                {running ? "Đang chạy…" : "▶ Chạy"}
+                {running ? "Đang chạy…" : (
+                  <>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" stroke="none">
+                      <path d="M6 4l14 8-14 8V4Z" />
+                    </svg>
+                    <span>Chạy</span>
+                  </>
+                )}
               </button>
             </div>
             <textarea
@@ -116,8 +128,14 @@ export default function ExplorerPage() {
           </div>
 
           {result && (
-            <div className="rounded-lg border border-border bg-surface px-5 py-4 flex flex-col gap-3 flex-grow min-h-0 overflow-auto">
-              <span className="text-xs font-semibold text-textPrimary">Kết quả</span>
+            <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-4 flex flex-col gap-3 flex-grow min-h-0 overflow-auto">
+              <div className="flex items-center gap-2">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-accent">
+                  <rect x="3" y="4" width="18" height="16" rx="1.5" />
+                  <path d="M3 10h18M9 4v16" />
+                </svg>
+                <span className="text-xs font-semibold text-textPrimary">Kết quả</span>
+              </div>
               <table className="font-mono w-full border-collapse text-xs">
                 <thead>
                   <tr>
@@ -132,7 +150,7 @@ export default function ExplorerPage() {
                   {result.rows.map((row, i) => (
                     <tr key={i}>
                       {row.map((cell, j) => (
-                        <td key={j} className="text-textSecondary border-b border-border py-2 px-2.5">
+                        <td key={j} className="tabular-nums text-textSecondary border-b border-border py-2 px-2.5">
                           {cell ?? ""}
                         </td>
                       ))}
@@ -140,7 +158,7 @@ export default function ExplorerPage() {
                   ))}
                 </tbody>
               </table>
-              <span className="mt-auto text-[11px] text-textMuted">
+              <span className="tabular-nums mt-auto text-[11px] text-textMuted">
                 Quét {formatBytes(result.scannedBytes)} · {(result.elapsedMs / 1000).toFixed(2)}s · {result.rows.length} dòng
                 {result.hasMoreRows ? " (hiển thị 100 dòng đầu)" : ""}
               </span>
