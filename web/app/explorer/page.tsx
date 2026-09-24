@@ -131,7 +131,7 @@ export default function ExplorerPage() {
             <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-4 flex flex-col gap-3 flex-grow min-h-0 overflow-auto">
               <div className="flex items-center gap-2">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-accent">
-                  <rect x="3" y="4" width="18" height="16" rx="1.5" />
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
                   <path d="M3 10h18M9 4v16" />
                 </svg>
                 <span className="text-xs font-semibold text-textPrimary">Kết quả</span>
