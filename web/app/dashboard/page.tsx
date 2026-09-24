@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { KpiCard } from "@/components/KpiCard";
 import { SourceVolumeChart } from "@/components/SourceVolumeChart";
 import { ActivityFeed } from "@/components/ActivityFeed";
+import { LiveBadge } from "@/components/LiveBadge";
 import type { DashboardResponse, CostResponse } from "@/lib/types";
 
 // sourceId matches lib/settingsMeta.ts's DATA_SOURCES ids and
@@ -27,18 +28,6 @@ function relativeTime(iso: string | null, now: Date = new Date()): string {
   if (minutes < 60) return `${minutes} phút trước`;
   const hours = Math.round(minutes / 60);
   return `${hours} giờ trước`;
-}
-
-function statusColor(status: string): string {
-  if (status === "ok") return "text-success";
-  if (status === "error") return "text-error";
-  return "text-textMuted";
-}
-
-function statusLabel(status: string): string {
-  if (status === "ok") return "● OK";
-  if (status === "error") return "● Lỗi";
-  return "● Chưa chạy";
 }
 
 function detectLogLevel(message: string): "ERROR" | "WARN" | "INFO" {
@@ -113,7 +102,7 @@ export default function DashboardPage() {
     return (
       <div className="p-9 grid grid-cols-3 gap-4">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-24 rounded-lg border border-border bg-surface animate-pulse" />
+          <div key={i} className="h-24 rounded-lg border border-border bg-surface/75 backdrop-blur-md animate-pulse" />
         ))}
       </div>
     );
@@ -157,7 +146,7 @@ export default function DashboardPage() {
         <ActivityFeed items={data.recentActivity} />
       </div>
 
-      <div className="rounded-lg border border-border bg-surface px-5 py-4 flex flex-col gap-3">
+      <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-4 flex flex-col gap-3">
         <span className="text-[13px] font-semibold text-textPrimary">Realtime Ingestion Streams (5 nguồn dị chủng)</span>
         <span className="text-[10.5px] text-textMuted">
           ● OK nghĩa là Lambda chạy không lỗi -- một nguồn có thể OK nhưng ghi 0 bản ghi hôm nay nếu không có dữ liệu mới.
@@ -167,13 +156,11 @@ export default function DashboardPage() {
             const health = healthBySource.get(lambdaLabel);
             const records = volumeBySource.get(sourceId) ?? 0;
             return (
-              <div key={sourceId} className="rounded-lg border border-border bg-bg px-3 py-3 flex flex-col gap-1.5">
+              <div key={sourceId} className="rounded-lg border border-border bg-surfaceHigh px-3 py-3 flex flex-col gap-1.5">
                 <span className="text-xs font-semibold text-textPrimary">{label}</span>
-                <span className={`text-[11px] ${statusColor(health?.status ?? "idle")}`}>
-                  {statusLabel(health?.status ?? "idle")}
-                </span>
-                <span className="font-mono text-[11px] text-textSecondary">{records} bản ghi hôm nay</span>
-                <span className="font-mono text-[10.5px] text-textMuted">
+                <LiveBadge status={health?.status ?? "idle"} />
+                <span className="font-mono tabular-nums text-[11px] text-textSecondary">{records} bản ghi hôm nay</span>
+                <span className="font-mono tabular-nums text-[10.5px] text-textMuted">
                   {health?.avgDurationMs === null || health?.avgDurationMs === undefined ? "—" : `${health.avgDurationMs}ms`} ·{" "}
                   {relativeTime(health?.lastInvocationAt ?? null)}
                 </span>
@@ -184,27 +171,27 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <div className="rounded-lg border border-border bg-surface px-5 py-4 flex flex-col gap-3">
+        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-4 flex flex-col gap-3">
           <span className="text-[13px] font-semibold text-textPrimary">Lakehouse Storage</span>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
               <span className="text-[11px] text-textSecondary">S3 raw</span>
-              <span className="font-mono text-sm text-textPrimary">{formatBytes(data.rawStorage.sizeBytes)}</span>
-              <span className="font-mono text-[10.5px] text-textMuted">
+              <span className="font-mono tabular-nums text-sm text-textPrimary">{formatBytes(data.rawStorage.sizeBytes)}</span>
+              <span className="font-mono tabular-nums text-[10.5px] text-textMuted">
                 {data.rawStorage.objectCount === null ? "—" : `${data.rawStorage.objectCount} object`}
               </span>
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-[11px] text-textSecondary">S3 curated</span>
-              <span className="font-mono text-sm text-textPrimary">{formatBytes(data.curatedStorage.sizeBytes)}</span>
-              <span className="font-mono text-[10.5px] text-textMuted">
+              <span className="font-mono tabular-nums text-sm text-textPrimary">{formatBytes(data.curatedStorage.sizeBytes)}</span>
+              <span className="font-mono tabular-nums text-[10.5px] text-textMuted">
                 {data.curatedStorage.objectCount === null ? "—" : `${data.curatedStorage.objectCount} object`}
               </span>
             </div>
           </div>
           <div className="flex flex-col gap-1 pt-1 border-t border-border">
             <span className="text-[11px] text-textSecondary">Athena avg query time (24h)</span>
-            <span className="font-mono text-sm text-textPrimary">
+            <span className="font-mono tabular-nums text-sm text-textPrimary">
               {data.athenaAvgQueryMs === null ? "chưa có query trong 24h" : `${data.athenaAvgQueryMs}ms`}
             </span>
           </div>
@@ -217,13 +204,13 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex flex-col gap-4">
-          <div className="rounded-lg border border-border bg-surface px-5 py-4 flex flex-col gap-2">
+          <div className="rounded-lg border-t-2 border-t-warning border border-border bg-surface/75 backdrop-blur-md px-5 py-4 flex flex-col gap-2">
             <span className="text-[13px] font-semibold text-textPrimary">CloudWatch Alarms</span>
-            <span className="font-mono text-xl text-textPrimary">
+            <span className="font-mono tabular-nums text-xl text-textPrimary">
               {data.alarmsBreaching} / {data.alarmsTotal} <span className="text-xs text-textMuted">breaching</span>
             </span>
           </div>
-          <div className="rounded-lg border border-border bg-surface px-5 py-4 flex flex-col gap-2 min-h-0 overflow-auto">
+          <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-4 flex flex-col gap-2 min-h-0 overflow-auto">
             <span className="text-xs font-semibold text-textPrimary">Log gần đây</span>
             <div className="font-mono flex flex-col gap-1.5 text-[10.5px] text-textMuted">
               {data.recentLogs.length === 0 && <span>Chưa có log trong 24h qua.</span>}
@@ -241,16 +228,16 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <div className="rounded-lg border border-border bg-surface px-5 py-4 flex flex-col gap-2.5">
+        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-4 flex flex-col gap-2.5">
           <span className="text-xs font-semibold text-textPrimary">Chi phí theo hạng mục</span>
           <div className="flex flex-col gap-2">
             {data.costBreakdown.map((c) => (
               <div key={c.category} className="flex items-center gap-2">
                 <span className="w-[110px] text-[11px] text-textSecondary">{c.category}</span>
                 <div className="flex-grow h-1.5 rounded bg-border">
-                  <div className="h-full rounded bg-textMuted" style={{ width: `${(c.monthlyUsd / maxCost) * 100}%` }} />
+                  <div className="h-full rounded bg-gradient-to-r from-accent to-accentBright" style={{ width: `${(c.monthlyUsd / maxCost) * 100}%` }} />
                 </div>
-                <span className="font-mono text-[10.5px] text-textMuted">${c.monthlyUsd.toFixed(2)}</span>
+                <span className="font-mono tabular-nums text-[10.5px] text-textMuted">${c.monthlyUsd.toFixed(2)}</span>
               </div>
             ))}
           </div>
@@ -259,14 +246,14 @@ export default function DashboardPage() {
           </span>
         </div>
 
-        <div className="rounded-lg border border-border bg-surface px-5 py-4 flex flex-col gap-2.5">
+        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-4 flex flex-col gap-2.5">
           <span className="text-xs font-semibold text-textPrimary">Liên kết nhanh</span>
           <div className="flex flex-col gap-2">
             <a
               href="https://console.aws.amazon.com/cloudwatch/home#alarmsV2:"
               target="_blank"
               rel="noreferrer"
-              className="text-[12px] text-accent"
+              className="text-[12px] text-accent transition-colors hover:text-accentBright"
             >
               CloudWatch Alarms Console →
             </a>
@@ -274,7 +261,7 @@ export default function DashboardPage() {
               href="https://console.aws.amazon.com/athena/home#/query-editor"
               target="_blank"
               rel="noreferrer"
-              className="text-[12px] text-accent"
+              className="text-[12px] text-accent transition-colors hover:text-accentBright"
             >
               Athena Query Editor →
             </a>
@@ -282,7 +269,7 @@ export default function DashboardPage() {
               href="https://github.com/coderuit3k/realtime-data-pipeline/actions"
               target="_blank"
               rel="noreferrer"
-              className="text-[12px] text-accent"
+              className="text-[12px] text-accent transition-colors hover:text-accentBright"
             >
               GitHub Actions →
             </a>
