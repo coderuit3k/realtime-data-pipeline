@@ -51,10 +51,10 @@ export default function AssistantPage() {
         </p>
       </div>
       <div className="grid grid-cols-[1.5fr_1fr] gap-5">
-        <div className="rounded-lg border border-border bg-surface p-6 flex flex-col gap-4">
+        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md p-6 flex flex-col gap-4">
           <ChatThread question={question} result={result} loading={loading} />
           {notice && <p className="text-xs text-warning">{notice}</p>}
-          <div className="mt-auto flex gap-2 items-center border border-border rounded-xl px-3 py-2">
+          <div className="mt-auto flex gap-2 items-center border border-border rounded-xl px-3 py-2 transition-shadow focus-within:border-accent focus-within:shadow-glowCyan">
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -67,7 +67,7 @@ export default function AssistantPage() {
             <button
               onClick={submit}
               disabled={loading}
-              className="rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-bg disabled:opacity-50"
+              className="rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-bg disabled:opacity-50 transition-shadow hover:shadow-glowCyan"
             >
               Gửi
             </button>
