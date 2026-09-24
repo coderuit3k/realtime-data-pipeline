@@ -11,6 +11,7 @@ import {
   WEATHER_LOCATION_COUNT,
 } from "@/lib/landingMeta";
 import type { CommitsResponse, GithubCommit, LogEntry } from "@/lib/types";
+import { LiveBadge } from "@/components/LiveBadge";
 
 const GITHUB_URL = "https://github.com/coderuit3k/realtime-data-pipeline";
 
@@ -132,7 +133,8 @@ export default function LandingPage() {
     <div className="flex gap-4 p-9">
       <div className="flex-[2.6] min-w-0 flex flex-col gap-5">
         <section className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-10 py-12 flex flex-col items-center text-center gap-5">
-          <span className="font-mono text-[11px] tracking-wide text-accent bg-accent/10 px-3.5 py-1.5 rounded-full">
+          <span className="flex items-center gap-2 font-mono text-[11px] tracking-wide text-accent bg-accent/10 px-3.5 py-1.5 rounded-full">
+            <span className="w-1.5 h-1.5 rounded-full bg-accent animate-ping motion-reduce:animate-none" />
             PORTFOLIO PROJECT · DATA ENGINEERING
           </span>
           <h1 className="max-w-3xl font-heading text-[40px] leading-[1.15] font-bold text-textPrimary">
@@ -162,21 +164,54 @@ export default function LandingPage() {
         </section>
 
         <section className="grid grid-cols-4 gap-4">
-          <div className="rounded-lg border-t-2 border-t-accent border border-border bg-surface/75 backdrop-blur-md px-4 py-4 flex flex-col items-center gap-1">
-            <span className="font-mono tabular-nums text-xl text-textPrimary">{DATA_SOURCE_COUNT}</span>
-            <span className="text-[11px] text-textMuted">nguồn dữ liệu</span>
+          <div className="rounded-lg border-t-2 border-t-accent border border-border bg-surface/75 backdrop-blur-md px-4 py-4 flex items-center gap-3 transition-transform hover:scale-[1.01]">
+            <span className="w-8 h-8 flex-shrink-0 rounded-md bg-bg flex items-center justify-center text-accent">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 3 2 8l10 5 10-5-10-5Z" />
+                <path d="M2 12l10 5 10-5" />
+                <path d="M2 16l10 5 10-5" />
+              </svg>
+            </span>
+            <span className="flex flex-col gap-0.5">
+              <span className="font-mono tabular-nums text-xl text-textPrimary">{DATA_SOURCE_COUNT}</span>
+              <span className="text-[11px] text-textMuted">nguồn dữ liệu</span>
+            </span>
           </div>
-          <div className="rounded-lg border-t-2 border-t-accent border border-border bg-surface/75 backdrop-blur-md px-4 py-4 flex flex-col items-center gap-1">
-            <span className="font-mono tabular-nums text-xl text-textPrimary">{LAMBDA_COUNT}</span>
-            <span className="text-[11px] text-textMuted">Lambda serverless</span>
+          <div className="rounded-lg border-t-2 border-t-accent border border-border bg-surface/75 backdrop-blur-md px-4 py-4 flex items-center gap-3 transition-transform hover:scale-[1.01]">
+            <span className="w-8 h-8 flex-shrink-0 rounded-md bg-bg flex items-center justify-center text-secondaryBright">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M13 2 3 14h8l-1 8 10-12h-8l1-8z" />
+              </svg>
+            </span>
+            <span className="flex flex-col gap-0.5">
+              <span className="font-mono tabular-nums text-xl text-textPrimary">{LAMBDA_COUNT}</span>
+              <span className="text-[11px] text-textMuted">Lambda serverless</span>
+            </span>
           </div>
-          <div className="rounded-lg border-t-2 border-t-accent border border-border bg-surface/75 backdrop-blur-md px-4 py-4 flex flex-col items-center gap-1">
-            <span className="font-mono tabular-nums text-xl text-textPrimary">{TEST_COUNT}</span>
-            <span className="text-[11px] text-textMuted">test tự động</span>
+          <div className="rounded-lg border-t-2 border-t-accent border border-border bg-surface/75 backdrop-blur-md px-4 py-4 flex items-center gap-3 transition-transform hover:scale-[1.01]">
+            <span className="w-8 h-8 flex-shrink-0 rounded-md bg-bg flex items-center justify-center text-success">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 3l7 3v5c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3Z" />
+                <path d="m9 12 2 2 4-4" />
+              </svg>
+            </span>
+            <span className="flex flex-col gap-0.5">
+              <span className="font-mono tabular-nums text-xl text-textPrimary">{TEST_COUNT}</span>
+              <span className="text-[11px] text-textMuted">test tự động</span>
+            </span>
           </div>
-          <div className="rounded-lg border-t-2 border-t-accent border border-border bg-surface/75 backdrop-blur-md px-4 py-4 flex flex-col items-center gap-1">
-            <span className="font-mono tabular-nums text-xl text-textPrimary">${MONTHLY_COST_USD.toFixed(0)}</span>
-            <span className="text-[11px] text-textMuted">chi phí / tháng</span>
+          <div className="rounded-lg border-t-2 border-t-accent border border-border bg-surface/75 backdrop-blur-md px-4 py-4 flex items-center gap-3 transition-transform hover:scale-[1.01]">
+            <span className="w-8 h-8 flex-shrink-0 rounded-md bg-bg flex items-center justify-center text-accent">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M14.5 9.5c0-1.1-1.1-2-2.5-2s-2.5.8-2.5 1.9c0 2.6 5 1.4 5 4 0 1.1-1.1 1.9-2.5 1.9s-2.5-.9-2.5-2" />
+                <path d="M12 6.5v1M12 16v1" />
+              </svg>
+            </span>
+            <span className="flex flex-col gap-0.5">
+              <span className="font-mono tabular-nums text-xl text-textPrimary">${MONTHLY_COST_USD.toFixed(0)}</span>
+              <span className="text-[11px] text-textMuted">chi phí / tháng</span>
+            </span>
           </div>
         </section>
 
@@ -185,22 +220,44 @@ export default function LandingPage() {
             Kiến trúc trong một dòng
           </span>
           <div className="flex items-center justify-center gap-3.5 flex-wrap">
-            <div className="rounded-lg border border-border bg-bg px-4 py-3.5 flex flex-col items-center gap-1 w-[120px]">
+            <div className="rounded-lg border border-border bg-bg px-4 py-3.5 flex flex-col items-center gap-1 w-[120px] transition-transform hover:scale-[1.01]">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#06B6D4" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+                <path d="M12 8v7M9 12l3 3 3-3" />
+              </svg>
               <span className="text-[11.5px] text-textPrimary">HN · News</span>
               <span className="text-[11.5px] text-textPrimary">Weather · Crypto</span>
               <span className="text-[11.5px] text-textPrimary">GitHub</span>
             </div>
             <ArrowIcon />
-            <div className="rounded-lg border border-border bg-bg px-[18px] py-3.5 text-center w-[160px]">
-              <span className="font-mono text-[11.5px] text-textPrimary">S3 raw → curated</span>
+            <div className="rounded-lg border border-border bg-bg px-[18px] py-3.5 text-center w-[160px] transition-transform hover:scale-[1.01]">
+              <div className="flex flex-col items-center gap-1.5">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="4" rx="1" />
+                  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8" />
+                  <path d="M10 13h4" />
+                </svg>
+                <span className="font-mono text-[11.5px] text-textPrimary">S3 raw → curated</span>
+              </div>
             </div>
             <ArrowIcon />
-            <div className="rounded-lg border border-border bg-bg px-[18px] py-3.5 text-center w-[160px]">
-              <span className="font-mono text-[11.5px] text-textPrimary">Glue Catalog + Athena</span>
+            <div className="rounded-lg border border-border bg-bg px-[18px] py-3.5 text-center w-[160px] transition-transform hover:scale-[1.01]">
+              <div className="flex flex-col items-center gap-1.5">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#06B6D4" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="10.5" cy="10.5" r="6.5" />
+                  <path d="M20 20l-4.35-4.35" />
+                </svg>
+                <span className="font-mono text-[11.5px] text-textPrimary">Glue Catalog + Athena</span>
+              </div>
             </div>
             <ArrowIcon />
-            <div className="rounded-lg border border-secondary bg-bg px-[18px] py-3.5 text-center w-[170px] shadow-glowIndigo">
-              <span className="font-mono text-[11.5px] text-secondaryBright">Agentic RAG</span>
+            <div className="rounded-lg border border-secondary bg-bg px-[18px] py-3.5 text-center w-[170px] shadow-glowIndigo transition-transform hover:scale-[1.01]">
+              <div className="flex flex-col items-center gap-1.5">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                </svg>
+                <span className="font-mono text-[11.5px] text-secondaryBright">Agentic RAG</span>
+              </div>
             </div>
           </div>
         </section>
@@ -271,7 +328,15 @@ export default function LandingPage() {
         <CommitsPanel commits={commits} />
 
         <div className="flex-1 rounded-lg border border-border bg-surface/75 backdrop-blur-md px-4 py-4 flex flex-col gap-2 min-h-0 overflow-auto">
-          <span className="text-xs font-semibold text-textPrimary">Log gần đây</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-error/70" />
+              <span className="w-2.5 h-2.5 rounded-full bg-warning/70" />
+              <span className="w-2.5 h-2.5 rounded-full bg-success/70" />
+              <span className="ml-1 text-xs font-semibold text-textPrimary">Log gần đây</span>
+            </div>
+            <LiveBadge status="ok" label="LIVE" />
+          </div>
           <div className="font-mono flex flex-col gap-1.5 text-[10.5px] text-textMuted">
             {logs === null && !logsError && <span>Đang tải log…</span>}
             {logsError && <span>Không tải được log.</span>}

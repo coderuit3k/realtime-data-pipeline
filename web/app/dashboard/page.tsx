@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { KpiCard } from "@/components/KpiCard";
 import { SourceVolumeChart } from "@/components/SourceVolumeChart";
 import { ActivityFeed } from "@/components/ActivityFeed";
@@ -12,12 +13,64 @@ import type { DashboardResponse, CostResponse } from "@/lib/types";
 // matches lib/opsMeta.ts's PIPELINE_LAMBDAS labels -- NOT a
 // `${sourceId}_ingestion` string pattern, since github's real label is
 // "github_trending_ingestion", not "github_ingestion".
-const SOURCES: { sourceId: string; label: string; lambdaLabel: string }[] = [
-  { sourceId: "hackernews", label: "Hacker News", lambdaLabel: "hackernews_ingestion" },
-  { sourceId: "news", label: "News API", lambdaLabel: "news_ingestion" },
-  { sourceId: "weather", label: "Weather", lambdaLabel: "weather_ingestion" },
-  { sourceId: "crypto", label: "Crypto", lambdaLabel: "crypto_ingestion" },
-  { sourceId: "github", label: "GitHub Trending", lambdaLabel: "github_trending_ingestion" },
+const SOURCES: { sourceId: string; label: string; lambdaLabel: string; icon: ReactNode }[] = [
+  {
+    sourceId: "hackernews",
+    label: "Hacker News",
+    lambdaLabel: "hackernews_ingestion",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M8 3h6l4 4v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
+        <path d="M14 3v4h4" />
+      </svg>
+    ),
+  },
+  {
+    sourceId: "news",
+    label: "News API",
+    lambdaLabel: "news_ingestion",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="5" width="18" height="14" rx="1.5" />
+        <path d="M7 9h10M7 12.5h10M7 16h6" />
+      </svg>
+    ),
+  },
+  {
+    sourceId: "weather",
+    label: "Weather",
+    lambdaLabel: "weather_ingestion",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+      </svg>
+    ),
+  },
+  {
+    sourceId: "crypto",
+    label: "Crypto",
+    lambdaLabel: "crypto_ingestion",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M14.5 9.5c0-1.1-1.1-2-2.5-2s-2.5.8-2.5 1.9c0 2.6 5 1.4 5 4 0 1.1-1.1 1.9-2.5 1.9s-2.5-.9-2.5-2" />
+        <path d="M12 6.5v1M12 16v1" />
+      </svg>
+    ),
+  },
+  {
+    sourceId: "github",
+    label: "GitHub Trending",
+    lambdaLabel: "github_trending_ingestion",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+        <line x1="6" y1="3" x2="6" y2="15" />
+        <circle cx="18" cy="6" r="3" />
+        <circle cx="6" cy="18" r="3" />
+        <path d="M18 9a9 9 0 0 1-9 9" />
+      </svg>
+    ),
+  },
 ];
 
 function relativeTime(iso: string | null, now: Date = new Date()): string {
@@ -132,13 +185,38 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <KpiCard label="Bản ghi hôm nay" value={String(data.recordsToday)} />
+        <KpiCard
+          label="Bản ghi hôm nay"
+          value={String(data.recordsToday)}
+          icon={
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2 12h4l2.5-7 4 14 2.5-7H22" />
+            </svg>
+          }
+        />
         <KpiCard
           label="Độ trễ trung bình"
           value={avgLatencyMs === null ? "—" : `${avgLatencyMs}ms`}
           hint="6 Lambda, 24h"
+          icon={
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v5l3.5 2" />
+            </svg>
+          }
         />
-        <KpiCard label="Chi phí tháng này" value={cost ? `$${cost.monthToDateCostUsd.toFixed(2)}` : "—"} hint="đến hôm nay" />
+        <KpiCard
+          label="Chi phí tháng này"
+          value={cost ? `$${cost.monthToDateCostUsd.toFixed(2)}` : "—"}
+          hint="đến hôm nay"
+          icon={
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M14.5 9.5c0-1.1-1.1-2-2.5-2s-2.5.8-2.5 1.9c0 2.6 5 1.4 5 4 0 1.1-1.1 1.9-2.5 1.9s-2.5-.9-2.5-2" />
+              <path d="M12 6.5v1M12 16v1" />
+            </svg>
+          }
+        />
       </div>
 
       <div className="grid grid-cols-[1.4fr_1fr] gap-4">
@@ -152,12 +230,18 @@ export default function DashboardPage() {
           ● OK nghĩa là Lambda chạy không lỗi -- một nguồn có thể OK nhưng ghi 0 bản ghi hôm nay nếu không có dữ liệu mới.
         </span>
         <div className="grid grid-cols-5 gap-3">
-          {SOURCES.map(({ sourceId, label, lambdaLabel }) => {
+          {SOURCES.map(({ sourceId, label, lambdaLabel, icon }) => {
             const health = healthBySource.get(lambdaLabel);
             const records = volumeBySource.get(sourceId) ?? 0;
             return (
-              <div key={sourceId} className="rounded-lg border border-border bg-surfaceHigh px-3 py-3 flex flex-col gap-1.5">
-                <span className="text-xs font-semibold text-textPrimary">{label}</span>
+              <div
+                key={sourceId}
+                className="rounded-lg border border-border bg-surfaceHigh px-3 py-3 flex flex-col gap-1.5 transition-transform hover:scale-[1.01]"
+              >
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-textPrimary">
+                  <span className="text-textSecondary">{icon}</span>
+                  {label}
+                </span>
                 <LiveBadge status={health?.status ?? "idle"} />
                 <span className="font-mono tabular-nums text-[11px] text-textSecondary">{records} bản ghi hôm nay</span>
                 <span className="font-mono tabular-nums text-[10.5px] text-textMuted">
@@ -211,7 +295,15 @@ export default function DashboardPage() {
             </span>
           </div>
           <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-4 flex flex-col gap-2 min-h-0 overflow-auto">
-            <span className="text-xs font-semibold text-textPrimary">Log gần đây</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-error/70" />
+                <span className="w-2.5 h-2.5 rounded-full bg-warning/70" />
+                <span className="w-2.5 h-2.5 rounded-full bg-success/70" />
+                <span className="ml-1 text-xs font-semibold text-textPrimary">Log gần đây</span>
+              </div>
+              <LiveBadge status="ok" label="LIVE" />
+            </div>
             <div className="font-mono flex flex-col gap-1.5 text-[10.5px] text-textMuted">
               {data.recentLogs.length === 0 && <span>Chưa có log trong 24h qua.</span>}
               {data.recentLogs.map((log, i) => {
