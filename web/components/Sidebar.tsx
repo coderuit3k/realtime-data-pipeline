@@ -164,12 +164,17 @@ export default function Sidebar() {
 
       <div className="mt-auto flex flex-col gap-2.5">
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface/75 backdrop-blur-md border border-border">
-          <span className="relative flex h-[7px] w-[7px] flex-shrink-0">
-            {statusDotColor(health).pulse && (
-              <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${statusDotColor(health).dot} opacity-75`} />
-            )}
-            <span className={`relative inline-flex h-[7px] w-[7px] rounded-full ${statusDotColor(health).dot} ${statusDotColor(health).pulse ? "shadow-glowEmerald" : ""}`} />
-          </span>
+          {(() => {
+            const status = statusDotColor(health);
+            return (
+              <span className="relative flex h-[7px] w-[7px] flex-shrink-0">
+                {status.pulse && (
+                  <span className={`absolute inline-flex h-full w-full animate-ping motion-reduce:animate-none rounded-full ${status.dot} opacity-75`} />
+                )}
+                <span className={`relative inline-flex h-[7px] w-[7px] rounded-full ${status.dot} ${status.pulse ? "shadow-glowEmerald" : ""}`} />
+              </span>
+            );
+          })()}
           <span className="font-mono text-[11px] text-textSecondary">
             {health ? `${health.sourcesHealthy}/${health.sourcesTotal} nguồn OK` : "—"}
           </span>

@@ -15,7 +15,7 @@ export function LiveBadge({ status, label }: LiveBadgeProps) {
     <span className={`inline-flex items-center gap-1.5 font-mono text-[10.5px] tracking-wide ${config.text}`}>
       <span className="relative flex h-1.5 w-1.5">
         {config.pulse && (
-          <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${config.dot} opacity-75`} />
+          <span className={`absolute inline-flex h-full w-full animate-ping motion-reduce:animate-none rounded-full ${config.dot} opacity-75`} />
         )}
         <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${config.dot} ${config.pulse ? "shadow-glowEmerald" : ""}`} />
       </span>
