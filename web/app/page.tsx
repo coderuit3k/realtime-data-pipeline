@@ -36,9 +36,13 @@ function ArrowIcon() {
   );
 }
 
-function FeatureCard({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
+function FeatureCard({ icon, title, description, accent = "cyan" }: { icon: ReactNode; title: string; description: string; accent?: "cyan" | "indigo" }) {
   return (
-    <div className="rounded-lg border border-border bg-surface px-6 py-[22px] flex flex-col gap-2">
+    <div
+      className={`rounded-lg border bg-surface/75 backdrop-blur-md px-6 py-[22px] flex flex-col gap-2 ${
+        accent === "indigo" ? "border-secondary/25" : "border-border"
+      }`}
+    >
       {icon}
       <span className="text-sm font-semibold text-textPrimary">{title}</span>
       <span className="text-[12.5px] leading-relaxed text-textSecondary">{description}</span>
@@ -71,7 +75,7 @@ function logLevelColor(level: "ERROR" | "WARN" | "INFO"): string {
 function CommitsPanel({ commits }: { commits: GithubCommit[] }) {
   if (commits.length === 0) return null;
   return (
-    <div className="rounded-lg border border-border bg-surface px-4 py-4 flex flex-col gap-2.5">
+    <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-4 py-4 flex flex-col gap-2.5">
       <span className="text-xs font-semibold text-textPrimary">Commit gần đây</span>
       <div className="flex flex-col gap-2.5">
         {commits.map((c) => (
@@ -127,7 +131,7 @@ export default function LandingPage() {
   return (
     <div className="flex gap-4 p-9">
       <div className="flex-[2.6] min-w-0 flex flex-col gap-5">
-        <section className="rounded-lg border border-border bg-surface px-10 py-12 flex flex-col items-center text-center gap-5">
+        <section className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-10 py-12 flex flex-col items-center text-center gap-5">
           <span className="font-mono text-[11px] tracking-wide text-accent bg-accent/10 px-3.5 py-1.5 rounded-full">
             PORTFOLIO PROJECT · DATA ENGINEERING
           </span>
@@ -140,14 +144,17 @@ export default function LandingPage() {
             deploy qua GitHub Actions với gate phê duyệt production.
           </p>
           <div className="flex gap-3 mt-1.5">
-            <Link href="/dashboard" className="rounded-lg bg-accent px-6 py-3 text-[13.5px] font-semibold text-bg">
+            <Link
+              href="/dashboard"
+              className="rounded-lg bg-accent px-6 py-3 text-[13.5px] font-semibold text-bg transition-shadow hover:shadow-glowCyan"
+            >
               Xem demo nội bộ →
             </Link>
             <a
               href={GITHUB_URL}
               target="_blank"
               rel="noreferrer"
-              className="rounded-lg border border-border px-6 py-3 text-[13.5px] text-textPrimary"
+              className="rounded-lg border border-border px-6 py-3 text-[13.5px] text-textPrimary transition-colors hover:border-borderStrong"
             >
               Xem trên GitHub
             </a>
@@ -155,25 +162,25 @@ export default function LandingPage() {
         </section>
 
         <section className="grid grid-cols-4 gap-4">
-          <div className="rounded-lg border border-border bg-surface px-4 py-4 flex flex-col items-center gap-1">
-            <span className="font-mono text-xl text-textPrimary">{DATA_SOURCE_COUNT}</span>
+          <div className="rounded-lg border-t-2 border-t-accent border border-border bg-surface/75 backdrop-blur-md px-4 py-4 flex flex-col items-center gap-1">
+            <span className="font-mono tabular-nums text-xl text-textPrimary">{DATA_SOURCE_COUNT}</span>
             <span className="text-[11px] text-textMuted">nguồn dữ liệu</span>
           </div>
-          <div className="rounded-lg border border-border bg-surface px-4 py-4 flex flex-col items-center gap-1">
-            <span className="font-mono text-xl text-textPrimary">{LAMBDA_COUNT}</span>
+          <div className="rounded-lg border-t-2 border-t-accent border border-border bg-surface/75 backdrop-blur-md px-4 py-4 flex flex-col items-center gap-1">
+            <span className="font-mono tabular-nums text-xl text-textPrimary">{LAMBDA_COUNT}</span>
             <span className="text-[11px] text-textMuted">Lambda serverless</span>
           </div>
-          <div className="rounded-lg border border-border bg-surface px-4 py-4 flex flex-col items-center gap-1">
-            <span className="font-mono text-xl text-textPrimary">{TEST_COUNT}</span>
+          <div className="rounded-lg border-t-2 border-t-accent border border-border bg-surface/75 backdrop-blur-md px-4 py-4 flex flex-col items-center gap-1">
+            <span className="font-mono tabular-nums text-xl text-textPrimary">{TEST_COUNT}</span>
             <span className="text-[11px] text-textMuted">test tự động</span>
           </div>
-          <div className="rounded-lg border border-border bg-surface px-4 py-4 flex flex-col items-center gap-1">
-            <span className="font-mono text-xl text-textPrimary">${MONTHLY_COST_USD.toFixed(0)}</span>
+          <div className="rounded-lg border-t-2 border-t-accent border border-border bg-surface/75 backdrop-blur-md px-4 py-4 flex flex-col items-center gap-1">
+            <span className="font-mono tabular-nums text-xl text-textPrimary">${MONTHLY_COST_USD.toFixed(0)}</span>
             <span className="text-[11px] text-textMuted">chi phí / tháng</span>
           </div>
         </section>
 
-        <section id="architecture" className="rounded-lg border border-border bg-surface px-8 py-9 flex flex-col gap-6">
+        <section id="architecture" className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-8 py-9 flex flex-col gap-6">
           <span className="text-center font-heading text-[17px] font-semibold text-textPrimary">
             Kiến trúc trong một dòng
           </span>
@@ -192,8 +199,8 @@ export default function LandingPage() {
               <span className="font-mono text-[11.5px] text-textPrimary">Glue Catalog + Athena</span>
             </div>
             <ArrowIcon />
-            <div className="rounded-lg border border-accent bg-bg px-[18px] py-3.5 text-center w-[170px]">
-              <span className="font-mono text-[11.5px] text-accent">Agentic RAG</span>
+            <div className="rounded-lg border border-secondary bg-bg px-[18px] py-3.5 text-center w-[170px] shadow-glowIndigo">
+              <span className="font-mono text-[11.5px] text-secondaryBright">Agentic RAG</span>
             </div>
           </div>
         </section>
@@ -221,8 +228,9 @@ export default function LandingPage() {
             description="Lambda, EventBridge, S3, Glue, Athena — không quản lý server, không crawler, partition projection."
           />
           <FeatureCard
+            accent="indigo"
             icon={
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#06B6D4" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
               </svg>
             }
@@ -249,7 +257,7 @@ export default function LandingPage() {
             {TECH_STACK.map((tech) => (
               <span
                 key={tech}
-                className="font-mono text-[11px] px-3 py-1.5 rounded-lg bg-surface border border-border text-textSecondary"
+                className="font-mono text-[11px] px-3 py-1.5 rounded-lg bg-surface/75 backdrop-blur-md border border-border text-textSecondary"
               >
                 {tech}
               </span>
@@ -262,7 +270,7 @@ export default function LandingPage() {
       <div className="flex-1 min-w-0 flex flex-col gap-4 min-h-0">
         <CommitsPanel commits={commits} />
 
-        <div className="flex-1 rounded-lg border border-border bg-surface px-4 py-4 flex flex-col gap-2 min-h-0 overflow-auto">
+        <div className="flex-1 rounded-lg border border-border bg-surface/75 backdrop-blur-md px-4 py-4 flex flex-col gap-2 min-h-0 overflow-auto">
           <span className="text-xs font-semibold text-textPrimary">Log gần đây</span>
           <div className="font-mono flex flex-col gap-1.5 text-[10.5px] text-textMuted">
             {logs === null && !logsError && <span>Đang tải log…</span>}
