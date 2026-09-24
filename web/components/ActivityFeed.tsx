@@ -2,7 +2,7 @@ import type { ActivityItem } from "@/lib/types";
 
 export function ActivityFeed({ items }: { items: ActivityItem[] }) {
   return (
-    <div className="rounded-lg border border-border bg-surface p-6 flex flex-col gap-3">
+    <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md p-6 flex flex-col gap-3">
       <span className="text-sm font-semibold text-textPrimary">Hoạt động gần đây</span>
       {items.length === 0 && <span className="text-xs text-textMuted">Chưa có bản ghi hôm nay.</span>}
       {items.map((item, i) => (

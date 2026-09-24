@@ -96,8 +96,10 @@ function SidebarLink({ link, active }: { link: NavLink; active: boolean }) {
     <Link
       href={link.href}
       aria-current={active ? "page" : undefined}
-      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] ${
-        active ? "bg-accent/[0.12] text-accent font-semibold" : "text-textSecondary font-medium"
+      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] border ${
+        active
+          ? "bg-accent/[0.12] text-accent font-semibold border-accent/30 shadow-glowCyan"
+          : "text-textSecondary font-medium border-transparent"
       }`}
     >
       {link.icon}
@@ -106,11 +108,11 @@ function SidebarLink({ link, active }: { link: NavLink; active: boolean }) {
   );
 }
 
-function statusDotColor(health: HealthResponse | null): string {
-  if (!health) return "bg-textMuted";
+function statusDotColor(health: HealthResponse | null): { dot: string; pulse: boolean } {
+  if (!health) return { dot: "bg-textMuted", pulse: false };
   return health.sourcesHealthy === health.sourcesTotal
-    ? "bg-success shadow-[0_0_8px_theme(colors.success)]"
-    : "bg-warning shadow-[0_0_8px_theme(colors.warning)]";
+    ? { dot: "bg-success", pulse: true }
+    : { dot: "bg-warning", pulse: false };
 }
 
 export default function Sidebar() {
@@ -161,8 +163,13 @@ export default function Sidebar() {
       </nav>
 
       <div className="mt-auto flex flex-col gap-2.5">
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface border border-border">
-          <span className={`w-[7px] h-[7px] rounded-full flex-shrink-0 ${statusDotColor(health)}`} />
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface/75 backdrop-blur-md border border-border">
+          <span className="relative flex h-[7px] w-[7px] flex-shrink-0">
+            {statusDotColor(health).pulse && (
+              <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${statusDotColor(health).dot} opacity-75`} />
+            )}
+            <span className={`relative inline-flex h-[7px] w-[7px] rounded-full ${statusDotColor(health).dot} ${statusDotColor(health).pulse ? "shadow-glowEmerald" : ""}`} />
+          </span>
           <span className="font-mono text-[11px] text-textSecondary">
             {health ? `${health.sourcesHealthy}/${health.sourcesTotal} nguồn OK` : "—"}
           </span>
