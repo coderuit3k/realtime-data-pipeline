@@ -76,7 +76,7 @@ export default function CicdPage() {
         </p>
       </div>
 
-      <div className="rounded-lg border border-border bg-surface px-6 py-5 flex flex-col gap-4">
+      <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-6 py-5 flex flex-col gap-4">
         <span className="text-xs font-semibold text-textPrimary">Pipeline hiện tại</span>
         <div className="flex items-center">
           {data.stages.map((stage, i) => {
@@ -85,7 +85,30 @@ export default function CicdPage() {
               <div key={stage.name} className="flex items-center flex-grow">
                 <div className="flex flex-col items-center gap-2 w-[170px]">
                   <div className={`w-9 h-9 rounded-full border flex items-center justify-center ${colors.ring} ${colors.bg}`}>
-                    <span className={`text-xs font-mono ${colors.text}`}>{i + 1}</span>
+                    {stage.status === "success" && (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={colors.text}>
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                    )}
+                    {stage.status === "in_progress" && (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={`${colors.text} animate-spin motion-reduce:animate-none`}>
+                        <path d="M21 12a9 9 0 1 1-9-9" />
+                      </svg>
+                    )}
+                    {stage.status === "waiting" && (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={colors.text}>
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="M12 7v5l3.5 2" />
+                      </svg>
+                    )}
+                    {(stage.status === "failure" || stage.status === "cancelled" || stage.status === "skipped") && (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={colors.text}>
+                        <path d="M18 6 6 18M6 6l12 12" />
+                      </svg>
+                    )}
+                    {!["success", "in_progress", "waiting", "failure", "cancelled", "skipped"].includes(stage.status) && (
+                      <span className={`text-xs font-mono ${colors.text}`}>{i + 1}</span>
+                    )}
                   </div>
                   <span className="text-[11.5px] text-textPrimary text-center">
                     {stage.name}
@@ -104,7 +127,7 @@ export default function CicdPage() {
               href={data.latestDeployRunUrl}
               target="_blank"
               rel="noreferrer"
-              className="rounded-lg px-4 py-2 text-xs font-semibold bg-warning text-bg"
+              className="rounded-lg px-4 py-2 text-xs font-semibold bg-warning text-bg transition-opacity hover:opacity-90"
             >
               Xem trên GitHub Actions để phê duyệt
             </a>
@@ -112,25 +135,25 @@ export default function CicdPage() {
         )}
       </div>
 
-      <div className="rounded-lg border border-border bg-surface px-5 py-5 flex flex-col gap-3 flex-grow min-h-0 overflow-auto">
+      <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-3 flex-grow min-h-0 overflow-auto">
         <span className="text-xs font-semibold text-textPrimary">Lịch sử chạy gần đây</span>
         <div className="flex flex-col">
           {data.recentRuns.map((run) => (
-            <div key={run.htmlUrl} className="flex items-center gap-3.5 py-2.5 border-b border-border last:border-b-0">
+            <div key={run.htmlUrl} className="flex items-center gap-3.5 py-2.5 border-b border-border last:border-b-0 transition-colors hover:bg-bg/40">
               <span
                 className={`w-2 h-2 rounded-full flex-shrink-0 ${
                   run.conclusion === "success" ? "bg-success" : run.conclusion === null ? "bg-accent" : "bg-error"
                 }`}
               />
               <span className="flex-grow text-xs text-textPrimary">{run.title}</span>
-              <span className="font-mono text-[11px] text-textMuted">
+              <span className="font-mono text-[11px] text-textMuted tabular-nums">
                 {run.branch} · {run.sha}
               </span>
               <a
                 href={run.htmlUrl}
                 target="_blank"
                 rel="noreferrer"
-                className={`font-mono text-[11px] ${run.conclusion === "success" ? "text-success" : "text-error"}`}
+                className={`font-mono text-[11px] tabular-nums ${run.conclusion === "success" ? "text-success" : "text-error"}`}
               >
                 {conclusionLabel(run.conclusion)} · {formatDuration(run.durationMs)}
               </a>
