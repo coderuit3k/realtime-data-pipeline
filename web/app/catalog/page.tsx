@@ -67,6 +67,8 @@ export default function CatalogPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [cicd, setCicd] = useState<CicdResponse | null>(null);
   const [costBreakdown, setCostBreakdown] = useState<CostBreakdownEntry[] | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   async function load() {
     setError(null);
@@ -78,6 +80,21 @@ export default function CatalogPage() {
       setSelected((current) => current ?? body[0]?.name ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không tải được Data Catalog.");
+    }
+  }
+
+  async function handleExport() {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const res = await fetch("/api/catalog/export", { method: "POST" });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Không xuất được file Excel.");
+      window.location.href = body.url;
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Không xuất được file Excel.");
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -134,11 +151,27 @@ export default function CatalogPage() {
 
   return (
     <div className="p-9 flex flex-col gap-5">
-      <div>
-        <h1 className="font-heading text-2xl font-semibold text-textPrimary">Architecture & Lakehouse</h1>
-        <p className="mt-1.5 text-sm text-textSecondary tabular-nums">
-          Kiến trúc pipeline, trạng thái CI/CD, chi phí hạ tầng, và {tables.length} bảng trong Glue Data Catalog
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-heading text-2xl font-semibold text-textPrimary">Architecture & Lakehouse</h1>
+          <p className="mt-1.5 text-sm text-textSecondary tabular-nums">
+            Kiến trúc pipeline, trạng thái CI/CD, chi phí hạ tầng, và {tables.length} bảng trong Glue Data Catalog
+          </p>
+        </div>
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-surface/75 backdrop-blur-md px-3.5 py-2 text-xs font-semibold text-textPrimary disabled:opacity-50 transition-shadow hover:shadow-glowCyan"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+              <path d="M12 3v12m0 0 4-4m-4 4-4-4" />
+              <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+            </svg>
+            {exporting ? "Đang xuất..." : "Xuất Excel"}
+          </button>
+          {exportError && <p className="text-error text-[11px] max-w-[220px] text-right">{exportError}</p>}
+        </div>
       </div>
 
       <ArchitectureFlow />
