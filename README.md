@@ -121,22 +121,30 @@ Lambda-memory cosine similarity is plenty, and it avoids a service that bills
   `hackernews_stories`, `news_articles`, `github_repos` -- embeds each with
   Titan (`amazon.titan-embed-text-v2:0`), writes
   `s3://<curated-bucket>/rag-index/index.json`. `weather_observations` and
-  `crypto_prices` are deliberately excluded: numeric telemetry with no
-  natural-language text isn't a fit for semantic search. **Incremental**:
+  `crypto_prices` are deliberately excluded from this semantic index:
+  numeric telemetry with no natural-language text isn't a fit for
+  embedding-based search -- the agent reaches that data through its own
+  direct-read tools instead (below), not through `search_knowledge_base`.
+  **Incremental**:
   caches by document id + text, so a re-run only embeds new/changed records
   (verified: a second run over the same 359 docs re-embedded 0, all served
   from cache).
 - `rag/agent.py` (Lambda `<project>-rag-agent`, on-demand): a genuine
   **tool-calling agent** over Bedrock's **Converse API** -- the model gets
-  two tools, `search_knowledge_base` (the local index above) and
-  `search_web` (Tavily), and on each turn decides for itself whether to
-  call one, which query to search with, whether to reformulate and search
-  again, or to stop and answer. The loop runs until the model returns a
-  plain text turn (no more tool calls) or `MAX_ITERATIONS` (6) is hit, at
-  which point one final call asks for a best-effort answer with tools
-  withdrawn. Every tool call is recorded in the response's `tool_calls`
-  trace -- this isn't knowable in advance from the code; it's whatever the
-  model chose to do for that specific question.
+  four tools and on each turn decides for itself whether to call one, with
+  what input, whether to reformulate and search again, or to stop and
+  answer: `search_knowledge_base` (the semantic-search index above),
+  `get_crypto_prices` and `get_weather` (real, live-ingested data read
+  directly from the curated S3 zone -- the same numeric telemetry the
+  index above deliberately excludes from semantic search, but exact and
+  current, so these two tools are strictly more reliable than a web search
+  for their narrow domains), and `search_web` (Tavily), the fallback for
+  everything else. The loop runs until the model returns a plain text turn
+  (no more tool calls) or `MAX_ITERATIONS` (6) is hit, at which point one
+  final call asks for a best-effort answer with tools withdrawn. Every
+  tool call is recorded in the response's `tool_calls` trace -- this isn't
+  knowable in advance from the code; it's whatever the model chose to do
+  for that specific question.
 
 Verified live, two real runs against the same index:
 - **In-domain** ("What is trending in AI safety and regulation right
@@ -187,8 +195,10 @@ retrieve-then-generate pipeline (CRAG), before it was retired, scored
 used only its local-knowledge-base path -- not the deployed Lambda's real
 Tavily web-search fallback tier -- so treat it as a lower bound on what
 CRAG could have scored, not a claim that CRAG had no web-search option at
-all. The agent, by contrast, always has both `search_knowledge_base` and
-`search_web` available as tools it can choose on every question, which the
+all. The agent, by contrast, always had both `search_knowledge_base` and
+`search_web` available as tools it could choose on every question in that
+comparison (it has since gained `get_crypto_prices`/`get_weather` too, see
+above -- neither existed yet at the time of this specific run), which the
 numbers above still meaningfully favor it on. See
 [`eval/README.md`](eval/README.md) for the latest run of today's
 single-pipeline script (numbers move slightly run to run; the judge LLM

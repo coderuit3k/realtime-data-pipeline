@@ -1,8 +1,11 @@
 import json
 import logging
+from datetime import datetime, timedelta, timezone
+from io import BytesIO
 
 import boto3
 import numpy as np
+import pandas as pd
 import requests
 
 from common import config
@@ -38,11 +41,41 @@ TOOLS = [
     },
     {
         "toolSpec": {
+            "name": "get_crypto_prices",
+            "description": (
+                "Get this pipeline's own real, live-ingested crypto prices "
+                "(Bitcoin, Ethereum, Solana) from CoinGecko, refreshed every "
+                "~10 minutes. Prefer this over search_web for any question "
+                "about the current price, market cap, or 24h change of these "
+                "three coins -- it's this pipeline's own current data, more "
+                "reliable than a general web search for them. Takes no "
+                "arguments."
+            ),
+            "inputSchema": {"json": {"type": "object", "properties": {}, "required": []}},
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "get_weather",
+            "description": (
+                "Get this pipeline's own real, live-ingested weather readings "
+                "(temperature, humidity, precipitation, wind) for 12 "
+                "Vietnamese locations from Open-Meteo, refreshed every ~10 "
+                "minutes. Prefer this over search_web for any current-weather "
+                "question about these locations. Takes no arguments."
+            ),
+            "inputSchema": {"json": {"type": "object", "properties": {}, "required": []}},
+        }
+    },
+    {
+        "toolSpec": {
             "name": "search_web",
             "description": (
                 "Search the public web. Use this when the knowledge base has "
-                "nothing relevant, or the question is outside its domain (e.g. "
-                "general knowledge unrelated to tech/AI/news)."
+                "nothing relevant and the question isn't about crypto prices "
+                "or Vietnamese-location weather (those have their own more "
+                "reliable tools above), or the question is otherwise outside "
+                "this pipeline's domain."
             ),
             "inputSchema": {
                 "json": {
@@ -58,11 +91,11 @@ TOOLS = [
 SYSTEM_PROMPT = (
     "You are a research agent that answers questions using tools, not "
     "unverified memory. For every question:\n"
-    "1. Decide which tool(s) to call, and with what query. Reformulate and "
+    "1. Decide which tool(s) to call, and with what input. Reformulate and "
     "search again if the first results are weak, or the question has "
     "multiple parts that need separate searches.\n"
     "2. Only stop calling tools once you have enough grounded information, "
-    "or you've tried both tools and found nothing relevant.\n"
+    "or you've tried the relevant tools and found nothing useful.\n"
     "3. Call at most one tool per turn, then look at its results before "
     "deciding the next step.\n"
     "4. When you give your final answer (no more tool calls), cite sources "
@@ -99,6 +132,40 @@ def load_index() -> list[dict]:
     return json.loads(response["Body"].read())["documents"]
 
 
+def list_parquet_keys(bucket: str, prefix: str) -> list[str]:
+    keys = []
+    paginator = _s3().get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            if obj["Key"].endswith(".parquet"):
+                keys.append(obj["Key"])
+    return keys
+
+
+def read_parquet_records(bucket: str, key: str) -> list[dict]:
+    response = _s3().get_object(Bucket=bucket, Key=key)
+    df = pd.read_parquet(BytesIO(response["Body"].read()))
+    return df.to_dict(orient="records")
+
+
+def read_latest_curated_snapshot(source: str, now: datetime | None = None) -> list[dict]:
+    """Returns the records from the single most recent curated Parquet file
+    for `source` (crypto/weather ingest every ~10 min and each run's file is
+    a full snapshot of every tracked coin/location, so the newest file IS
+    the latest reading -- no historical scan needed, unlike build_index.py's
+    full-corpus RAG build). Checks today's UTC partition, falling back to
+    yesterday's if today's is still empty (e.g. just after midnight, before
+    the first run of the day)."""
+    now = now or datetime.now(timezone.utc)
+    for day_offset in (0, 1):
+        ts = now - timedelta(days=day_offset)
+        prefix = f"source={source}/year={ts:%Y}/month={ts:%m}/day={ts:%d}/"
+        keys = list_parquet_keys(config.CURATED_BUCKET, prefix)
+        if keys:
+            return read_parquet_records(config.CURATED_BUCKET, max(keys))
+    return []
+
+
 def cosine_similarity(a: list[float], b: list[float]) -> float:
     a_arr, b_arr = np.array(a, dtype=float), np.array(b, dtype=float)
     denom = np.linalg.norm(a_arr) * np.linalg.norm(b_arr)
@@ -110,6 +177,14 @@ def search_knowledge_base(query: str, documents: list[dict], top_k: int) -> list
     scored = [{**doc, "score": cosine_similarity(embedding, doc["embedding"])} for doc in documents]
     scored.sort(key=lambda d: d["score"], reverse=True)
     return scored[:top_k]
+
+
+def get_crypto_prices() -> list[dict]:
+    return read_latest_curated_snapshot("crypto")
+
+
+def get_weather() -> list[dict]:
+    return read_latest_curated_snapshot("weather")
 
 
 def search_web(query: str, max_results: int = 5) -> list[dict]:
@@ -149,6 +224,52 @@ def run_tool(name: str, tool_input: dict, documents: list[dict]) -> tuple[list[d
             for m in matches
         ]
         return summary, matches
+
+    if name == "get_crypto_prices":
+        records = get_crypto_prices()
+        summary = [
+            {
+                "coin_id": r.get("coin_id"),
+                "price_usd": r.get("price_usd"),
+                "change_24h_pct": r.get("change_24h_pct"),
+                "market_cap_usd": r.get("market_cap_usd"),
+                "observed_at": r.get("observed_at"),
+            }
+            for r in records
+        ]
+        sources = [
+            {
+                "title": f"CoinGecko: {r.get('coin_id')}",
+                "url": f"https://www.coingecko.com/en/coins/{r.get('coin_id')}",
+                "source": "crypto",
+            }
+            for r in records
+        ]
+        return summary, sources
+
+    if name == "get_weather":
+        records = get_weather()
+        summary = [
+            {
+                "location": r.get("location"),
+                "temperature_c": r.get("temperature_c"),
+                "humidity_pct": r.get("humidity_pct"),
+                "precipitation_mm": r.get("precipitation_mm"),
+                "wind_speed_kmh": r.get("wind_speed_kmh"),
+                "observed_at": r.get("observed_at"),
+            }
+            for r in records
+        ]
+        # One representative source for the whole batch, not one per
+        # location -- Open-Meteo has no public per-location page to cite,
+        # unlike CoinGecko's real per-coin URLs above.
+        weather_source = {
+            "title": "Open-Meteo (dữ liệu thời tiết đã ingest)",
+            "url": "https://open-meteo.com/",
+            "source": "weather",
+        }
+        sources = [weather_source] if records else []
+        return summary, sources
 
     if name == "search_web":
         try:

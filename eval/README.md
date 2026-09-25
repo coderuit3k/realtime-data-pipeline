@@ -1,7 +1,8 @@
 # RAGAS evaluation
 
 Offline evaluation of the `rag_agent` pipeline (Bedrock Converse
-tool-calling agent: `search_knowledge_base` + `search_web`) using
+tool-calling agent: `search_knowledge_base`, `get_crypto_prices`,
+`get_weather`, and `search_web`) using
 [RAGAS](https://github.com/explodinggraphs/ragas) metrics, judged by
 Bedrock (Claude Haiku + Titan Embed) instead of OpenAI.
 
@@ -45,10 +46,13 @@ Results print to the terminal and get written per-question to
 
 `questions.json` deliberately mixes in-domain questions (should retrieve
 relevant context from the knowledge base) with out-of-domain ones like a
-recipe, the weather, or a sports result. The agent has no separate grading
-step -- it decides per question, via the tool descriptions alone, whether
-`search_knowledge_base` is a fit, and falls back to `search_web` (Tavily)
-when it isn't or comes back empty. A healthy run looks like:
+recipe, the weather in a city this pipeline doesn't track, or a sports
+result -- Paris weather stays out-of-domain even for `get_weather`, which
+only covers the 12 Vietnamese locations this pipeline actually ingests.
+The agent has no separate grading step -- it decides per question, via the
+tool descriptions alone, which tool (if any) is a fit, and falls back to
+`search_web` (Tavily) when nothing else is or comes back empty. A healthy
+run looks like:
 
 - High faithfulness and relevancy across both in- and out-of-domain
   questions (the agent should ground itself in whichever tool actually had
