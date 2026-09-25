@@ -9,13 +9,25 @@ vi.mock("@/lib/aws", () => ({
   }),
 }));
 vi.mock("@/lib/ratelimit", () => ({ checkRateLimit: vi.fn() }));
+vi.mock("@/lib/supabase", () => ({ getSupabaseClient: vi.fn(() => ({})) }));
+vi.mock("@/lib/conversations", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/conversations")>("@/lib/conversations");
+  return {
+    ...actual,
+    conversationBelongsToSession: vi.fn(),
+    insertMessage: vi.fn(),
+  };
+});
 
 import { getLambdaClient } from "@/lib/aws";
 import { checkRateLimit } from "@/lib/ratelimit";
+import { conversationBelongsToSession, insertMessage } from "@/lib/conversations";
 import { POST } from "./route";
 
 const mockedGetLambdaClient = vi.mocked(getLambdaClient);
 const mockedCheckRateLimit = vi.mocked(checkRateLimit);
+const mockedBelongsToSession = vi.mocked(conversationBelongsToSession);
+const mockedInsertMessage = vi.mocked(insertMessage);
 
 function makeRequest(body: unknown): NextRequest {
   return new NextRequest("http://localhost/api/assistant", {
@@ -28,6 +40,8 @@ function makeRequest(body: unknown): NextRequest {
 beforeEach(() => {
   mockedCheckRateLimit.mockReset();
   mockedGetLambdaClient.mockReset();
+  mockedBelongsToSession.mockReset();
+  mockedInsertMessage.mockReset();
 });
 
 describe("POST /api/assistant", () => {
@@ -121,5 +135,115 @@ describe("POST /api/assistant", () => {
     expect(response.status).toBe(500);
     const body = await response.json();
     expect(body.error).toBe("Không gọi được RAG Lambda, thử lại sau.");
+  });
+
+  it("returns 404 without calling the Lambda when conversationId belongs to a different session", async () => {
+    mockedCheckRateLimit.mockResolvedValue({ allowed: true, remaining: 4 });
+    mockedBelongsToSession.mockResolvedValue(false);
+
+    const request = new NextRequest("http://localhost/api/assistant", {
+      method: "POST",
+      body: JSON.stringify({ question: "hi", conversationId: "not-mine" }),
+      headers: {
+        "content-type": "application/json",
+        "x-forwarded-for": "9.9.9.9",
+        "x-session-id": "session-1",
+      },
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(404);
+    expect(mockedGetLambdaClient).not.toHaveBeenCalled();
+  });
+
+  it("persists the turn to the conversation on success", async () => {
+    mockedCheckRateLimit.mockResolvedValue({ allowed: true, remaining: 4 });
+    mockedBelongsToSession.mockResolvedValue(true);
+    mockedInsertMessage.mockResolvedValue(undefined);
+    const payload = {
+      statusCode: 200,
+      question: "hi",
+      answer: "answer text",
+      grounded: true,
+      tool_calls: [],
+      sources: [],
+    };
+    mockedGetLambdaClient.mockReturnValue({
+      send: vi.fn().mockResolvedValue({ Payload: Buffer.from(JSON.stringify(payload)) }),
+    } as never);
+
+    const request = new NextRequest("http://localhost/api/assistant", {
+      method: "POST",
+      body: JSON.stringify({ question: "hi", conversationId: "conv-1" }),
+      headers: {
+        "content-type": "application/json",
+        "x-forwarded-for": "9.9.9.9",
+        "x-session-id": "session-1",
+      },
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(mockedInsertMessage).toHaveBeenCalledWith(
+      expect.anything(),
+      "conv-1",
+      expect.objectContaining({ question: "hi", answer: "answer text", grounded: true })
+    );
+  });
+
+  it("still returns the real answer when persisting the turn fails", async () => {
+    mockedCheckRateLimit.mockResolvedValue({ allowed: true, remaining: 4 });
+    mockedBelongsToSession.mockResolvedValue(true);
+    mockedInsertMessage.mockRejectedValue(new Error("db down"));
+    const payload = {
+      statusCode: 200,
+      question: "hi",
+      answer: "answer text",
+      grounded: true,
+      tool_calls: [],
+      sources: [],
+    };
+    mockedGetLambdaClient.mockReturnValue({
+      send: vi.fn().mockResolvedValue({ Payload: Buffer.from(JSON.stringify(payload)) }),
+    } as never);
+
+    const request = new NextRequest("http://localhost/api/assistant", {
+      method: "POST",
+      body: JSON.stringify({ question: "hi", conversationId: "conv-1" }),
+      headers: {
+        "content-type": "application/json",
+        "x-forwarded-for": "9.9.9.9",
+        "x-session-id": "session-1",
+      },
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.answer).toBe("answer text");
+  });
+
+  it("skips persistence entirely when no conversationId is given (unchanged behavior)", async () => {
+    mockedCheckRateLimit.mockResolvedValue({ allowed: true, remaining: 4 });
+    const payload = {
+      statusCode: 200,
+      question: "hi",
+      answer: "answer text",
+      grounded: true,
+      tool_calls: [],
+      sources: [],
+    };
+    mockedGetLambdaClient.mockReturnValue({
+      send: vi.fn().mockResolvedValue({ Payload: Buffer.from(JSON.stringify(payload)) }),
+    } as never);
+
+    const response = await POST(makeRequest({ question: "hi" }));
+
+    expect(response.status).toBe(200);
+    expect(mockedBelongsToSession).not.toHaveBeenCalled();
+    expect(mockedInsertMessage).not.toHaveBeenCalled();
   });
 });
