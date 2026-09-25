@@ -21,7 +21,7 @@ export function formatDateTitle(date: Date): string {
 }
 
 export function nextConversationTitle(base: string, existingTitles: string[]): string {
-  const matches = existingTitles.filter((t) => t === base || t.startsWith(`${base} `));
+  const matches = existingTitles.filter((t) => t === base || t.startsWith(`${base} (`));
   return matches.length === 0 ? base : `${base} (${matches.length + 1})`;
 }
 

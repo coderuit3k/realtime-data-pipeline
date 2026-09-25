@@ -33,7 +33,7 @@ describe("nextConversationTitle", () => {
 
   it("does not treat an unrelated title that merely starts with the base as a match", () => {
     expect(nextConversationTitle("25/09/26", ["25/09/26 something else entirely"])).toBe(
-      "25/09/26 (2)"
+      "25/09/26"
     );
   });
 });
