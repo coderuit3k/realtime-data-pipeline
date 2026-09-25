@@ -41,9 +41,22 @@ function StageIcon({ status }: { status: PipelineStage["status"] }) {
       </svg>
     );
   }
+  if (status === "failure" || status === "cancelled" || status === "skipped") {
+    return (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={`${color} flex-shrink-0`}>
+        <path d="M18 6 6 18M6 6l12 12" />
+      </svg>
+    );
+  }
+  // "pending" (a stage that hasn't started yet, e.g. a later stage while an
+  // earlier one still runs) and any other status this codebase's
+  // PipelineStage type doesn't otherwise recognize -- a neutral "not
+  // started" dot, never the X-mark, so a pending stage never misreads as
+  // failed/cancelled (matches app/cicd/page.tsx's numbered-badge fallback
+  // intent for the same set of statuses).
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={`${color} flex-shrink-0`}>
-      <path d="M18 6 6 18M6 6l12 12" />
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" className={`${color} flex-shrink-0`}>
+      <circle cx="12" cy="12" r="4" />
     </svg>
   );
 }
