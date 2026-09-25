@@ -9,22 +9,27 @@ import { COST_ESTIMATE_USD } from "./opsMeta";
 export const DATA_SOURCE_COUNT = DATA_SOURCES.length;
 
 // Real count of aws_lambda_function resources across this project's
-// Terraform, verified 2026-09-23 via:
+// Terraform, verified 2026-09-26 via:
 //   grep -n '^resource "aws_lambda_function"' infra/*.tf
-// 6 in infra/lambda.tf (hackernews/news/weather/crypto/github ingestion
-// + transform) + 2 in infra/rag.tf (rag_build_index, rag_agent -- CRAG's
-// rag_query was retired, see docs/superpowers/specs/2026-09-23-single-
-// agentic-rag-design.md) = 8.
-export const LAMBDA_COUNT = 8;
+// 7 in infra/lambda.tf (hackernews/news/weather/crypto/github/gmail
+// ingestion + transform -- gmail_ingestion added 2026-09-26, see
+// docs/superpowers/specs/2026-09-25-gmail-ingestion-design.md) + 2 in
+// infra/rag.tf (rag_build_index, rag_agent -- CRAG's rag_query was
+// retired, see docs/superpowers/specs/2026-09-23-single-agentic-rag-
+// design.md) = 9. This count is infra-level (real Lambda functions) and
+// intentionally independent of DATA_SOURCE_COUNT above (a UI-facing "N
+// nguồn dữ liệu" figure) -- gmail_ingestion is real infra now, but its
+// web-facing "6th source" rollout is a separate, deferred sub-project.
+export const LAMBDA_COUNT = 9;
 
-// Real combined automated test count, verified 2026-09-25 after adding the
-// catalog Excel export feature (lib/excelExport.ts, lib/r2.ts, the new
-// export API route) -- recomputed from a fresh run, not carried over:
-//   .venv/bin/python -m pytest tests/ --collect-only -q   -> 75
+// Real combined automated test count, verified 2026-09-26 after adding the
+// gmail_ingestion backend sub-project (ingestion/gmail_ingestion.py, the
+// transform.py gmail case) -- recomputed from a fresh run, not carried over:
+//   .venv/bin/python -m pytest tests/ --collect-only -q   -> 92
 //   cd web && npx vitest run                              -> 235 (48 files)
-// 75 + 235 = 310 total. Both are real, currently-passing suites for this same
+// 92 + 235 = 327 total. Both are real, currently-passing suites for this same
 // project (Python pipeline + TypeScript web app).
-export const TEST_COUNT = 310;
+export const TEST_COUNT = 327;
 
 // Reused directly from opsMeta.ts's existing, already-cited
 // COST_ESTIMATE_USD -- never re-derived separately.
