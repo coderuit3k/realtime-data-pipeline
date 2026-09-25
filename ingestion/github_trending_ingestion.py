@@ -46,7 +46,7 @@ def fetch_trending() -> list[dict]:
 
 def lambda_handler(event, context):
     repos = fetch_trending()
-    key = write_records("github", repos)
+    key = write_records("github", repos, "repo_id")
     logger.info("Wrote %d records to %s", len(repos), key)
     return {"statusCode": 200, "records_ingested": len(repos), "s3_key": key}
 

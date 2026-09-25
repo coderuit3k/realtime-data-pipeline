@@ -1,4 +1,6 @@
-from ingestion.weather_ingestion import normalize_current
+from unittest.mock import patch
+
+from ingestion.weather_ingestion import lambda_handler, normalize_current
 
 
 def test_normalize_current_maps_fields():
@@ -34,3 +36,16 @@ def test_normalize_current_handles_missing_current_block():
 
     assert result["weather_id"] == "Da Lat-None"
     assert result["temperature_c"] is None
+
+
+@patch("ingestion.weather_ingestion.write_records")
+@patch("ingestion.weather_ingestion.fetch_weather")
+def test_lambda_handler_writes_records_keyed_by_weather_id(mock_fetch_weather, mock_write_records):
+    mock_fetch_weather.return_value = [{"weather_id": "Da Lat-2026-09-19T18:00"}]
+    mock_write_records.return_value = "some/key.json"
+
+    lambda_handler({}, None)
+
+    mock_write_records.assert_called_once_with(
+        "weather", [{"weather_id": "Da Lat-2026-09-19T18:00"}], "weather_id"
+    )

@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
+from unittest.mock import patch
 
-from ingestion.hackernews_ingestion import normalize_story
+from ingestion.hackernews_ingestion import lambda_handler, normalize_story
 
 
 def _fake_item(**overrides):
@@ -48,3 +49,14 @@ def test_normalize_story_handles_missing_text():
     result = normalize_story(item)
 
     assert result["text"] == ""
+
+
+@patch("ingestion.hackernews_ingestion.write_records")
+@patch("ingestion.hackernews_ingestion.fetch_new_stories")
+def test_lambda_handler_writes_records_keyed_by_story_id(mock_fetch_new_stories, mock_write_records):
+    mock_fetch_new_stories.return_value = [{"story_id": "123"}]
+    mock_write_records.return_value = "some/key.json"
+
+    lambda_handler({}, None)
+
+    mock_write_records.assert_called_once_with("hackernews", [{"story_id": "123"}], "story_id")

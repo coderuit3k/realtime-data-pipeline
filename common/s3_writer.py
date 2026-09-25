@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import uuid
 from datetime import datetime, timezone
@@ -6,6 +7,8 @@ from datetime import datetime, timezone
 import boto3
 
 from . import config
+
+logger = logging.getLogger(__name__)
 
 _s3_client = None
 
@@ -24,8 +27,27 @@ def build_key(source: str, ts: datetime) -> str:
     )
 
 
-def write_records(source: str, records: list[dict]) -> str:
+def _dedupe(records: list[dict], key_field: str) -> list[dict]:
+    seen = set()
+    deduped = []
+    for record in records:
+        value = record[key_field]
+        if value in seen:
+            continue
+        seen.add(value)
+        deduped.append(record)
+
+    dropped = len(records) - len(deduped)
+    if dropped:
+        logger.info("Dropped %d duplicate record(s) by %s", dropped, key_field)
+    return deduped
+
+
+def write_records(source: str, records: list[dict], key_field: str) -> str:
     """Writes records as newline-delimited JSON to the raw zone and returns the key.
+
+    Records sharing the same `key_field` value are deduplicated first (first
+    occurrence wins) so a single API response's duplicates never reach S3.
 
     Falls back to a local file under ./local_output when DRY_RUN is set or no
     bucket is configured, so ingestion handlers can be exercised without AWS.
@@ -33,6 +55,7 @@ def write_records(source: str, records: list[dict]) -> str:
     if not records:
         return ""
 
+    records = _dedupe(records, key_field)
     ts = datetime.now(timezone.utc)
     key = build_key(source, ts)
     body = "\n".join(json.dumps(r, ensure_ascii=False) for r in records)

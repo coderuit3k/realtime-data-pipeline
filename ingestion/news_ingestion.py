@@ -48,7 +48,7 @@ def fetch_articles() -> list[dict]:
 
 def lambda_handler(event, context):
     articles = fetch_articles()
-    key = write_records("news", articles)
+    key = write_records("news", articles, "article_id")
     logger.info("Wrote %d records to %s", len(articles), key)
     return {"statusCode": 200, "records_ingested": len(articles), "s3_key": key}
 

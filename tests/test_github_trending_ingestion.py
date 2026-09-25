@@ -1,4 +1,6 @@
-from ingestion.github_trending_ingestion import normalize_repo
+from unittest.mock import patch
+
+from ingestion.github_trending_ingestion import lambda_handler, normalize_repo
 
 
 def test_normalize_repo_maps_fields():
@@ -34,3 +36,14 @@ def test_normalize_repo_handles_missing_description_and_language():
 
     assert result["description"] == ""
     assert result["language"] == ""
+
+
+@patch("ingestion.github_trending_ingestion.write_records")
+@patch("ingestion.github_trending_ingestion.fetch_trending")
+def test_lambda_handler_writes_records_keyed_by_repo_id(mock_fetch_trending, mock_write_records):
+    mock_fetch_trending.return_value = [{"repo_id": "1373655162"}]
+    mock_write_records.return_value = "some/key.json"
+
+    lambda_handler({}, None)
+
+    mock_write_records.assert_called_once_with("github", [{"repo_id": "1373655162"}], "repo_id")

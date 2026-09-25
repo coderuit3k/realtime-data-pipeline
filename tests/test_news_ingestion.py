@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from ingestion.news_ingestion import fetch_articles, normalize_article
+from ingestion.news_ingestion import fetch_articles, lambda_handler, normalize_article
 
 
 def test_normalize_article_maps_fields():
@@ -29,6 +29,22 @@ def test_normalize_article_handles_missing_source():
     result = normalize_article(article)
 
     assert result["provider"] is None
+
+
+@patch("ingestion.news_ingestion.write_records")
+@patch("ingestion.news_ingestion.fetch_articles")
+def test_lambda_handler_writes_records_keyed_by_article_id(mock_fetch_articles, mock_write_records):
+    # NewsAPI's /v2/everything has been observed returning the same article
+    # twice in one response -- write_records dedupes by key_field, so this
+    # module must pass its real unique id field ("article_id") through.
+    mock_fetch_articles.return_value = [{"article_id": "https://example.com/a"}]
+    mock_write_records.return_value = "some/key.json"
+
+    lambda_handler({}, None)
+
+    mock_write_records.assert_called_once_with(
+        "news", [{"article_id": "https://example.com/a"}], "article_id"
+    )
 
 
 @patch("ingestion.news_ingestion.requests.get")

@@ -62,7 +62,7 @@ def fetch_weather() -> list[dict]:
 
 def lambda_handler(event, context):
     records = fetch_weather()
-    key = write_records("weather", records)
+    key = write_records("weather", records, "weather_id")
     logger.info("Wrote %d records to %s", len(records), key)
     return {"statusCode": 200, "records_ingested": len(records), "s3_key": key}
 

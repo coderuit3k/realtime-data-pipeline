@@ -66,7 +66,7 @@ def fetch_prices() -> list[dict]:
 
 def lambda_handler(event, context):
     records = fetch_prices()
-    key = write_records("crypto", records)
+    key = write_records("crypto", records, "price_id")
     logger.info("Wrote %d records to %s", len(records), key)
     return {"statusCode": 200, "records_ingested": len(records), "s3_key": key}
 

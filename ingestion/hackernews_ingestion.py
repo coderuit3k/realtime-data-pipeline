@@ -51,7 +51,7 @@ def fetch_new_stories(limit: int) -> list[dict]:
 
 def lambda_handler(event, context):
     stories = fetch_new_stories(config.HN_STORY_LIMIT)
-    key = write_records("hackernews", stories)
+    key = write_records("hackernews", stories, "story_id")
     logger.info("Wrote %d records to %s", len(stories), key)
     return {"statusCode": 200, "records_ingested": len(stories), "s3_key": key}
 
