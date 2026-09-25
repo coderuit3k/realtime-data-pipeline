@@ -75,7 +75,10 @@ export function getExportLimiter(): Ratelimit {
     });
     exportLimiter = new Ratelimit({
       redis,
-      limiter: Ratelimit.slidingWindow(3, "1 h"),
+      // TEMPORARY: raised from 3 to 20 on 2026-09-25 to unblock live
+      // verification of the R2 credential/bucket-name fix after repeated
+      // debugging exhausted the real 3/h quota. Revert to 3 once confirmed.
+      limiter: Ratelimit.slidingWindow(20, "1 h"),
       prefix: "export-ratelimit",
     });
   }
