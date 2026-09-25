@@ -77,6 +77,8 @@ export default function AssistantPage() {
     setSelectedId(id);
     setPendingQuestion(null);
     setPendingResult(null);
+    setMessages([]);
+    setMessagesError(null);
   }
 
   async function createConversation(): Promise<ConversationJSON | null> {

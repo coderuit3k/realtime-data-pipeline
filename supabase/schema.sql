@@ -22,3 +22,12 @@ create table messages (
   created_at timestamptz not null default now()
 );
 create index messages_conversation_id_idx on messages (conversation_id, created_at);
+
+-- RLS: this app's own routes (using the service-role key, which bypasses
+-- RLS) are the only intended write/read path. Without this, Supabase's
+-- public anon key could read or write every session's rows directly via
+-- PostgREST, bypassing the app's session-id ownership checks entirely.
+-- No policies needed -- enabling RLS with zero policies means the anon/
+-- authenticated roles get zero access, which is exactly the intent here.
+alter table conversations enable row level security;
+alter table messages enable row level security;

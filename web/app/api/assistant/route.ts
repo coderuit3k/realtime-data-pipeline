@@ -34,15 +34,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Đợi một chút rồi hỏi tiếp." }, { status: 429 });
   }
 
-  if (conversationId) {
-    const sessionId = getSessionIdHeader(request.headers);
-    const belongs = sessionId && (await conversationBelongsToSession(getSupabaseClient(), sessionId, conversationId));
-    if (!belongs) {
-      return NextResponse.json({ error: "Không tìm thấy cuộc trò chuyện." }, { status: 404 });
-    }
-  }
-
   try {
+    if (conversationId) {
+      const sessionId = getSessionIdHeader(request.headers);
+      const belongs = sessionId && (await conversationBelongsToSession(getSupabaseClient(), sessionId, conversationId));
+      if (!belongs) {
+        return NextResponse.json({ error: "Không tìm thấy cuộc trò chuyện." }, { status: 404 });
+      }
+    }
+
     const functionName = requiredEnv("RAG_AGENT_FUNCTION_NAME");
     const response = await getLambdaClient().send(
       new InvokeCommand({ FunctionName: functionName, Payload: Buffer.from(JSON.stringify({ question })) })

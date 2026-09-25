@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseClient } from "@/lib/supabase";
 import { listConversations, createConversation, toConversationJSON, getSessionIdHeader } from "@/lib/conversations";
 import { checkRateLimit, getConversationLimiter } from "@/lib/ratelimit";
+import { clientIp } from "@/lib/clientIp";
 
 export async function GET(request: NextRequest) {
   const sessionId = getSessionIdHeader(request.headers);
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Thiếu X-Session-Id." }, { status: 400 });
   }
 
-  const rateLimit = await checkRateLimit(sessionId, getConversationLimiter());
+  const rateLimit = await checkRateLimit(clientIp(request), getConversationLimiter());
   if (!rateLimit.allowed) {
     return NextResponse.json({ error: "Đợi một chút rồi tạo cuộc trò chuyện mới." }, { status: 429 });
   }

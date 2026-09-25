@@ -23,3 +23,6 @@ eval/results.csv
 
 # Claude Code's own session state, not project-relevant
 .claude/
+
+# Playwright MCP browser session artifacts, not project-relevant
+.playwright-mcp/
