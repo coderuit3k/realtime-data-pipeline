@@ -173,6 +173,40 @@ def test_transform_records_dedups_github_by_repo_id_and_attaches_keywords(monkey
     assert result[0]["keywords"] == ["a", "b"]
 
 
+def test_record_text_gmail_combines_subject_and_snippet():
+    record = {"subject": "Weekly digest", "snippet": "top stories inside"}
+    assert transform.record_text(record, "gmail") == "Weekly digest top stories inside"
+
+
+def test_clean_gmail_record_strips_fields():
+    record = {
+        "message_id": "m1",
+        "subject": "  Weekly digest  ",
+        "from_address": "  news@example.com  ",
+        "snippet": "  top stories  ",
+    }
+
+    result = transform.clean_gmail_record(record)
+
+    assert result["subject"] == "Weekly digest"
+    assert result["from_address"] == "news@example.com"
+    assert result["snippet"] == "top stories"
+
+
+def test_transform_records_dedups_gmail_by_message_id_and_attaches_keywords(monkeypatch):
+    fake_llm = lambda texts: [["digest", "news"] for _ in texts]  # noqa: E731
+    monkeypatch.setattr(transform, "extract_keywords_llm", fake_llm)
+    records = [
+        {"message_id": "m1", "subject": "Digest", "from_address": "a@b.com", "snippet": ""},
+        {"message_id": "m1", "subject": "Digest", "from_address": "a@b.com", "snippet": ""},
+    ]
+
+    result = transform.transform_records("gmail", records)
+
+    assert len(result) == 1
+    assert result[0]["keywords"] == ["digest", "news"]
+
+
 def test_transform_records_rejects_unknown_source():
     try:
         transform.transform_records("unknown", [])

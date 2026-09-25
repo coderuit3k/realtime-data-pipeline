@@ -105,6 +105,8 @@ def record_text(record: dict, source: str) -> str:
         return f"{record.get('title') or ''} {record.get('text') or ''}".strip()
     if source == "github":
         return f"{record.get('full_name') or ''} {record.get('description') or ''}".strip()
+    if source == "gmail":
+        return f"{record.get('subject') or ''} {record.get('snippet') or ''}".strip()
     return f"{record.get('title') or ''} {record.get('description') or ''}".strip()
 
 
@@ -166,6 +168,14 @@ def clean_github_record(record: dict) -> dict:
     return cleaned
 
 
+def clean_gmail_record(record: dict) -> dict:
+    cleaned = dict(record)
+    cleaned["subject"] = (cleaned.get("subject") or "").strip()
+    cleaned["from_address"] = (cleaned.get("from_address") or "").strip()
+    cleaned["snippet"] = (cleaned.get("snippet") or "").strip()
+    return cleaned
+
+
 def transform_records(source: str, records: list[dict]) -> list[dict]:
     if source == "hackernews":
         cleaned = dedup_records([clean_hackernews_record(r) for r in records], "story_id")
@@ -188,6 +198,9 @@ def transform_records(source: str, records: list[dict]) -> list[dict]:
         return cleaned
     elif source == "github":
         cleaned = dedup_records([clean_github_record(r) for r in records], "repo_id")
+        return attach_keywords(cleaned, source)
+    elif source == "gmail":
+        cleaned = dedup_records([clean_gmail_record(r) for r in records], "message_id")
         return attach_keywords(cleaned, source)
     else:
         raise ValueError(f"Unknown source: {source}")
