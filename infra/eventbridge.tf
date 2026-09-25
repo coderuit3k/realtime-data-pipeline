@@ -74,3 +74,22 @@ resource "aws_lambda_permission" "allow_eventbridge_news" {
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.news_ingestion_schedule.arn
 }
+
+resource "aws_cloudwatch_event_rule" "gmail_ingestion_schedule" {
+  name                = "${local.name_prefix}-gmail-ingestion-schedule"
+  schedule_expression = var.gmail_ingestion_schedule
+  state               = var.enable_ingestion_schedule ? "ENABLED" : "DISABLED"
+}
+
+resource "aws_cloudwatch_event_target" "gmail_ingestion" {
+  rule = aws_cloudwatch_event_rule.gmail_ingestion_schedule.name
+  arn  = aws_lambda_function.gmail_ingestion.arn
+}
+
+resource "aws_lambda_permission" "allow_eventbridge_gmail" {
+  statement_id  = "AllowEventBridgeInvokeGmail"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.gmail_ingestion.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.gmail_ingestion_schedule.arn
+}
