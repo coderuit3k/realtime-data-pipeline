@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatThread } from "@/components/ChatThread";
 import { ToolTraceHistory } from "@/components/ToolTraceHistory";
 import { ConversationList } from "@/components/ConversationList";
@@ -20,6 +20,10 @@ export default function AssistantPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [conversationsError, setConversationsError] = useState<string | null>(null);
   const [messagesError, setMessagesError] = useState<string | null>(null);
+  const selectedIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
 
   useEffect(() => {
     setSessionId(getOrCreateSessionId());
@@ -41,17 +45,23 @@ export default function AssistantPage() {
     if (sessionId) loadConversations(sessionId);
   }, [sessionId, loadConversations]);
 
-  const loadMessages = useCallback(async (sid: string, conversationId: string) => {
+  const loadMessages = useCallback(async (sid: string, conversationId: string): Promise<ChatMessage[] | null> => {
     try {
       const res = await fetch(`/api/conversations/${conversationId}/messages`, {
         headers: { "X-Session-Id": sid },
       });
       if (!res.ok) throw new Error("request failed");
       const body = await res.json();
-      setMessages(body.messages);
-      setMessagesError(null);
+      if (conversationId === selectedIdRef.current) {
+        setMessages(body.messages);
+        setMessagesError(null);
+      }
+      return body.messages;
     } catch {
-      setMessagesError("Không tải được lịch sử tin nhắn.");
+      if (conversationId === selectedIdRef.current) {
+        setMessagesError("Không tải được lịch sử tin nhắn.");
+      }
+      return null;
     }
   }, []);
 
@@ -131,9 +141,18 @@ export default function AssistantPage() {
       } else if (!res.ok) {
         setNotice(body.error ?? "Không gọi được RAG Lambda.");
       } else {
-        await loadMessages(sessionId, conversationId);
-        setPendingQuestion(null);
-        setPendingResult(null);
+        const assistantResult = body as AssistantResult;
+        if (conversationId === selectedIdRef.current) {
+          setPendingResult(assistantResult);
+        }
+        const reloaded = await loadMessages(sessionId, conversationId);
+        const persisted =
+          reloaded !== null &&
+          reloaded.some((m) => m.question === trimmed && m.answer === assistantResult.answer);
+        if (conversationId === selectedIdRef.current && persisted) {
+          setPendingQuestion(null);
+          setPendingResult(null);
+        }
       }
     } catch {
       setNotice("Không gọi được RAG Lambda, thử lại sau.");
