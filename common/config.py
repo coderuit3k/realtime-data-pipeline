@@ -45,6 +45,10 @@ CRYPTO_COIN_IDS = ["bitcoin", "ethereum", "solana"]
 GITHUB_TRENDING_DAYS = int(os.environ.get("GITHUB_TRENDING_DAYS", "7"))
 GITHUB_TRENDING_LIMIT = int(os.environ.get("GITHUB_TRENDING_LIMIT", "20"))
 
+GMAIL_SECRET_NAME = os.environ.get("GMAIL_SECRET_NAME", "data-pipeline/gmail-ingestion")
+GMAIL_MESSAGE_LIMIT = int(os.environ.get("GMAIL_MESSAGE_LIMIT", "50"))
+GMAIL_R2_BUCKET_NAME = os.environ.get("GMAIL_R2_BUCKET_NAME", "")
+
 # When true (or when RAW_BUCKET is unset), records are written under ./local_output
 # instead of S3 -- lets the handlers run locally without any AWS resources.
 DRY_RUN = os.environ.get("DRY_RUN", "false").lower() == "true"
