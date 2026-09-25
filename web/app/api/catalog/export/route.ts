@@ -20,7 +20,14 @@ const EXPORT_TABLES = [
 const XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 export async function POST(request: NextRequest) {
-  const rateLimit = await checkRateLimit(clientIp(request), getExportLimiter());
+  const ip = clientIp(request);
+  console.error("DEBUG export rate-limit identifier", {
+    ip,
+    xVercelForwardedFor: request.headers.get("x-vercel-forwarded-for"),
+    xRealIp: request.headers.get("x-real-ip"),
+    xForwardedFor: request.headers.get("x-forwarded-for"),
+  });
+  const rateLimit = await checkRateLimit(ip, getExportLimiter());
   if (!rateLimit.allowed) {
     return NextResponse.json({ error: "Đợi một chút rồi thử xuất lại." }, { status: 429 });
   }
