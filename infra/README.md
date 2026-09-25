@@ -236,7 +236,7 @@ What's actually running, at this project's low volume:
 
 | Resource | Ongoing cost |
 | --- | --- |
-| Lambda (6 functions, ~every 10 min) | ~$0 (well within free tier) |
+| Lambda (6 functions, ~every 30 min) | ~$0 (well within free tier) |
 | S3 (raw + curated) | Pennies/month |
 | Secrets Manager (2 secrets: NewsAPI, Tavily -- Open-Meteo, CoinGecko, GitHub Search need no key) | ~$0.80/month |
 | CloudWatch alarms (6) | ~$0.60/month |
