@@ -63,7 +63,7 @@ export default function InsightsPage() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="font-heading text-2xl font-semibold text-textPrimary">Trending Insights</h1>
-          <p className="mt-1.5 text-sm text-textSecondary">Tương quan chéo giữa 5 nguồn · cập nhật mỗi 10 phút</p>
+          <p className="mt-1.5 text-sm text-textSecondary">Tương quan chéo giữa 5 nguồn · cập nhật mỗi 30 phút</p>
         </div>
         <div className="flex gap-1.5">
           <button

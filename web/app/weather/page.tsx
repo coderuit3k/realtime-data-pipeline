@@ -106,7 +106,7 @@ export default function WeatherPage() {
         <div>
           <h1 className="font-heading text-2xl font-semibold text-textPrimary">Thời tiết miền Nam</h1>
           <p className="mt-1.5 text-sm text-textSecondary">
-            {data.locations.length} tỉnh/thành · Open-Meteo, không cần API key · làm mới mỗi 10 phút
+            {data.locations.length} tỉnh/thành · Open-Meteo, không cần API key · làm mới mỗi 30 phút
           </p>
         </div>
         {mostRecentObservedAt && (

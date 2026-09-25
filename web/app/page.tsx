@@ -218,7 +218,7 @@ export default function LandingPage() {
               </svg>
             }
             title={`${DATA_SOURCE_COUNT} nguồn dữ liệu dị chủng`}
-            description={`Hacker News, News API, thời tiết Open-Meteo (${WEATHER_LOCATION_COUNT} khu vực), giá crypto CoinGecko, GitHub trending — ingest mỗi 10-20 phút tuỳ nguồn.`}
+            description={`Hacker News, News API, thời tiết Open-Meteo (${WEATHER_LOCATION_COUNT} khu vực), giá crypto CoinGecko, GitHub trending — ingest mỗi 30 phút.`}
           />
           <FeatureCard
             icon={

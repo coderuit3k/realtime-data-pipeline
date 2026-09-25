@@ -45,7 +45,7 @@ TOOLS = [
             "name": "get_crypto_prices",
             "description": (
                 "Get this pipeline's own real, live-ingested crypto prices "
-                "from CoinGecko, refreshed every ~10 minutes -- covers "
+                "from CoinGecko, refreshed every ~30 minutes -- covers "
                 "exactly three coins: Bitcoin, Ethereum, Solana. Prefer this "
                 "over search_web for the current price, market cap, or 24h "
                 "change of these three specifically -- it's this pipeline's "
@@ -62,7 +62,7 @@ TOOLS = [
             "description": (
                 "Get this pipeline's own real, live-ingested weather readings "
                 "(temperature, humidity, precipitation, wind) from Open-Meteo, "
-                "refreshed every ~10 minutes -- covers exactly these 12 "
+                "refreshed every ~30 minutes -- covers exactly these 12 "
                 "Southern Vietnam locations: Tay Ninh, Ho Chi Minh City, Thu "
                 "Dau Mot (Binh Duong), Long Xuyen (An Giang), Bien Hoa (Dong "
                 "Nai), Can Tho, My Tho (Tien Giang), Soc Trang, Vung Tau, "

@@ -46,17 +46,17 @@ variable "github_trending_limit" {
 variable "ingestion_schedule" {
   description = "EventBridge schedule expression for the ingestion Lambdas"
   type        = string
-  default     = "rate(10 minutes)"
+  default     = "rate(30 minutes)"
 }
 
 variable "news_ingestion_schedule" {
-  # NewsAPI's free "Developer" tier caps at 100 requests/day. Sharing the
-  # 10-minute rule (144 calls/day) blows through that partway through the
-  # day and 429s for the rest -- news_ingestion gets its own, slower rule.
-  # 20 minutes = 72 calls/day, comfortably under the 100/day cap.
+  # NewsAPI's free "Developer" tier caps at 100 requests/day. Both rules
+  # now share the same 30-minute cadence (48 calls/day), comfortably under
+  # the 100/day cap -- news_ingestion keeps its own variable/rule in case
+  # that cap ever forces it to diverge again.
   description = "EventBridge schedule expression for news_ingestion (separate from the other 4 -- NewsAPI's free tier caps at 100 requests/day)"
   type        = string
-  default     = "rate(20 minutes)"
+  default     = "rate(30 minutes)"
 }
 
 variable "enable_ingestion_schedule" {

@@ -43,7 +43,7 @@ describe("GET /api/catalog", () => {
         ragIndexed: false,
         sourceApi: "CoinGecko /simple/price",
         ingestionLambda: "realtime-data-pipeline-dev-crypto-ingestion",
-        cadence: "mỗi 10 phút",
+        cadence: "mỗi 30 phút",
       },
     ]);
   });
