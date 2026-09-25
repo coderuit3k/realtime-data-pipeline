@@ -17,15 +17,14 @@ export const DATA_SOURCE_COUNT = DATA_SOURCES.length;
 // agentic-rag-design.md) = 8.
 export const LAMBDA_COUNT = 8;
 
-// Real combined automated test count, verified 2026-09-25 after adding
-// per-source duplicate-record dedup to the 5 ingestion Lambdas (write_records
-// now dedupes by each source's key_field before writing to S3) -- recomputed
-// from a fresh run, not carried over from an earlier snapshot:
+// Real combined automated test count, verified 2026-09-25 after adding the
+// catalog Excel export feature (lib/excelExport.ts, lib/r2.ts, the new
+// export API route) -- recomputed from a fresh run, not carried over:
 //   .venv/bin/python -m pytest tests/ --collect-only -q   -> 75
-//   cd web && npx vitest run                              -> 225 (45 files)
-// 75 + 225 = 300 total. Both are real, currently-passing suites for this same
+//   cd web && npx vitest run                              -> 235 (48 files)
+// 75 + 235 = 310 total. Both are real, currently-passing suites for this same
 // project (Python pipeline + TypeScript web app).
-export const TEST_COUNT = 300;
+export const TEST_COUNT = 310;
 
 // Reused directly from opsMeta.ts's existing, already-cited
 // COST_ESTIMATE_USD -- never re-derived separately.
