@@ -79,6 +79,17 @@ locals {
     { name = "keywords", type = "string" },
   ]
 
+  gmail_columns = [
+    { name = "message_id", type = "string" },
+    { name = "source", type = "string" },
+    { name = "subject", type = "string" },
+    { name = "from_address", type = "string" },
+    { name = "snippet", type = "string" },
+    { name = "received_at", type = "string" },
+    { name = "ingested_at", type = "string" },
+    { name = "keywords", type = "string" },
+  ]
+
   # Shared partition projection config -- only the source-specific location
   # template differs between the two tables.
   partition_projection_base = {
@@ -296,6 +307,48 @@ resource "aws_glue_catalog_table" "github_repos" {
 
     dynamic "columns" {
       for_each = local.github_columns
+      content {
+        name = columns.value.name
+        type = columns.value.type
+      }
+    }
+  }
+}
+
+resource "aws_glue_catalog_table" "gmail_messages" {
+  name          = "gmail_messages"
+  database_name = aws_glue_catalog_database.curated.name
+  table_type    = "EXTERNAL_TABLE"
+
+  parameters = merge(local.partition_projection_base, {
+    "classification"            = "parquet"
+    "storage.location.template" = "s3://${aws_s3_bucket.curated.bucket}/source=gmail/year=$${year}/month=$${month}/day=$${day}/"
+  })
+
+  partition_keys {
+    name = "year"
+    type = "string"
+  }
+  partition_keys {
+    name = "month"
+    type = "string"
+  }
+  partition_keys {
+    name = "day"
+    type = "string"
+  }
+
+  storage_descriptor {
+    location      = "s3://${aws_s3_bucket.curated.bucket}/source=gmail/"
+    input_format  = "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat"
+    output_format = "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat"
+
+    ser_de_info {
+      serialization_library = "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe"
+    }
+
+    dynamic "columns" {
+      for_each = local.gmail_columns
       content {
         name = columns.value.name
         type = columns.value.type
