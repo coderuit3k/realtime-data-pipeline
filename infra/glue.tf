@@ -7,6 +7,14 @@ resource "aws_glue_catalog_database" "curated" {
   name = "${replace(local.name_prefix, "-", "_")}_curated"
 }
 
+# Separate from the "curated" database (which the public web app's IAM
+# policy grants read access to via /api/explorer/query) -- gmail_messages
+# holds real private email content (subject, from_address, snippet) and
+# must never be queryable through that public, unauthenticated page.
+resource "aws_glue_catalog_database" "gmail" {
+  name = "${replace(local.name_prefix, "-", "_")}_gmail"
+}
+
 locals {
   hackernews_columns = [
     { name = "story_id", type = "string" },
@@ -317,7 +325,7 @@ resource "aws_glue_catalog_table" "github_repos" {
 
 resource "aws_glue_catalog_table" "gmail_messages" {
   name          = "gmail_messages"
-  database_name = aws_glue_catalog_database.curated.name
+  database_name = aws_glue_catalog_database.gmail.name
   table_type    = "EXTERNAL_TABLE"
 
   parameters = merge(local.partition_projection_base, {
