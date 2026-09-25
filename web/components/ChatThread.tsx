@@ -1,4 +1,26 @@
+import ReactMarkdown from "react-markdown";
+import type { Components } from "react-markdown";
 import type { AssistantResult } from "@/lib/assistant";
+
+// The agent's real answer text often contains markdown (bold, bullet/
+// numbered lists, links) -- render it properly instead of showing raw
+// "**"/"-" syntax to the user. These overrides just restyle the default
+// elements to match this page's existing dark theme; they don't change
+// what content renders.
+const answerMarkdownComponents: Components = {
+  p: ({ children }) => <p className="text-sm leading-relaxed text-textSecondary">{children}</p>,
+  strong: ({ children }) => <strong className="font-semibold text-textPrimary">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  ul: ({ children }) => <ul className="list-disc pl-5 flex flex-col gap-1">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-5 flex flex-col gap-1">{children}</ol>,
+  li: ({ children }) => <li className="text-sm leading-relaxed text-textSecondary">{children}</li>,
+  a: ({ children, href }) => (
+    <a href={href} target="_blank" rel="noreferrer" className="text-accent underline decoration-accent/40 hover:text-accentBright">
+      {children}
+    </a>
+  ),
+  code: ({ children }) => <code className="font-mono text-[12px] bg-bg rounded px-1 py-0.5 text-accent">{children}</code>,
+};
 
 export function ChatThread({
   question,
@@ -34,7 +56,9 @@ export function ChatThread({
             </svg>
           </span>
           <div className="max-w-[80%] rounded-lg rounded-bl-sm border border-border bg-surface/75 backdrop-blur-md px-4 py-3 flex flex-col gap-3">
-            <span className="text-sm leading-relaxed text-textSecondary">{result.answer}</span>
+            <div className="flex flex-col gap-2">
+              <ReactMarkdown components={answerMarkdownComponents}>{result.answer}</ReactMarkdown>
+            </div>
             <div className="flex flex-wrap gap-2">
               {result.sources.map((s, i) => (
                 <span key={i} className="font-mono text-[10.5px] text-accent bg-accent/10 rounded px-2 py-1">
