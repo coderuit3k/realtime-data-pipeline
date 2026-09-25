@@ -66,6 +66,22 @@ export function getConversationLimiter(): Ratelimit {
   return conversationLimiter;
 }
 
+let exportLimiter: Ratelimit | undefined;
+export function getExportLimiter(): Ratelimit {
+  if (!exportLimiter) {
+    const redis = new Redis({
+      url: requiredEnv("UPSTASH_REDIS_REST_URL"),
+      token: requiredEnv("UPSTASH_REDIS_REST_TOKEN"),
+    });
+    exportLimiter = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(3, "1 h"),
+      prefix: "export-ratelimit",
+    });
+  }
+  return exportLimiter;
+}
+
 export type RateLimitResult = { allowed: boolean; remaining: number };
 
 export async function checkRateLimit(
