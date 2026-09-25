@@ -17,15 +17,15 @@ export const DATA_SOURCE_COUNT = DATA_SOURCES.length;
 // agentic-rag-design.md) = 8.
 export const LAMBDA_COUNT = 8;
 
-// Real combined automated test count, verified 2026-09-25 AFTER adding
-// rag/agent.py's get_crypto_prices/get_weather tools plus the NaN-sanitize
-// fix from code review (10 new pytest cases total) -- recomputed from a
-// fresh run, not carried over from an earlier snapshot:
+// Real combined automated test count, verified 2026-09-25 after wiring the
+// 3-column conversation UI into assistant/page.tsx (Task 9, this plan's
+// final task -- no new automated tests added by this task) -- recomputed
+// from a fresh run, not carried over from an earlier snapshot:
 //   .venv/bin/python -m pytest tests/ --collect-only -q   -> 69
-//   cd web && npx vitest run                              -> 176 (40 files)
-// 69 + 176 = 245 total. Both are real, currently-passing suites for this same
+//   cd web && npx vitest run                              -> 225 (45 files)
+// 69 + 225 = 294 total. Both are real, currently-passing suites for this same
 // project (Python pipeline + TypeScript web app).
-export const TEST_COUNT = 245;
+export const TEST_COUNT = 294;
 
 // Reused directly from opsMeta.ts's existing, already-cited
 // COST_ESTIMATE_USD -- never re-derived separately.
