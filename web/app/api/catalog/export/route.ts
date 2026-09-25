@@ -29,7 +29,12 @@ export async function POST(request: NextRequest) {
     const athenaClient = getAthenaClient();
     const sheets: ExportSheet[] = await Promise.all(
       EXPORT_TABLES.map(async (table) => {
-        const { columns, rows } = await runAthenaQueryWithStats(athenaClient, `SELECT * FROM ${table} LIMIT 5000`);
+        // Athena's GetQueryResultsCommand hard-caps MaxResults at 1000 per call (no pagination here) -- ample headroom over this project's real per-table volume.
+        const { columns, rows } = await runAthenaQueryWithStats(
+          athenaClient,
+          `SELECT * FROM ${table} LIMIT 5000`,
+          1000
+        );
         return { name: table, columns, rows: parseAthenaRows(rows, (cols) => cols) };
       })
     );
