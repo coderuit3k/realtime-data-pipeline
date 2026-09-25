@@ -18,13 +18,14 @@ export const DATA_SOURCE_COUNT = DATA_SOURCES.length;
 export const LAMBDA_COUNT = 8;
 
 // Real combined automated test count, verified 2026-09-25 AFTER adding
-// rag/agent.py's get_crypto_prices/get_weather tools (8 new pytest cases) --
-// recomputed from a fresh run, not carried over from an earlier snapshot:
-//   .venv/bin/python -m pytest tests/ --collect-only -q   -> 67
+// rag/agent.py's get_crypto_prices/get_weather tools plus the NaN-sanitize
+// fix from code review (10 new pytest cases total) -- recomputed from a
+// fresh run, not carried over from an earlier snapshot:
+//   .venv/bin/python -m pytest tests/ --collect-only -q   -> 69
 //   cd web && npx vitest run                              -> 176 (40 files)
-// 67 + 176 = 243 total. Both are real, currently-passing suites for this same
+// 69 + 176 = 245 total. Both are real, currently-passing suites for this same
 // project (Python pipeline + TypeScript web app).
-export const TEST_COUNT = 243;
+export const TEST_COUNT = 245;
 
 // Reused directly from opsMeta.ts's existing, already-cited
 // COST_ESTIMATE_USD -- never re-derived separately.

@@ -69,6 +69,22 @@ def test_read_latest_curated_snapshot_returns_empty_when_no_data_either_day(monk
     assert result == []
 
 
+def test_sanitize_nan_converts_nan_floats_to_none():
+    records = [{"coin_id": "bitcoin", "price_usd": 88420.0, "change_24h_pct": float("nan")}]
+
+    result = agent._sanitize_nan(records)
+
+    assert result == [{"coin_id": "bitcoin", "price_usd": 88420.0, "change_24h_pct": None}]
+
+
+def test_sanitize_nan_leaves_non_float_and_normal_values_untouched():
+    records = [{"location": "Vung Tau", "temperature_c": 29.5, "weather_code": 3, "note": None}]
+
+    result = agent._sanitize_nan(records)
+
+    assert result == records
+
+
 def test_search_knowledge_base_orders_by_score_and_truncates(monkeypatch):
     monkeypatch.setattr(agent, "embed_text", lambda text: [1.0, 0.0])
     documents = [

@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 
@@ -44,12 +45,13 @@ TOOLS = [
             "name": "get_crypto_prices",
             "description": (
                 "Get this pipeline's own real, live-ingested crypto prices "
-                "(Bitcoin, Ethereum, Solana) from CoinGecko, refreshed every "
-                "~10 minutes. Prefer this over search_web for any question "
-                "about the current price, market cap, or 24h change of these "
-                "three coins -- it's this pipeline's own current data, more "
-                "reliable than a general web search for them. Takes no "
-                "arguments."
+                "from CoinGecko, refreshed every ~10 minutes -- covers "
+                "exactly three coins: Bitcoin, Ethereum, Solana. Prefer this "
+                "over search_web for the current price, market cap, or 24h "
+                "change of these three specifically -- it's this pipeline's "
+                "own current data, more reliable than a general web search "
+                "for them. For any other coin, use search_web instead. "
+                "Takes no arguments."
             ),
             "inputSchema": {"json": {"type": "object", "properties": {}, "required": []}},
         }
@@ -59,10 +61,16 @@ TOOLS = [
             "name": "get_weather",
             "description": (
                 "Get this pipeline's own real, live-ingested weather readings "
-                "(temperature, humidity, precipitation, wind) for 12 "
-                "Vietnamese locations from Open-Meteo, refreshed every ~10 "
-                "minutes. Prefer this over search_web for any current-weather "
-                "question about these locations. Takes no arguments."
+                "(temperature, humidity, precipitation, wind) from Open-Meteo, "
+                "refreshed every ~10 minutes -- covers exactly these 12 "
+                "Southern Vietnam locations: Tay Ninh, Ho Chi Minh City, Thu "
+                "Dau Mot (Binh Duong), Long Xuyen (An Giang), Bien Hoa (Dong "
+                "Nai), Can Tho, My Tho (Tien Giang), Soc Trang, Vung Tau, "
+                "Rach Gia (Kien Giang), Ca Mau, Da Lat. Prefer this over "
+                "search_web for current weather in one of these specific "
+                "locations. For any other location (e.g. Hanoi, Da Nang, or "
+                "anywhere outside Vietnam), use search_web instead. Takes no "
+                "arguments."
             ),
             "inputSchema": {"json": {"type": "object", "properties": {}, "required": []}},
         }
@@ -72,9 +80,9 @@ TOOLS = [
             "name": "search_web",
             "description": (
                 "Search the public web. Use this when the knowledge base has "
-                "nothing relevant and the question isn't about crypto prices "
-                "or Vietnamese-location weather (those have their own more "
-                "reliable tools above), or the question is otherwise outside "
+                "nothing relevant, the question is about a coin other than "
+                "Bitcoin/Ethereum/Solana or a location other than the 12 "
+                "get_weather covers, or the question is otherwise outside "
                 "this pipeline's domain."
             ),
             "inputSchema": {
@@ -142,10 +150,23 @@ def list_parquet_keys(bucket: str, prefix: str) -> list[str]:
     return keys
 
 
+def _sanitize_nan(records: list[dict]) -> list[dict]:
+    """Pandas turns a missing value in a numeric column into NaN, which
+    isn't valid JSON -- json.dumps(float('nan')) emits the literal `NaN`
+    token, and Bedrock's Converse API rejects that in a tool-result
+    payload. Convert every NaN to None so one missing reading (e.g. a
+    single location's precipitation sensor down that run) can't crash the
+    whole tool call."""
+    return [
+        {k: (None if isinstance(v, float) and math.isnan(v) else v) for k, v in record.items()}
+        for record in records
+    ]
+
+
 def read_parquet_records(bucket: str, key: str) -> list[dict]:
     response = _s3().get_object(Bucket=bucket, Key=key)
     df = pd.read_parquet(BytesIO(response["Body"].read()))
-    return df.to_dict(orient="records")
+    return _sanitize_nan(df.to_dict(orient="records"))
 
 
 def read_latest_curated_snapshot(source: str, now: datetime | None = None) -> list[dict]:
