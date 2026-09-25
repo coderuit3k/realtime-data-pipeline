@@ -50,6 +50,22 @@ export function getCostLimiter(): Ratelimit {
   return costLimiter;
 }
 
+let conversationLimiter: Ratelimit | undefined;
+export function getConversationLimiter(): Ratelimit {
+  if (!conversationLimiter) {
+    const redis = new Redis({
+      url: requiredEnv("UPSTASH_REDIS_REST_URL"),
+      token: requiredEnv("UPSTASH_REDIS_REST_TOKEN"),
+    });
+    conversationLimiter = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(10, "1 h"),
+      prefix: "conversation-ratelimit",
+    });
+  }
+  return conversationLimiter;
+}
+
 export type RateLimitResult = { allowed: boolean; remaining: number };
 
 export async function checkRateLimit(
