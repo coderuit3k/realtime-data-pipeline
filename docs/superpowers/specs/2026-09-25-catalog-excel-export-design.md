@@ -38,13 +38,20 @@ using the `mail` bucket is a separate, later sub-project.
 - **No export history/listing UI.** Each click uploads a new
   timestamped object to R2 and returns a presigned URL for that one
   file; there is no page listing past exports. Out of scope for v1.
-- **No unbounded table scan.** Each sheet contains the 999 most recent
-  rows per table (`ORDER BY ingested_at DESC LIMIT 999` — 999 data rows
-  plus 1 header row matches `maxResults: 1000`, Athena's per-call
-  ceiling for `GetQueryResultsCommand`), a hard, predictable bound on
-  Athena cost and file size given this project's real ingestion volume
-  (48 runs/day at 30-minute cadence, 5 sources, no cross-run dedup —
-  each table exceeds 1000 rows within about a week).
+- **No unbounded table scan.** Each sheet contains up to the 999 most
+  recent rows **within today's UTC partition** (`WHERE year=... AND
+  month=... AND day=...` via the existing `partitionWhere(todayUtcParts())`
+  helper, then `ORDER BY ingested_at DESC LIMIT 999` — 999 data rows plus
+  1 header row matches `maxResults: 1000`, Athena's per-call ceiling for
+  `GetQueryResultsCommand`). The partition filter is load-bearing, not
+  cosmetic: a real production incident (2026-09-25) showed that
+  `ORDER BY` with no partition filter forces Athena to scan the entire
+  unpartitioned table history, and once real ingestion volume (48
+  runs/day, no cross-run dedup) grew past about a week, that full scan
+  timed out (`Athena query timed out waiting for SUCCEEDED state`).
+  Scoping to today's partition is the same pattern already proven fast
+  in production by `buildSourceVolumeQuery`/`buildRecentActivityQuery`
+  and the Dashboard/Insights pages that use them.
 - **The `mail` R2 bucket is untouched by this sub-project.**
 
 ## Architecture / data flow
@@ -56,8 +63,10 @@ using the `mail` bucket is a separate, later sub-project.
    real bypass this project already found and fixed once for the
    conversation-rate-limit route).
 4. Route runs 5 real Athena queries in parallel, one per curated table:
-   `SELECT * FROM <table> ORDER BY ingested_at DESC LIMIT 999`, via the
-   existing `getAthenaClient()` / `runAthenaQueryWithStats(client, sql)`
+   `SELECT * FROM <table> WHERE year=... AND month=... AND day=... ORDER BY
+   ingested_at DESC LIMIT 999` (today's UTC partition only, via the
+   existing `partitionWhere(todayUtcParts())` helper), via the existing
+   `getAthenaClient()` / `runAthenaQueryWithStats(client, sql, maxResults)`
    / `parseAthenaRows(rows, mapRow)` helpers in `lib/athena.ts` — no new
    Athena-calling code, only new call sites. Ordering by `ingested_at`
    (already used the same way by `buildRecentActivityQuery` in

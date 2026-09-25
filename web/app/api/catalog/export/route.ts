@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getAthenaClient, requiredEnv } from "@/lib/aws";
-import { runAthenaQueryWithStats, parseAthenaRows } from "@/lib/athena";
+import { runAthenaQueryWithStats, parseAthenaRows, partitionWhere, todayUtcParts } from "@/lib/athena";
 import { buildCatalogWorkbook, type ExportSheet } from "@/lib/excelExport";
 import { getR2Client, uploadAndPresign } from "@/lib/r2";
 import { checkRateLimit, getExportLimiter } from "@/lib/ratelimit";
@@ -27,12 +27,18 @@ export async function POST(request: NextRequest) {
 
   try {
     const athenaClient = getAthenaClient();
+    // Same today-only partition filter as buildSourceVolumeQuery/buildRecentActivityQuery
+    // (already proven fast in production for Dashboard/Insights) -- without it, ORDER BY
+    // ingested_at DESC forces a full unpartitioned table scan, which timed out in
+    // production once the raw ingestion history grew past ~1 week (real incident,
+    // 2026-09-25: "Athena query timed out waiting for SUCCEEDED state"). 999 data rows
+    // + 1 header row = exactly maxResults: 1000, Athena's per-call ceiling.
+    const where = partitionWhere(todayUtcParts());
     const sheets: ExportSheet[] = await Promise.all(
       EXPORT_TABLES.map(async (table) => {
-        // 999 data rows + 1 header row = exactly maxResults: 1000, Athena's per-call ceiling for GetQueryResultsCommand -- ORDER BY ingested_at DESC makes this a deterministic "most recent 999" snapshot instead of an arbitrary unordered sample (this project's real ingestion volume exceeds 1000 rows/table within about a week).
         const { columns, rows } = await runAthenaQueryWithStats(
           athenaClient,
-          `SELECT * FROM ${table} ORDER BY ingested_at DESC LIMIT 999`,
+          `SELECT * FROM ${table} ${where} ORDER BY ingested_at DESC LIMIT 999`,
           1000
         );
         return { name: table, columns, rows: parseAthenaRows(rows, (cols) => cols) };

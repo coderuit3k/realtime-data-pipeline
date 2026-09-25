@@ -19,7 +19,7 @@ vi.mock("@/lib/excelExport", () => ({ buildCatalogWorkbook: vi.fn() }));
 vi.mock("@/lib/r2", () => ({ getR2Client: vi.fn(() => ({})), uploadAndPresign: vi.fn() }));
 
 import { checkRateLimit } from "@/lib/ratelimit";
-import { runAthenaQueryWithStats } from "@/lib/athena";
+import { runAthenaQueryWithStats, partitionWhere, todayUtcParts } from "@/lib/athena";
 import { buildCatalogWorkbook } from "@/lib/excelExport";
 import { uploadAndPresign } from "@/lib/r2";
 import { POST } from "./route";
@@ -75,9 +75,10 @@ describe("POST /api/catalog/export", () => {
     const body = await response.json();
     expect(body.url).toBe("https://example.r2.dev/signed-url");
     expect(mockedRun).toHaveBeenCalledTimes(5);
+    const where = partitionWhere(todayUtcParts());
     expect(mockedRun).toHaveBeenCalledWith(
       expect.anything(),
-      "SELECT * FROM hackernews_stories ORDER BY ingested_at DESC LIMIT 999",
+      `SELECT * FROM hackernews_stories ${where} ORDER BY ingested_at DESC LIMIT 999`,
       1000
     );
     expect(mockedBuild).toHaveBeenCalledWith([
