@@ -1,16 +1,59 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { CatalogTable } from "@/lib/types";
+import type { CatalogTable, CicdResponse, PipelineStage, CostBreakdownEntry } from "@/lib/types";
+import { ArchitectureFlow } from "@/components/ArchitectureFlow";
 
 function badgeLabel(table: CatalogTable): string {
   return table.ragIndexed ? "RAG indexed" : "không vào RAG";
+}
+
+function stageIconColor(status: PipelineStage["status"]): string {
+  if (status === "success") return "text-success";
+  if (status === "waiting") return "text-warning";
+  if (status === "in_progress") return "text-accent";
+  if (status === "failure") return "text-error";
+  if (status === "cancelled" || status === "skipped") return "text-textMuted";
+  return "text-textMuted";
+}
+
+function StageIcon({ status }: { status: PipelineStage["status"] }) {
+  const color = stageIconColor(status);
+  if (status === "success") {
+    return (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={`${color} flex-shrink-0`}>
+        <path d="M20 6 9 17l-5-5" />
+      </svg>
+    );
+  }
+  if (status === "in_progress") {
+    return (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={`${color} flex-shrink-0 animate-spin motion-reduce:animate-none`}>
+        <path d="M21 12a9 9 0 1 1-9-9" />
+      </svg>
+    );
+  }
+  if (status === "waiting") {
+    return (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={`${color} flex-shrink-0`}>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3.5 2" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={`${color} flex-shrink-0`}>
+      <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
+  );
 }
 
 export default function CatalogPage() {
   const [tables, setTables] = useState<CatalogTable[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [cicd, setCicd] = useState<CicdResponse | null>(null);
+  const [costBreakdown, setCostBreakdown] = useState<CostBreakdownEntry[] | null>(null);
 
   async function load() {
     setError(null);
@@ -27,6 +70,28 @@ export default function CatalogPage() {
 
   useEffect(() => {
     load();
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/cicd")
+      .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
+      .then(({ ok, body }) => {
+        if (ok) setCicd(body);
+      })
+      .catch(() => {
+        /* CI/CD summary is secondary -- never block the catalog page over it */
+      });
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/ops")
+      .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
+      .then(({ ok, body }) => {
+        if (ok && Array.isArray(body?.costBreakdown)) setCostBreakdown(body.costBreakdown);
+      })
+      .catch(() => {
+        /* cost breakdown is secondary -- never block the catalog page over it */
+      });
   }, []);
 
   if (error) {
@@ -57,11 +122,57 @@ export default function CatalogPage() {
   return (
     <div className="p-9 flex flex-col gap-5">
       <div>
-        <h1 className="font-heading text-2xl font-semibold text-textPrimary">Data Catalog</h1>
+        <h1 className="font-heading text-2xl font-semibold text-textPrimary">Architecture & Lakehouse</h1>
         <p className="mt-1.5 text-sm text-textSecondary tabular-nums">
-          {tables.length} bảng trong Glue Data Catalog
+          Kiến trúc pipeline, trạng thái CI/CD, chi phí hạ tầng, và {tables.length} bảng trong Glue Data Catalog
         </p>
       </div>
+
+      <ArchitectureFlow />
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-4 flex flex-col gap-3">
+          <span className="text-xs font-semibold text-textPrimary">Trạng thái CI/CD</span>
+          {cicd ? (
+            <div className="flex flex-wrap gap-3">
+              {cicd.stages.map((stage) => (
+                <div key={stage.name} className="flex items-center gap-1.5 rounded-lg bg-bg px-2.5 py-1.5">
+                  <StageIcon status={stage.status} />
+                  <span className="text-[11px] text-textSecondary">{stage.name}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <span className="text-[11px] text-textMuted">Đang tải…</span>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-4 flex flex-col gap-2.5">
+          <span className="text-xs font-semibold text-textPrimary">Chi phí hạ tầng</span>
+          {costBreakdown ? (
+            <div className="flex flex-col gap-2">
+              {costBreakdown.map((c) => {
+                const maxCost = Math.max(1, ...costBreakdown.map((x) => x.monthlyUsd));
+                return (
+                  <div key={c.category} className="flex items-center gap-2">
+                    <span className="w-[110px] text-[11px] text-textSecondary">{c.category}</span>
+                    <div className="flex-grow h-1.5 rounded bg-border">
+                      <div
+                        className="h-full rounded bg-gradient-to-r from-accent to-accentBright"
+                        style={{ width: `${(c.monthlyUsd / maxCost) * 100}%` }}
+                      />
+                    </div>
+                    <span className="font-mono tabular-nums text-[10.5px] text-textMuted">${c.monthlyUsd.toFixed(2)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <span className="text-[11px] text-textMuted">Đang tải…</span>
+          )}
+        </div>
+      </div>
+
       <div className="flex gap-4 flex-grow min-h-0">
         <div className="w-[270px] shrink-0 rounded-lg border border-border bg-surface/75 backdrop-blur-md p-3.5 flex flex-col gap-1.5 overflow-auto">
           {tables.map((table) => (
