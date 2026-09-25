@@ -12,6 +12,14 @@ export type AssistantResult = {
   toolCalls: unknown[];
 };
 
+export type ChatMessage = {
+  id: string;
+  question: string;
+  answer: string;
+  sources: AssistantSource[];
+  toolCalls: unknown[];
+};
+
 type RawAgentPayload = {
   question: string;
   answer: string;
