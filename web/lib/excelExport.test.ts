@@ -16,7 +16,7 @@ describe("buildCatalogWorkbook", () => {
     ]);
 
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as any);
     const sheet = workbook.getWorksheet("hackernews_stories");
 
     expect(sheet).toBeDefined();
@@ -33,7 +33,7 @@ describe("buildCatalogWorkbook", () => {
     ]);
 
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as any);
 
     expect(workbook.worksheets.map((w) => w.name)).toEqual(["a_table", "b_table"]);
   });
@@ -42,7 +42,7 @@ describe("buildCatalogWorkbook", () => {
     const buffer = await buildCatalogWorkbook([{ name: "empty_table", columns: ["x", "y"], rows: [] }]);
 
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as any);
     const sheet = workbook.getWorksheet("empty_table")!;
 
     expect(sheet.rowCount).toBe(1);
