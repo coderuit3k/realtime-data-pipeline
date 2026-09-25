@@ -140,7 +140,7 @@ resource "aws_lambda_function" "gmail_ingestion" {
   handler          = "gmail_ingestion.lambda_handler"
   runtime          = var.lambda_runtime
   timeout          = 60
-  memory_size      = 256
+  memory_size      = 1024
   filename         = data.archive_file.gmail_ingestion.output_path
   source_code_hash = data.archive_file.gmail_ingestion.output_base64sha256
 

@@ -19,12 +19,19 @@ GMAIL_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1/users/me"
 
 
+def _safe_decode(raw_bytes: bytes, charset: str | None) -> str:
+    try:
+        return raw_bytes.decode(charset or "utf-8", errors="replace")
+    except (LookupError, TypeError):
+        return raw_bytes.decode("utf-8", errors="replace")
+
+
 def _decode_header_value(raw_value: str | None) -> str:
     if not raw_value:
         return ""
     parts = decode_header(raw_value)
     return "".join(
-        part.decode(encoding or "utf-8", errors="replace") if isinstance(part, bytes) else part
+        _safe_decode(part, encoding) if isinstance(part, bytes) else part
         for part, encoding in parts
     )
 
@@ -34,11 +41,11 @@ def _extract_snippet(parsed_email, max_len: int = 200) -> str:
         for part in parsed_email.walk():
             if part.get_content_type() == "text/plain":
                 body = part.get_payload(decode=True) or b""
-                return body.decode(part.get_content_charset() or "utf-8", errors="replace")[:max_len].strip()
+                return _safe_decode(body, part.get_content_charset())[:max_len].strip()
         return ""
     if parsed_email.get_content_type() == "text/plain":
         body = parsed_email.get_payload(decode=True) or b""
-        return body.decode(parsed_email.get_content_charset() or "utf-8", errors="replace")[:max_len].strip()
+        return _safe_decode(body, parsed_email.get_content_charset())[:max_len].strip()
     return ""
 
 
@@ -130,8 +137,12 @@ def fetch_and_archive_messages() -> list[dict]:
 
     records = []
     for message_id in fetch_message_ids(access_token, config.GMAIL_MESSAGE_LIMIT):
-        raw_response = fetch_raw_message(access_token, message_id)
-        raw_bytes, record = normalize_message(message_id, raw_response)
+        try:
+            raw_response = fetch_raw_message(access_token, message_id)
+            raw_bytes, record = normalize_message(message_id, raw_response)
+        except Exception:
+            logger.exception("Failed to fetch/normalize message %s -- skipping", message_id)
+            continue
         try:
             archive_to_r2(r2_client, config.GMAIL_R2_BUCKET_NAME, message_id, raw_bytes)
         except Exception:

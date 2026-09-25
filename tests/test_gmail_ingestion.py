@@ -1,8 +1,20 @@
 import base64
 from email.header import Header
 from email.message import EmailMessage
+from unittest.mock import MagicMock, patch
 
-from ingestion.gmail_ingestion import normalize_message
+from botocore.exceptions import ClientError
+
+from ingestion.gmail_ingestion import (
+    _decode_header_value,
+    archive_to_r2,
+    fetch_and_archive_messages,
+    fetch_message_ids,
+    fetch_raw_message,
+    get_access_token,
+    lambda_handler,
+    normalize_message,
+)
 
 
 def _raw_response(msg: EmailMessage, internal_date_ms: int = 1700000000000) -> dict:
@@ -42,6 +54,20 @@ def test_normalize_message_decodes_rfc2047_encoded_subject():
     assert record["subject"] == "Xin chào bạn"
 
 
+def test_decode_header_value_falls_back_on_unknown_charset(monkeypatch):
+    # decode_header() can return an encoded-word charset (or raw 8-bit header)
+    # that Python's codecs module doesn't recognize -- bytes.decode() raises
+    # LookupError in that case, not just UnicodeDecodeError.
+    monkeypatch.setattr(
+        "ingestion.gmail_ingestion.decode_header",
+        lambda value: [(b"raw bytes with unknown charset", "unknown-8bit")],
+    )
+
+    result = _decode_header_value("irrelevant -- decode_header is mocked")
+
+    assert result == "raw bytes with unknown charset"
+
+
 def test_normalize_message_snippet_is_empty_when_no_text_plain_part():
     msg = EmailMessage()
     msg["Subject"] = "HTML only"
@@ -62,11 +88,6 @@ def test_normalize_message_truncates_long_snippet_to_200_chars():
     _, record = normalize_message("msg-4", _raw_response(msg))
 
     assert len(record["snippet"]) == 200
-
-
-from unittest.mock import MagicMock, patch
-
-from ingestion.gmail_ingestion import get_access_token
 
 
 @patch("ingestion.gmail_ingestion.requests.post")
@@ -91,11 +112,6 @@ def test_get_access_token_sends_refresh_token_grant(mock_post):
     }
 
 
-from botocore.exceptions import ClientError
-
-from ingestion.gmail_ingestion import archive_to_r2
-
-
 def test_archive_to_r2_skips_upload_when_object_already_exists():
     client = MagicMock()
     client.head_object.return_value = {}  # no exception -- object exists
@@ -114,7 +130,10 @@ def test_archive_to_r2_uploads_when_object_is_missing():
     archive_to_r2(client, "mail-bucket", "msg-1", b"raw bytes")
 
     client.put_object.assert_called_once_with(
-        Bucket="mail-bucket", Key="messages/msg-1.eml", Body=b"raw bytes", ContentType="message/rfc822"
+        Bucket="mail-bucket",
+        Key="messages/msg-1.eml",
+        Body=b"raw bytes",
+        ContentType="message/rfc822",
     )
 
 
@@ -129,14 +148,6 @@ def test_archive_to_r2_reraises_non_404_errors():
         assert False, "expected ClientError to propagate"
     except ClientError:
         pass
-
-
-from ingestion.gmail_ingestion import (
-    fetch_message_ids,
-    fetch_raw_message,
-    fetch_and_archive_messages,
-    lambda_handler,
-)
 
 
 @patch("ingestion.gmail_ingestion.requests.get")
@@ -173,7 +184,12 @@ def test_fetch_raw_message_requests_raw_format(mock_get):
 @patch("ingestion.gmail_ingestion.get_access_token")
 @patch("ingestion.gmail_ingestion.get_secret")
 def test_fetch_and_archive_messages_continues_when_one_archive_fails(
-    mock_get_secret, mock_get_access_token, mock_fetch_ids, mock_fetch_raw, mock_get_r2_client, mock_archive
+    mock_get_secret,
+    mock_get_access_token,
+    mock_fetch_ids,
+    mock_fetch_raw,
+    mock_get_r2_client,
+    mock_archive,
 ):
     mock_get_secret.return_value = {
         "client_id": "cid", "client_secret": "cs", "refresh_token": "rt",
@@ -196,6 +212,44 @@ def test_fetch_and_archive_messages_continues_when_one_archive_fails(
 
     assert [r["message_id"] for r in records] == ["m1", "m2"]
     assert mock_archive.call_count == 2
+
+
+@patch("ingestion.gmail_ingestion.archive_to_r2")
+@patch("ingestion.gmail_ingestion.get_r2_client")
+@patch("ingestion.gmail_ingestion.fetch_raw_message")
+@patch("ingestion.gmail_ingestion.fetch_message_ids")
+@patch("ingestion.gmail_ingestion.get_access_token")
+@patch("ingestion.gmail_ingestion.get_secret")
+def test_fetch_and_archive_messages_skips_message_that_fails_to_fetch(
+    mock_get_secret,
+    mock_get_access_token,
+    mock_fetch_ids,
+    mock_fetch_raw,
+    mock_get_r2_client,
+    mock_archive,
+):
+    mock_get_secret.return_value = {
+        "client_id": "cid", "client_secret": "cs", "refresh_token": "rt",
+        "r2_account_id": "acc", "r2_access_key_id": "ak", "r2_secret_access_key": "sk",
+    }
+    mock_get_access_token.return_value = "token-x"
+    mock_fetch_ids.return_value = ["bad-id", "m2"]
+
+    def fake_raw(token, message_id):
+        if message_id == "bad-id":
+            raise RuntimeError("404 from Gmail -- message deleted between list and get")
+        msg = EmailMessage()
+        msg["Subject"] = f"Subject {message_id}"
+        msg["From"] = "a@example.com"
+        msg.set_content("body")
+        return _raw_response(msg)
+
+    mock_fetch_raw.side_effect = fake_raw
+
+    records = fetch_and_archive_messages()
+
+    assert [r["message_id"] for r in records] == ["m2"]
+    mock_archive.assert_called_once()
 
 
 @patch("ingestion.gmail_ingestion.write_records")

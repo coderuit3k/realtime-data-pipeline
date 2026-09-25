@@ -58,6 +58,7 @@ variable "gmail_message_limit" {
 variable "gmail_r2_bucket_name" {
   description = "Real Cloudflare R2 bucket name for archiving raw Gmail messages (not secret -- the real R2 API credentials are in the gmail_ingestion Secrets Manager secret)"
   type        = string
+  default     = ""
 }
 
 variable "ingestion_schedule" {
