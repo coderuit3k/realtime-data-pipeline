@@ -16,18 +16,114 @@ import { ArchitectureFlow } from "@/components/ArchitectureFlow";
 
 const GITHUB_URL = "https://github.com/coderuit3k/realtime-data-pipeline";
 
-const TECH_STACK = [
-  "Python",
-  "Terraform",
-  "AWS Lambda",
-  "S3",
-  "Glue",
-  "Athena",
-  "Bedrock",
-  "GitHub Actions",
-  "Next.js",
-  "TypeScript",
-  "Vercel",
+function TechIcon({ children }: { children: ReactNode }) {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="text-accent flex-shrink-0">
+      {children}
+    </svg>
+  );
+}
+
+const TECH_STACK: { name: string; icon: ReactNode }[] = [
+  {
+    name: "Python",
+    icon: (
+      <TechIcon>
+        <polyline points="16 18 22 12 16 6" />
+        <polyline points="8 6 2 12 8 18" />
+      </TechIcon>
+    ),
+  },
+  {
+    name: "Terraform",
+    icon: (
+      <TechIcon>
+        <polygon points="12 2 2 7 12 12 22 7 12 2" />
+        <polyline points="2 17 12 22 22 17" />
+        <polyline points="2 12 12 17 22 12" />
+      </TechIcon>
+    ),
+  },
+  {
+    name: "AWS Lambda",
+    icon: (
+      <TechIcon>
+        <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+      </TechIcon>
+    ),
+  },
+  {
+    name: "S3",
+    icon: (
+      <TechIcon>
+        <rect x="3" y="4" width="18" height="4" rx="1" />
+        <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8" />
+        <path d="M10 13h4" />
+      </TechIcon>
+    ),
+  },
+  {
+    name: "Glue",
+    icon: (
+      <TechIcon>
+        <path d="M9 17H7A5 5 0 0 1 7 7h2M15 7h2a5 5 0 1 1 0 10h-2M8 12h8" />
+      </TechIcon>
+    ),
+  },
+  {
+    name: "Athena",
+    icon: (
+      <TechIcon>
+        <circle cx="10.5" cy="10.5" r="6.5" />
+        <path d="M20 20l-4.35-4.35" />
+      </TechIcon>
+    ),
+  },
+  {
+    name: "Bedrock",
+    icon: (
+      <TechIcon>
+        <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+      </TechIcon>
+    ),
+  },
+  {
+    name: "GitHub Actions",
+    icon: (
+      <TechIcon>
+        <line x1="6" y1="3" x2="6" y2="15" />
+        <circle cx="18" cy="6" r="3" />
+        <circle cx="6" cy="18" r="3" />
+        <path d="M18 9a9 9 0 0 1-9 9" />
+      </TechIcon>
+    ),
+  },
+  {
+    name: "Next.js",
+    icon: (
+      <TechIcon>
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="M3 9h18" />
+      </TechIcon>
+    ),
+  },
+  {
+    name: "TypeScript",
+    icon: (
+      <TechIcon>
+        <path d="M8 3a2 2 0 0 0-2 2v3a2 2 0 0 1-2 2 2 2 0 0 1 2 2v3a2 2 0 0 0 2 2" />
+        <path d="M16 3a2 2 0 0 1 2 2v3a2 2 0 0 0 2 2 2 2 0 0 0-2 2v3a2 2 0 0 1-2 2" />
+      </TechIcon>
+    ),
+  },
+  {
+    name: "Vercel",
+    icon: (
+      <TechIcon>
+        <path d="M12 3 22 20H2Z" />
+      </TechIcon>
+    ),
+  },
 ];
 
 function FeatureCard({ icon, title, description, accent = "cyan" }: { icon: ReactNode; title: string; description: string; accent?: "cyan" | "indigo" }) {
@@ -261,10 +357,11 @@ export default function LandingPage() {
           <div className="flex flex-wrap gap-2 justify-center max-w-3xl">
             {TECH_STACK.map((tech) => (
               <span
-                key={tech}
-                className="font-mono text-[11px] px-3 py-1.5 rounded-lg bg-surface/75 backdrop-blur-md border border-border text-textSecondary"
+                key={tech.name}
+                className="flex items-center gap-1.5 font-mono text-[11px] px-3 py-1.5 rounded-lg bg-surface/75 backdrop-blur-md border border-border text-textSecondary"
               >
-                {tech}
+                {tech.icon}
+                {tech.name}
               </span>
             ))}
           </div>

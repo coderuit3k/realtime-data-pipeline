@@ -35,6 +35,17 @@ const config: Config = {
         body: ["var(--font-inter)"],
         mono: ["var(--font-jetbrains-mono)"],
       },
+      keyframes: {
+        flowDot: {
+          "0%, 10%": { transform: "translateX(0)", opacity: "0" },
+          "25%": { opacity: "1" },
+          "80%": { opacity: "1" },
+          "100%": { transform: "translateX(22px)", opacity: "0" },
+        },
+      },
+      animation: {
+        flowDot: "flowDot 1.8s ease-in-out infinite",
+      },
     },
   },
   plugins: [],

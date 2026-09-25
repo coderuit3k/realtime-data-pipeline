@@ -1,8 +1,14 @@
-function ArrowIcon() {
+function ArrowIcon({ delay }: { delay: string }) {
   return (
-    <svg width="26" height="14" viewBox="0 0 26 14" fill="none" stroke="currentColor" strokeWidth={2} className="text-border">
-      <path d="M0 7h22M17 2l6 5-6 5" />
-    </svg>
+    <div className="relative flex items-center">
+      <svg width="26" height="14" viewBox="0 0 26 14" fill="none" stroke="currentColor" strokeWidth={2} className="text-border">
+        <path d="M0 7h22M17 2l6 5-6 5" />
+      </svg>
+      <span
+        className="absolute left-0 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-accentBright shadow-glowCyan animate-flowDot motion-reduce:hidden"
+        style={{ animationDelay: delay }}
+      />
+    </div>
   );
 }
 
@@ -22,7 +28,7 @@ export function ArchitectureFlow() {
           <span className="text-[11.5px] text-textPrimary">Weather · Crypto</span>
           <span className="text-[11.5px] text-textPrimary">GitHub</span>
         </div>
-        <ArrowIcon />
+        <ArrowIcon delay="0s" />
         <div className="rounded-lg border border-border bg-bg px-[18px] py-3.5 text-center w-[160px] transition-transform hover:scale-[1.01]">
           <div className="flex flex-col items-center gap-1.5">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -33,7 +39,7 @@ export function ArchitectureFlow() {
             <span className="font-mono text-[11.5px] text-textPrimary">S3 raw → curated</span>
           </div>
         </div>
-        <ArrowIcon />
+        <ArrowIcon delay="0.6s" />
         <div className="rounded-lg border border-border bg-bg px-[18px] py-3.5 text-center w-[160px] transition-transform hover:scale-[1.01]">
           <div className="flex flex-col items-center gap-1.5">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#06B6D4" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -43,7 +49,7 @@ export function ArchitectureFlow() {
             <span className="font-mono text-[11.5px] text-textPrimary">Glue Catalog + Athena</span>
           </div>
         </div>
-        <ArrowIcon />
+        <ArrowIcon delay="1.2s" />
         <div className="rounded-lg border border-secondary bg-bg px-[18px] py-3.5 text-center w-[170px] shadow-glowIndigo transition-transform hover:scale-[1.01]">
           <div className="flex flex-col items-center gap-1.5">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
