@@ -38,10 +38,13 @@ using the `mail` bucket is a separate, later sub-project.
 - **No export history/listing UI.** Each click uploads a new
   timestamped object to R2 and returns a presigned URL for that one
   file; there is no page listing past exports. Out of scope for v1.
-- **No unbounded table scan.** Each sheet is capped at `LIMIT 5000` rows
-  per table — generous headroom over this project's real, low ingestion
-  volume (every 30 minutes, 5 sources), but still a hard, predictable
-  bound on Athena cost and file size.
+- **No unbounded table scan.** Each sheet contains the 999 most recent
+  rows per table (`ORDER BY ingested_at DESC LIMIT 999` — 999 data rows
+  plus 1 header row matches `maxResults: 1000`, Athena's per-call
+  ceiling for `GetQueryResultsCommand`), a hard, predictable bound on
+  Athena cost and file size given this project's real ingestion volume
+  (48 runs/day at 30-minute cadence, 5 sources, no cross-run dedup —
+  each table exceeds 1000 rows within about a week).
 - **The `mail` R2 bucket is untouched by this sub-project.**
 
 ## Architecture / data flow
@@ -53,10 +56,13 @@ using the `mail` bucket is a separate, later sub-project.
    real bypass this project already found and fixed once for the
    conversation-rate-limit route).
 4. Route runs 5 real Athena queries in parallel, one per curated table:
-   `SELECT * FROM <table> LIMIT 5000`, via the existing
-   `getAthenaClient()` / `runAthenaQueryWithStats(client, sql)` /
-   `parseAthenaRows(rows, mapRow)` helpers in `lib/athena.ts` — no new
-   Athena-calling code, only new call sites.
+   `SELECT * FROM <table> ORDER BY ingested_at DESC LIMIT 999`, via the
+   existing `getAthenaClient()` / `runAthenaQueryWithStats(client, sql)`
+   / `parseAthenaRows(rows, mapRow)` helpers in `lib/athena.ts` — no new
+   Athena-calling code, only new call sites. Ordering by `ingested_at`
+   (already used the same way by `buildRecentActivityQuery` in
+   `lib/athena.ts`) makes this a deterministic "most recent 999 rows"
+   snapshot per table, not an arbitrary unordered sample.
 5. Route builds one in-memory `.xlsx` workbook via
    `lib/excelExport.ts`'s `buildCatalogWorkbook(sheets)`, one sheet per
    table, headers taken verbatim from Athena's own returned column

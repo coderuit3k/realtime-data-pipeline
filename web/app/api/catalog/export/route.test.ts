@@ -75,6 +75,11 @@ describe("POST /api/catalog/export", () => {
     const body = await response.json();
     expect(body.url).toBe("https://example.r2.dev/signed-url");
     expect(mockedRun).toHaveBeenCalledTimes(5);
+    expect(mockedRun).toHaveBeenCalledWith(
+      expect.anything(),
+      "SELECT * FROM hackernews_stories ORDER BY ingested_at DESC LIMIT 999",
+      1000
+    );
     expect(mockedBuild).toHaveBeenCalledWith([
       { name: "hackernews_stories", columns: ["a"], rows: [["1"]] },
       { name: "news_articles", columns: ["a"], rows: [["1"]] },

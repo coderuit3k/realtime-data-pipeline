@@ -88,7 +88,7 @@ export default function CatalogPage() {
     setExportError(null);
     try {
       const res = await fetch("/api/catalog/export", { method: "POST" });
-      const body = await res.json();
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? "Không xuất được file Excel.");
       window.location.href = body.url;
     } catch (err) {
