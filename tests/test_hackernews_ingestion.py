@@ -53,7 +53,9 @@ def test_normalize_story_handles_missing_text():
 
 @patch("ingestion.hackernews_ingestion.write_records")
 @patch("ingestion.hackernews_ingestion.fetch_new_stories")
-def test_lambda_handler_writes_records_keyed_by_story_id(mock_fetch_new_stories, mock_write_records):
+def test_lambda_handler_writes_records_keyed_by_story_id(
+    mock_fetch_new_stories, mock_write_records
+):
     mock_fetch_new_stories.return_value = [{"story_id": "123"}]
     mock_write_records.return_value = "some/key.json"
 
