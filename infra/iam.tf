@@ -29,9 +29,12 @@ data "aws_iam_policy_document" "ingestion_permissions" {
   }
 
   statement {
-    sid       = "ReadIngestionSecrets"
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = [aws_secretsmanager_secret.news_api.arn]
+    sid     = "ReadIngestionSecrets"
+    actions = ["secretsmanager:GetSecretValue"]
+    resources = [
+      aws_secretsmanager_secret.news_api.arn,
+      aws_secretsmanager_secret.gmail_ingestion.arn,
+    ]
   }
 }
 
