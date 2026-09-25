@@ -43,6 +43,23 @@ variable "github_trending_limit" {
   default     = 20
 }
 
+variable "gmail_ingestion_schedule" {
+  description = "EventBridge schedule expression for gmail_ingestion (its own, slower rule -- real inbox content changes less predictably than API-polled sources)"
+  type        = string
+  default     = "rate(4 hours)"
+}
+
+variable "gmail_message_limit" {
+  description = "Max number of latest Gmail messages fetched per gmail_ingestion run"
+  type        = number
+  default     = 50
+}
+
+variable "gmail_r2_bucket_name" {
+  description = "Real Cloudflare R2 bucket name for archiving raw Gmail messages (not secret -- the real R2 API credentials are in the gmail_ingestion Secrets Manager secret)"
+  type        = string
+}
+
 variable "ingestion_schedule" {
   description = "EventBridge schedule expression for the ingestion Lambdas"
   type        = string

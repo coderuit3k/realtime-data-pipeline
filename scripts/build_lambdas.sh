@@ -39,6 +39,7 @@ package_with_requests news_ingestion ingestion/news_ingestion.py
 package_with_requests weather_ingestion ingestion/weather_ingestion.py
 package_with_requests crypto_ingestion ingestion/crypto_ingestion.py
 package_with_requests github_trending_ingestion ingestion/github_trending_ingestion.py
+package_with_requests gmail_ingestion ingestion/gmail_ingestion.py
 package_no_deps transform transform/transform.py
 package_no_deps rag_build_index rag/build_index.py
 package_with_requests rag_agent rag/agent.py
