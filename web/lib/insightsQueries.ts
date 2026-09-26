@@ -52,6 +52,25 @@ ORDER BY overlap_count DESC
 LIMIT 6`;
 }
 
+export function buildGithubLanguagesQuery(partsList: TodayParts[]): string {
+  const where = partitionPredicateAny(partsList);
+  return `SELECT language, COUNT(*) AS repo_count
+FROM github_repos
+WHERE (${where}) AND language <> ''
+GROUP BY language
+ORDER BY repo_count DESC
+LIMIT 6`;
+}
+
+export function buildHnSpotlightQuery(partsList: TodayParts[]): string {
+  const where = partitionPredicateAny(partsList);
+  return `SELECT title, score, num_comments, author, COALESCE(NULLIF(url, ''), permalink) AS link
+FROM hackernews_stories
+WHERE ${where}
+ORDER BY score DESC
+LIMIT 1`;
+}
+
 export function buildWeatherSnapshotQuery(parts: TodayParts): string {
   const where = partitionPredicateAny([parts]);
   return `SELECT location, temperature_c, humidity_pct

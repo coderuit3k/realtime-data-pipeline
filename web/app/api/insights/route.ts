@@ -6,6 +6,8 @@ import {
   buildTopKeywordsQuery,
   buildCryptoMentionsQuery,
   buildGithubHnOverlapQuery,
+  buildGithubLanguagesQuery,
+  buildHnSpotlightQuery,
   buildWeatherSnapshotQuery,
 } from "@/lib/insightsQueries";
 import type { InsightsResponse } from "@/lib/types";
@@ -19,11 +21,13 @@ export async function GET(request: NextRequest) {
     const partsList = lastNDaysUtcParts(range === "7d" ? 7 : 1);
     const athena = getAthenaClient();
 
-    const [keywordRows, cryptoRows, overlapRows, weatherRows] = await Promise.all([
+    const [keywordRows, cryptoRows, overlapRows, weatherRows, languageRows, spotlightRows] = await Promise.all([
       runAthenaQuery(athena, buildTopKeywordsQuery(partsList)),
       runAthenaQuery(athena, buildCryptoMentionsQuery(partsList)),
       runAthenaQuery(athena, buildGithubHnOverlapQuery(partsList)),
       runAthenaQuery(athena, buildWeatherSnapshotQuery(todayUtcParts())),
+      runAthenaQuery(athena, buildGithubLanguagesQuery(partsList)),
+      runAthenaQuery(athena, buildHnSpotlightQuery(partsList)),
     ]);
 
     const response: InsightsResponse = {
@@ -47,6 +51,18 @@ export async function GET(request: NextRequest) {
         temperatureC: Number(cols[1] ?? 0),
         humidityPct: Number(cols[2] ?? 0),
       })),
+      githubLanguages: parseAthenaRows(languageRows, (cols) => ({
+        language: cols[0] ?? "",
+        repoCount: Number(cols[1] ?? 0),
+      })),
+      hnSpotlight:
+        parseAthenaRows(spotlightRows, (cols) => ({
+          title: cols[0] ?? "",
+          score: Number(cols[1] ?? 0),
+          comments: Number(cols[2] ?? 0),
+          author: cols[3] ?? "",
+          url: cols[4] ?? "",
+        }))[0] ?? null,
     };
 
     return NextResponse.json(response, {

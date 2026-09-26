@@ -57,6 +57,7 @@ export default function InsightsPage() {
 
   const maxMentions = Math.max(1, ...data.topKeywords.map((k) => k.mentions));
   const maxOverlap = Math.max(1, ...data.githubHnOverlap.map((o) => o.overlapCount));
+  const maxLanguages = Math.max(1, ...data.githubLanguages.map((l) => l.repoCount));
 
   return (
     <div className="p-9 flex flex-col gap-5">
@@ -84,7 +85,7 @@ export default function InsightsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 grid-rows-2 gap-4 flex-grow min-h-0">
+      <div className="grid grid-cols-2 gap-4 items-start">
         <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-3 min-h-0">
           <div className="flex items-center gap-2">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="text-accent">
@@ -173,6 +174,56 @@ export default function InsightsPage() {
               </div>
             ))}
           </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-3 min-h-0">
+          <div className="flex items-center gap-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="text-accent">
+              <path d="M16 18 22 12 16 6" />
+              <path d="M8 6 2 12 8 18" />
+            </svg>
+            <span className="text-[13px] font-semibold text-textPrimary">Ngôn ngữ nổi bật trên GitHub</span>
+          </div>
+          <div className="flex flex-col gap-2.5">
+            {data.githubLanguages.map((l, i) => (
+              <div key={l.language} className="flex items-center gap-2.5">
+                <span className="w-20 text-[11.5px] text-textSecondary">{l.language}</span>
+                <div className="flex-grow h-2 rounded bg-border">
+                  <div
+                    className={`h-full rounded ${i === 0 ? "bg-accent" : "bg-textMuted"}`}
+                    style={{ width: `${(l.repoCount / maxLanguages) * 100}%` }}
+                  />
+                </div>
+                <span className="font-mono tabular-nums text-[11px] text-textMuted">{l.repoCount}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-3 min-h-0">
+          <div className="flex items-center gap-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="text-accent">
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+            </svg>
+            <span className="text-[13px] font-semibold text-textPrimary">Story nổi bật nhất (HN)</span>
+          </div>
+          {data.hnSpotlight ? (
+            <div className="flex flex-col gap-2 min-h-0 overflow-hidden">
+              <a
+                href={data.hnSpotlight.url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[15px] leading-snug font-semibold text-textPrimary transition-colors hover:text-accent line-clamp-3"
+              >
+                {data.hnSpotlight.title}
+              </a>
+              <span className="font-mono tabular-nums text-[11px] text-textMuted">
+                {data.hnSpotlight.score} điểm · {data.hnSpotlight.comments} bình luận · {data.hnSpotlight.author}
+              </span>
+            </div>
+          ) : (
+            <span className="text-[11px] text-textMuted">Chưa có story nào.</span>
+          )}
         </div>
       </div>
     </div>

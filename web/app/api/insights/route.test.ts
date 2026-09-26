@@ -28,14 +28,21 @@ beforeEach(() => {
 });
 
 describe("GET /api/insights", () => {
-  it("defaults to range=today and returns all 4 sections", async () => {
+  it("defaults to range=today and returns all 6 sections", async () => {
     mockedRun
       .mockResolvedValueOnce(rows(["keyword", "mentions"], [["agent", "41"]]))
       .mockResolvedValueOnce(
         rows(["coin_id", "price_usd", "change_24h_pct", "mention_count"], [["bitcoin", "81314.2", "2.4", "18"]])
       )
       .mockResolvedValueOnce(rows(["keyword", "overlap_count"], [["agent", "7"]]))
-      .mockResolvedValueOnce(rows(["location", "temperature_c", "humidity_pct"], [["Ho Chi Minh City", "31", "68"]]));
+      .mockResolvedValueOnce(rows(["location", "temperature_c", "humidity_pct"], [["Ho Chi Minh City", "31", "68"]]))
+      .mockResolvedValueOnce(rows(["language", "repo_count"], [["Python", "174"]]))
+      .mockResolvedValueOnce(
+        rows(
+          ["title", "score", "num_comments", "author", "link"],
+          [["Breaking Up with Google Play", "123", "23", "ezst", "https://example.com/story"]]
+        )
+      );
 
     const response = await GET(makeRequest("http://localhost/api/insights"));
     expect(response.status).toBe(200);
@@ -47,6 +54,14 @@ describe("GET /api/insights", () => {
     ]);
     expect(body.githubHnOverlap).toEqual([{ keyword: "agent", overlapCount: 7 }]);
     expect(body.weatherSnapshot).toEqual([{ location: "Ho Chi Minh City", temperatureC: 31, humidityPct: 68 }]);
+    expect(body.githubLanguages).toEqual([{ language: "Python", repoCount: 174 }]);
+    expect(body.hnSpotlight).toEqual({
+      title: "Breaking Up with Google Play",
+      score: 123,
+      comments: 23,
+      author: "ezst",
+      url: "https://example.com/story",
+    });
   });
 
   it("accepts range=7d", async () => {
@@ -54,7 +69,9 @@ describe("GET /api/insights", () => {
       .mockResolvedValueOnce(rows(["keyword", "mentions"], []))
       .mockResolvedValueOnce(rows(["coin_id", "price_usd", "change_24h_pct", "mention_count"], []))
       .mockResolvedValueOnce(rows(["keyword", "overlap_count"], []))
-      .mockResolvedValueOnce(rows(["location", "temperature_c", "humidity_pct"], []));
+      .mockResolvedValueOnce(rows(["location", "temperature_c", "humidity_pct"], []))
+      .mockResolvedValueOnce(rows(["language", "repo_count"], []))
+      .mockResolvedValueOnce(rows(["title", "score", "num_comments", "author", "link"], []));
 
     const response = await GET(makeRequest("http://localhost/api/insights?range=7d"));
     const body = await response.json();
@@ -66,11 +83,27 @@ describe("GET /api/insights", () => {
       .mockResolvedValueOnce(rows(["keyword", "mentions"], []))
       .mockResolvedValueOnce(rows(["coin_id", "price_usd", "change_24h_pct", "mention_count"], []))
       .mockResolvedValueOnce(rows(["keyword", "overlap_count"], []))
-      .mockResolvedValueOnce(rows(["location", "temperature_c", "humidity_pct"], []));
+      .mockResolvedValueOnce(rows(["location", "temperature_c", "humidity_pct"], []))
+      .mockResolvedValueOnce(rows(["language", "repo_count"], []))
+      .mockResolvedValueOnce(rows(["title", "score", "num_comments", "author", "link"], []));
 
     const response = await GET(makeRequest("http://localhost/api/insights?range=bogus"));
     const body = await response.json();
     expect(body.range).toBe("today");
+  });
+
+  it("returns null hnSpotlight when there are no stories in range", async () => {
+    mockedRun
+      .mockResolvedValueOnce(rows(["keyword", "mentions"], []))
+      .mockResolvedValueOnce(rows(["coin_id", "price_usd", "change_24h_pct", "mention_count"], []))
+      .mockResolvedValueOnce(rows(["keyword", "overlap_count"], []))
+      .mockResolvedValueOnce(rows(["location", "temperature_c", "humidity_pct"], []))
+      .mockResolvedValueOnce(rows(["language", "repo_count"], []))
+      .mockResolvedValueOnce(rows(["title", "score", "num_comments", "author", "link"], []));
+
+    const response = await GET(makeRequest("http://localhost/api/insights"));
+    const body = await response.json();
+    expect(body.hnSpotlight).toBeNull();
   });
 
   it("returns 500 with a safe message when Athena fails", async () => {

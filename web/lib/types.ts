@@ -53,6 +53,8 @@ export type TopKeyword = { keyword: string; mentions: number };
 export type CryptoMention = { coinId: string; priceUsd: number; change24hPct: number; mentionCount: number };
 export type GithubHnOverlap = { keyword: string; overlapCount: number };
 export type WeatherSnapshot = { location: string; temperatureC: number; humidityPct: number };
+export type GithubLanguage = { language: string; repoCount: number };
+export type HnSpotlight = { title: string; score: number; comments: number; author: string; url: string };
 
 export type InsightsResponse = {
   range: "today" | "7d";
@@ -60,6 +62,8 @@ export type InsightsResponse = {
   cryptoMentions: CryptoMention[];
   githubHnOverlap: GithubHnOverlap[];
   weatherSnapshot: WeatherSnapshot[];
+  githubLanguages: GithubLanguage[];
+  hnSpotlight: HnSpotlight | null;
 };
 
 export type LambdaHealthRow = {

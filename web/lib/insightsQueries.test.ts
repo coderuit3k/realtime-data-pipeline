@@ -3,6 +3,8 @@ import {
   buildTopKeywordsQuery,
   buildCryptoMentionsQuery,
   buildGithubHnOverlapQuery,
+  buildGithubLanguagesQuery,
+  buildHnSpotlightQuery,
   buildWeatherSnapshotQuery,
 } from "./insightsQueries";
 
@@ -41,6 +43,30 @@ describe("buildGithubHnOverlapQuery", () => {
     const sql = buildGithubHnOverlapQuery(PARTS_TODAY);
     expect(sql).toContain("COUNT(DISTINCT g.full_name) AS overlap_count");
     expect(sql).toContain("GROUP BY gk");
+  });
+});
+
+describe("buildGithubLanguagesQuery", () => {
+  it("groups by language, excludes blanks, capped at 6", () => {
+    const sql = buildGithubLanguagesQuery(PARTS_TODAY);
+    expect(sql).toContain("GROUP BY language");
+    expect(sql).toContain("language <> ''");
+    expect(sql).toContain("LIMIT 6");
+  });
+
+  it("references every day in a multi-day range", () => {
+    const sql = buildGithubLanguagesQuery(PARTS_7D);
+    expect(sql).toContain("day='20'");
+    expect(sql).toContain("day='19'");
+  });
+});
+
+describe("buildHnSpotlightQuery", () => {
+  it("picks the single highest-scoring story and falls back to permalink when url is blank", () => {
+    const sql = buildHnSpotlightQuery(PARTS_TODAY);
+    expect(sql).toContain("ORDER BY score DESC");
+    expect(sql).toContain("LIMIT 1");
+    expect(sql).toContain("COALESCE(NULLIF(url, ''), permalink)");
   });
 });
 
