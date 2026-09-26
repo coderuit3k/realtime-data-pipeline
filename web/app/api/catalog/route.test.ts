@@ -62,6 +62,36 @@ describe("GET /api/catalog", () => {
     expect(body[0].ingestionLambda).toBe("");
   });
 
+  it("uses the Glue column's own comment as the note when there's no columnNotes override", async () => {
+    mockedList.mockResolvedValueOnce([
+      {
+        name: "crypto_prices",
+        location: "s3://real-bucket/curated/source=crypto/",
+        columns: [{ name: "coin_id", type: "string", note: "CoinGecko coin id." }],
+      },
+    ]);
+
+    const response = await GET();
+    const body = await response.json();
+    expect(body[0].columns[0].note).toBe("CoinGecko coin id.");
+  });
+
+  it("combines the Glue comment and the columnNotes override when both exist", async () => {
+    mockedList.mockResolvedValueOnce([
+      {
+        name: "crypto_prices",
+        location: "s3://real-bucket/curated/source=crypto/",
+        columns: [{ name: "price_usd", type: "double", note: "Current spot price in USD." }],
+      },
+    ]);
+
+    const response = await GET();
+    const body = await response.json();
+    expect(body[0].columns[0].note).toBe(
+      "Current spot price in USD. — ép float khi ingest (tránh HIVE_BAD_DATA vì CoinGecko trả số nguyên)"
+    );
+  });
+
   it("does not fabricate a note for a column absent from columnNotes", async () => {
     mockedList.mockResolvedValueOnce([
       {

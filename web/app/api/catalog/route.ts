@@ -17,10 +17,15 @@ export async function GET() {
       return {
         name: table.name,
         location: table.location,
-        columns: table.columns.map((col) => ({
-          ...col,
-          note: meta?.columnNotes?.[col.name],
-        })),
+        columns: table.columns.map((col) => {
+          // col.note is the Glue column's own comment (its general meaning,
+          // set in infra/glue.tf); columnNotes is a specific operational
+          // caveat about that column (e.g. a data-quality workaround) --
+          // show both when present instead of one clobbering the other.
+          const metaNote = meta?.columnNotes?.[col.name];
+          const note = metaNote && col.note ? `${col.note} — ${metaNote}` : metaNote ?? col.note;
+          return { ...col, note };
+        }),
         ragIndexed: meta?.ragIndexed ?? false,
         sourceApi: meta?.sourceApi ?? "",
         ingestionLambda: meta ? `${alarmPrefix}-${meta.ingestionLambda}` : "",

@@ -248,35 +248,6 @@ export default function CatalogPage() {
 
         {current && (
           <div className="flex-grow flex flex-col gap-4 min-h-0">
-            <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 border-t-2 border-t-accent flex flex-col gap-2.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="text-accent flex-shrink-0">
-                    <ellipse cx="12" cy="5" rx="8" ry="3" />
-                    <path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5" />
-                    <path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
-                  </svg>
-                  <span className="font-heading text-[15px] font-semibold text-textPrimary">
-                    {current.name}
-                  </span>
-                </div>
-                <span className="font-mono text-[10px] rounded-md bg-bg px-2.5 py-1 text-textSecondary flex items-center gap-1.5">
-                  {current.ragIndexed && (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="text-success flex-shrink-0">
-                      <path d="M20 6 9 17l-5-5" />
-                    </svg>
-                  )}
-                  {badgeLabel(current)}
-                </span>
-              </div>
-              {current.cadence && (
-                <span className="text-xs text-textMuted">
-                  Ghi bởi <span className="font-mono">{current.ingestionLambda}</span> {current.cadence} · nguồn{" "}
-                  <span className="font-mono">{current.sourceApi}</span>
-                </span>
-              )}
-            </div>
-
             <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-2.5 flex-grow min-h-0 overflow-auto">
               <div className="flex items-center gap-2">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="text-accent flex-shrink-0">

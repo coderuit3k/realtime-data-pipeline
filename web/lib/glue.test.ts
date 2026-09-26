@@ -44,6 +44,31 @@ describe("listCuratedTables", () => {
     expect(tables).toEqual([{ name: "weird_table", location: "", columns: [] }]);
   });
 
+  it("maps a Glue column's Comment into note", async () => {
+    const send = vi.fn().mockResolvedValue({
+      TableList: [
+        {
+          Name: "crypto_prices",
+          StorageDescriptor: {
+            Location: "s3://real-bucket/curated/source=crypto/",
+            Columns: [
+              { Name: "price_usd", Type: "double", Comment: "Current spot price in USD." },
+              { Name: "coin_id", Type: "string" },
+            ],
+          },
+        },
+      ],
+    });
+    const client = { send } as unknown as import("@aws-sdk/client-glue").GlueClient;
+
+    const tables = await listCuratedTables(client, "curated_db");
+
+    expect(tables[0].columns).toEqual([
+      { name: "price_usd", type: "double", note: "Current spot price in USD." },
+      { name: "coin_id", type: "string", note: undefined },
+    ]);
+  });
+
   it("appends partition key columns after the regular storage columns", async () => {
     const send = vi.fn().mockResolvedValue({
       TableList: [

@@ -14,6 +14,7 @@ export async function listCuratedTables(client: GlueClient, database: string): P
     ].map((col) => ({
       name: col.Name ?? "",
       type: col.Type ?? "",
+      note: col.Comment || undefined,
     })),
   }));
 }
