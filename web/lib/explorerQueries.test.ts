@@ -7,13 +7,18 @@ const PARTS = { year: "2026", month: "09", day: "20" };
 describe("buildSampleQueryGroups", () => {
   const groups = buildSampleQueryGroups(PARTS);
 
-  it("has exactly the 3 groups from the mockup, in order", () => {
-    expect(groups.map((g) => g.label)).toEqual(["Tương quan", "Xu hướng từ khoá", "Khối lượng & mới nhất"]);
+  it("has the original 3 groups from the mockup plus the Xếp hạng group, in order", () => {
+    expect(groups.map((g) => g.label)).toEqual([
+      "Tương quan",
+      "Xu hướng từ khoá",
+      "Khối lượng & mới nhất",
+      "Xếp hạng",
+    ]);
   });
 
-  it("has exactly 7 sample queries total across all groups", () => {
+  it("has exactly 11 sample queries total across all groups", () => {
     const total = groups.reduce((sum, g) => sum + g.queries.length, 0);
-    expect(total).toBe(7);
+    expect(total).toBe(11);
   });
 
   it("every query's SQL references the given partition date", () => {
@@ -42,5 +47,23 @@ describe("buildSampleQueryGroups", () => {
   it("every query id is unique", () => {
     const ids = groups.flatMap((g) => g.queries).map((q) => q.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("the github-stars-ranking query dedupes by repo_id (latest ingest) before ranking by stars", () => {
+    const query = groups.flatMap((g) => g.queries).find((q) => q.id === "github-stars-ranking");
+    expect(query?.sql).toContain("ROW_NUMBER() OVER (PARTITION BY repo_id ORDER BY ingested_at DESC)");
+    expect(query?.sql).toContain("ORDER BY stars DESC");
+  });
+
+  it("the crypto-market-cap-ranking query dedupes by coin_id (latest observed_at)", () => {
+    const query = groups.flatMap((g) => g.queries).find((q) => q.id === "crypto-market-cap-ranking");
+    expect(query?.sql).toContain("ROW_NUMBER() OVER (PARTITION BY coin_id ORDER BY observed_at DESC)");
+    expect(query?.sql).toContain("volume_24h_usd");
+  });
+
+  it("the hn-most-controversial query filters near-zero-score noise and ranks by comments-per-score", () => {
+    const query = groups.flatMap((g) => g.queries).find((q) => q.id === "hn-most-controversial");
+    expect(query?.sql).toContain("score >= 10");
+    expect(query?.sql).toContain("CAST(num_comments AS DOUBLE) / score AS comments_per_score");
   });
 });

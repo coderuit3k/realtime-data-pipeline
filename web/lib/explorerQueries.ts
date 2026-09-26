@@ -91,5 +91,57 @@ LIMIT 20`,
         },
       ],
     },
+    {
+      label: "Xếp hạng",
+      queries: [
+        {
+          id: "hn-authors-by-score",
+          label: "Tác giả HN theo tổng điểm",
+          sql: `SELECT author, COUNT(*) AS stories, SUM(score) AS total_score
+FROM hackernews_stories
+${where}
+GROUP BY author
+ORDER BY total_score DESC
+LIMIT 10`,
+        },
+        {
+          id: "github-stars-ranking",
+          label: "Repo GitHub nhiều sao nhất",
+          sql: `SELECT full_name, stars, forks, language
+FROM (
+  SELECT full_name, stars, forks, language,
+         ROW_NUMBER() OVER (PARTITION BY repo_id ORDER BY ingested_at DESC) AS rn
+  FROM github_repos
+  ${where}
+) ranked
+WHERE rn = 1
+ORDER BY stars DESC
+LIMIT 20`,
+        },
+        {
+          id: "crypto-market-cap-ranking",
+          label: "Crypto: vốn hoá & khối lượng",
+          sql: `SELECT coin_id, market_cap_usd, volume_24h_usd
+FROM (
+  SELECT coin_id, market_cap_usd, volume_24h_usd,
+         ROW_NUMBER() OVER (PARTITION BY coin_id ORDER BY observed_at DESC) AS rn
+  FROM crypto_prices
+  ${where}
+) ranked
+WHERE rn = 1
+ORDER BY market_cap_usd DESC`,
+        },
+        {
+          id: "hn-most-controversial",
+          label: "Story HN gây tranh cãi nhất",
+          sql: `SELECT title, score, num_comments, author,
+  CAST(num_comments AS DOUBLE) / score AS comments_per_score
+FROM hackernews_stories
+${where} AND score >= 10
+ORDER BY comments_per_score DESC
+LIMIT 10`,
+        },
+      ],
+    },
   ];
 }
