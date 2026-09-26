@@ -280,9 +280,6 @@ export default function CatalogPage() {
                   ))}
                 </tbody>
               </table>
-              <span className="mt-auto text-[11px] text-textMuted">
-                Vị trí lưu trữ: <span className="font-mono">{current.location}</span>
-              </span>
             </div>
           </div>
         )}
