@@ -6,6 +6,7 @@ from email.header import decode_header
 
 import boto3
 import requests
+from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from common import config
@@ -121,12 +122,19 @@ def fetch_raw_message(access_token: str, message_id: str) -> dict:
 
 
 def get_r2_client(creds: dict):
+    # R2 doesn't support the AWS-specific checksum headers botocore >=1.36 sends
+    # by default (e.g. x-amz-checksum-crc32), which makes PutObject fail against
+    # non-AWS S3-compatible endpoints unless we opt back into the old behavior.
     return boto3.client(
         "s3",
         endpoint_url=f"https://{creds['r2_account_id']}.r2.cloudflarestorage.com",
         aws_access_key_id=creds["r2_access_key_id"],
         aws_secret_access_key=creds["r2_secret_access_key"],
         region_name="auto",
+        config=Config(
+            request_checksum_calculation="when_required",
+            response_checksum_validation="when_required",
+        ),
     )
 
 

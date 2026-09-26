@@ -112,6 +112,25 @@ def test_get_access_token_sends_refresh_token_grant(mock_post):
     }
 
 
+@patch("ingestion.gmail_ingestion.boto3.client")
+def test_get_r2_client_disables_aws_only_checksum_headers(mock_boto_client):
+    # botocore >=1.36 defaults to sending AWS-specific checksum headers
+    # (e.g. x-amz-checksum-crc32) that Cloudflare R2 rejects, so the client
+    # must opt back into "when_required" for both request and response checksums.
+    from ingestion.gmail_ingestion import get_r2_client
+
+    get_r2_client({
+        "r2_account_id": "acc",
+        "r2_access_key_id": "ak",
+        "r2_secret_access_key": "sk",
+    })
+
+    _, kwargs = mock_boto_client.call_args
+    config = kwargs["config"]
+    assert config.request_checksum_calculation == "when_required"
+    assert config.response_checksum_validation == "when_required"
+
+
 def test_archive_to_r2_skips_upload_when_object_already_exists():
     client = MagicMock()
     client.head_object.return_value = {}  # no exception -- object exists
