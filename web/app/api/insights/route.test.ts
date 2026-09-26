@@ -23,12 +23,28 @@ function rows(header: string[], data: string[][]) {
   ];
 }
 
+// Matches the Promise.all order in route.ts: keywords, cryptoMentions,
+// githubHnOverlap, weatherSnapshot, githubLanguages, hnSpotlight,
+// githubStars, cryptoRanking, hnControversial.
+function mockAllEmpty() {
+  mockedRun
+    .mockResolvedValueOnce(rows(["keyword", "mentions"], []))
+    .mockResolvedValueOnce(rows(["coin_id", "price_usd", "change_24h_pct", "mention_count"], []))
+    .mockResolvedValueOnce(rows(["keyword", "overlap_count"], []))
+    .mockResolvedValueOnce(rows(["location", "temperature_c", "humidity_pct"], []))
+    .mockResolvedValueOnce(rows(["language", "repo_count"], []))
+    .mockResolvedValueOnce(rows(["title", "score", "num_comments", "author", "link"], []))
+    .mockResolvedValueOnce(rows(["full_name", "stars", "forks", "language"], []))
+    .mockResolvedValueOnce(rows(["coin_id", "market_cap_usd", "volume_24h_usd"], []))
+    .mockResolvedValueOnce(rows(["title", "score", "num_comments", "author", "link"], []));
+}
+
 beforeEach(() => {
   mockedRun.mockReset();
 });
 
 describe("GET /api/insights", () => {
-  it("defaults to range=today and returns all 6 sections", async () => {
+  it("defaults to range=today and returns all 9 sections", async () => {
     mockedRun
       .mockResolvedValueOnce(rows(["keyword", "mentions"], [["agent", "41"]]))
       .mockResolvedValueOnce(
@@ -41,6 +57,21 @@ describe("GET /api/insights", () => {
         rows(
           ["title", "score", "num_comments", "author", "link"],
           [["Breaking Up with Google Play", "123", "23", "ezst", "https://example.com/story"]]
+        )
+      )
+      .mockResolvedValueOnce(
+        rows(
+          ["full_name", "stars", "forks", "language"],
+          [["zai-org/ZCode", "6819", "2049", "TypeScript"]]
+        )
+      )
+      .mockResolvedValueOnce(
+        rows(["coin_id", "market_cap_usd", "volume_24h_usd"], [["bitcoin", "1686742462959.38", "22084196107.17"]])
+      )
+      .mockResolvedValueOnce(
+        rows(
+          ["title", "score", "num_comments", "author", "link"],
+          [["Can AI Shopping Agents Be Trusted?", "14", "26", "ddaniel10", "https://example.com/agents"]]
         )
       );
 
@@ -62,16 +93,23 @@ describe("GET /api/insights", () => {
       author: "ezst",
       url: "https://example.com/story",
     });
+    expect(body.githubStars).toEqual([
+      { fullName: "zai-org/ZCode", stars: 6819, forks: 2049, language: "TypeScript" },
+    ]);
+    expect(body.cryptoRanking).toEqual([
+      { coinId: "bitcoin", marketCapUsd: 1686742462959.38, volume24hUsd: 22084196107.17 },
+    ]);
+    expect(body.hnControversial).toEqual({
+      title: "Can AI Shopping Agents Be Trusted?",
+      score: 14,
+      comments: 26,
+      author: "ddaniel10",
+      url: "https://example.com/agents",
+    });
   });
 
   it("accepts range=7d", async () => {
-    mockedRun
-      .mockResolvedValueOnce(rows(["keyword", "mentions"], []))
-      .mockResolvedValueOnce(rows(["coin_id", "price_usd", "change_24h_pct", "mention_count"], []))
-      .mockResolvedValueOnce(rows(["keyword", "overlap_count"], []))
-      .mockResolvedValueOnce(rows(["location", "temperature_c", "humidity_pct"], []))
-      .mockResolvedValueOnce(rows(["language", "repo_count"], []))
-      .mockResolvedValueOnce(rows(["title", "score", "num_comments", "author", "link"], []));
+    mockAllEmpty();
 
     const response = await GET(makeRequest("http://localhost/api/insights?range=7d"));
     const body = await response.json();
@@ -79,31 +117,20 @@ describe("GET /api/insights", () => {
   });
 
   it("falls back to today for an invalid range value", async () => {
-    mockedRun
-      .mockResolvedValueOnce(rows(["keyword", "mentions"], []))
-      .mockResolvedValueOnce(rows(["coin_id", "price_usd", "change_24h_pct", "mention_count"], []))
-      .mockResolvedValueOnce(rows(["keyword", "overlap_count"], []))
-      .mockResolvedValueOnce(rows(["location", "temperature_c", "humidity_pct"], []))
-      .mockResolvedValueOnce(rows(["language", "repo_count"], []))
-      .mockResolvedValueOnce(rows(["title", "score", "num_comments", "author", "link"], []));
+    mockAllEmpty();
 
     const response = await GET(makeRequest("http://localhost/api/insights?range=bogus"));
     const body = await response.json();
     expect(body.range).toBe("today");
   });
 
-  it("returns null hnSpotlight when there are no stories in range", async () => {
-    mockedRun
-      .mockResolvedValueOnce(rows(["keyword", "mentions"], []))
-      .mockResolvedValueOnce(rows(["coin_id", "price_usd", "change_24h_pct", "mention_count"], []))
-      .mockResolvedValueOnce(rows(["keyword", "overlap_count"], []))
-      .mockResolvedValueOnce(rows(["location", "temperature_c", "humidity_pct"], []))
-      .mockResolvedValueOnce(rows(["language", "repo_count"], []))
-      .mockResolvedValueOnce(rows(["title", "score", "num_comments", "author", "link"], []));
+  it("returns null hnSpotlight and hnControversial when there are no stories in range", async () => {
+    mockAllEmpty();
 
     const response = await GET(makeRequest("http://localhost/api/insights"));
     const body = await response.json();
     expect(body.hnSpotlight).toBeNull();
+    expect(body.hnControversial).toBeNull();
   });
 
   it("returns 500 with a safe message when Athena fails", async () => {

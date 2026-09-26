@@ -4,7 +4,10 @@ import {
   buildCryptoMentionsQuery,
   buildGithubHnOverlapQuery,
   buildGithubLanguagesQuery,
+  buildGithubStarsQuery,
+  buildCryptoRankingQuery,
   buildHnSpotlightQuery,
+  buildHnControversialQuery,
   buildWeatherSnapshotQuery,
 } from "./insightsQueries";
 
@@ -61,12 +64,39 @@ describe("buildGithubLanguagesQuery", () => {
   });
 });
 
+describe("buildGithubStarsQuery", () => {
+  it("dedupes by repo_id (latest ingest) before ranking by stars, capped at 6", () => {
+    const sql = buildGithubStarsQuery(PARTS_TODAY);
+    expect(sql).toContain("ROW_NUMBER() OVER (PARTITION BY repo_id ORDER BY ingested_at DESC)");
+    expect(sql).toContain("ORDER BY stars DESC");
+    expect(sql).toContain("LIMIT 6");
+  });
+});
+
+describe("buildCryptoRankingQuery", () => {
+  it("dedupes by coin_id (latest observed_at) and orders by market cap", () => {
+    const sql = buildCryptoRankingQuery(PARTS_TODAY);
+    expect(sql).toContain("ROW_NUMBER() OVER (PARTITION BY coin_id ORDER BY observed_at DESC)");
+    expect(sql).toContain("ORDER BY market_cap_usd DESC");
+    expect(sql).toContain("volume_24h_usd");
+  });
+});
+
 describe("buildHnSpotlightQuery", () => {
   it("picks the single highest-scoring story and falls back to permalink when url is blank", () => {
     const sql = buildHnSpotlightQuery(PARTS_TODAY);
     expect(sql).toContain("ORDER BY score DESC");
     expect(sql).toContain("LIMIT 1");
     expect(sql).toContain("COALESCE(NULLIF(url, ''), permalink)");
+  });
+});
+
+describe("buildHnControversialQuery", () => {
+  it("filters out near-zero-score noise and ranks by comments-per-score", () => {
+    const sql = buildHnControversialQuery(PARTS_TODAY);
+    expect(sql).toContain("score >= 10");
+    expect(sql).toContain("ORDER BY CAST(num_comments AS DOUBLE) / score DESC");
+    expect(sql).toContain("LIMIT 1");
   });
 });
 

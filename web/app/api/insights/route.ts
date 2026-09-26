@@ -8,6 +8,9 @@ import {
   buildGithubHnOverlapQuery,
   buildGithubLanguagesQuery,
   buildHnSpotlightQuery,
+  buildGithubStarsQuery,
+  buildCryptoRankingQuery,
+  buildHnControversialQuery,
   buildWeatherSnapshotQuery,
 } from "@/lib/insightsQueries";
 import type { InsightsResponse } from "@/lib/types";
@@ -21,13 +24,26 @@ export async function GET(request: NextRequest) {
     const partsList = lastNDaysUtcParts(range === "7d" ? 7 : 1);
     const athena = getAthenaClient();
 
-    const [keywordRows, cryptoRows, overlapRows, weatherRows, languageRows, spotlightRows] = await Promise.all([
+    const [
+      keywordRows,
+      cryptoRows,
+      overlapRows,
+      weatherRows,
+      languageRows,
+      spotlightRows,
+      starsRows,
+      rankingRows,
+      controversialRows,
+    ] = await Promise.all([
       runAthenaQuery(athena, buildTopKeywordsQuery(partsList)),
       runAthenaQuery(athena, buildCryptoMentionsQuery(partsList)),
       runAthenaQuery(athena, buildGithubHnOverlapQuery(partsList)),
       runAthenaQuery(athena, buildWeatherSnapshotQuery(todayUtcParts())),
       runAthenaQuery(athena, buildGithubLanguagesQuery(partsList)),
       runAthenaQuery(athena, buildHnSpotlightQuery(partsList)),
+      runAthenaQuery(athena, buildGithubStarsQuery(partsList)),
+      runAthenaQuery(athena, buildCryptoRankingQuery(partsList)),
+      runAthenaQuery(athena, buildHnControversialQuery(partsList)),
     ]);
 
     const response: InsightsResponse = {
@@ -57,6 +73,25 @@ export async function GET(request: NextRequest) {
       })),
       hnSpotlight:
         parseAthenaRows(spotlightRows, (cols) => ({
+          title: cols[0] ?? "",
+          score: Number(cols[1] ?? 0),
+          comments: Number(cols[2] ?? 0),
+          author: cols[3] ?? "",
+          url: cols[4] ?? "",
+        }))[0] ?? null,
+      githubStars: parseAthenaRows(starsRows, (cols) => ({
+        fullName: cols[0] ?? "",
+        stars: Number(cols[1] ?? 0),
+        forks: Number(cols[2] ?? 0),
+        language: cols[3] ?? "",
+      })),
+      cryptoRanking: parseAthenaRows(rankingRows, (cols) => ({
+        coinId: cols[0] ?? "",
+        marketCapUsd: Number(cols[1] ?? 0),
+        volume24hUsd: Number(cols[2] ?? 0),
+      })),
+      hnControversial:
+        parseAthenaRows(controversialRows, (cols) => ({
           title: cols[0] ?? "",
           score: Number(cols[1] ?? 0),
           comments: Number(cols[2] ?? 0),

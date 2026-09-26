@@ -55,6 +55,9 @@ export type GithubHnOverlap = { keyword: string; overlapCount: number };
 export type WeatherSnapshot = { location: string; temperatureC: number; humidityPct: number };
 export type GithubLanguage = { language: string; repoCount: number };
 export type HnSpotlight = { title: string; score: number; comments: number; author: string; url: string };
+export type GithubStarRepo = { fullName: string; stars: number; forks: number; language: string };
+export type CryptoRanking = { coinId: string; marketCapUsd: number; volume24hUsd: number };
+export type HnControversial = { title: string; score: number; comments: number; author: string; url: string };
 
 export type InsightsResponse = {
   range: "today" | "7d";
@@ -64,6 +67,9 @@ export type InsightsResponse = {
   weatherSnapshot: WeatherSnapshot[];
   githubLanguages: GithubLanguage[];
   hnSpotlight: HnSpotlight | null;
+  githubStars: GithubStarRepo[];
+  cryptoRanking: CryptoRanking[];
+  hnControversial: HnControversial | null;
 };
 
 export type LambdaHealthRow = {

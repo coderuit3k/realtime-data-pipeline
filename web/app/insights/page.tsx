@@ -5,6 +5,15 @@ import type { InsightsResponse } from "@/lib/types";
 
 type Range = "today" | "7d";
 
+function formatUsdCompact(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9) return `$${(value / 1e9).toFixed(1)}B`;
+  if (abs >= 1e6) return `$${(value / 1e6).toFixed(1)}M`;
+  if (abs >= 1e3) return `$${(value / 1e3).toFixed(1)}K`;
+  return `$${value.toFixed(2)}`;
+}
+
 export default function InsightsPage() {
   const [range, setRange] = useState<Range>("today");
   const [data, setData] = useState<InsightsResponse | null>(null);
@@ -58,6 +67,7 @@ export default function InsightsPage() {
   const maxMentions = Math.max(1, ...data.topKeywords.map((k) => k.mentions));
   const maxOverlap = Math.max(1, ...data.githubHnOverlap.map((o) => o.overlapCount));
   const maxLanguages = Math.max(1, ...data.githubLanguages.map((l) => l.repoCount));
+  const maxStars = Math.max(1, ...data.githubStars.map((r) => r.stars));
 
   return (
     <div className="p-9 flex flex-col gap-5">
@@ -219,6 +229,80 @@ export default function InsightsPage() {
               </a>
               <span className="font-mono tabular-nums text-[11px] text-textMuted">
                 {data.hnSpotlight.score} điểm · {data.hnSpotlight.comments} bình luận · {data.hnSpotlight.author}
+              </span>
+            </div>
+          ) : (
+            <span className="text-[11px] text-textMuted">Chưa có story nào.</span>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="text-accent">
+              <path d="M12 2 15.09 8.26 22 9.27 17 14.14 18.18 21 12 17.77 5.82 21 7 14.14 2 9.27 8.91 8.26 12 2Z" />
+            </svg>
+            <span className="text-[13px] font-semibold text-textPrimary">Repo nhiều sao nhất trên GitHub</span>
+          </div>
+          <div className="flex flex-col gap-2.5">
+            {data.githubStars.map((r, i) => (
+              <div key={r.fullName} className="flex items-center gap-2.5">
+                <span className="w-32 text-[11.5px] text-textSecondary">{r.fullName}</span>
+                <div className="flex-grow h-2 rounded bg-border">
+                  <div
+                    className={`h-full rounded ${i === 0 ? "bg-accent" : "bg-textMuted"}`}
+                    style={{ width: `${(r.stars / maxStars) * 100}%` }}
+                  />
+                </div>
+                <span className="font-mono tabular-nums text-[11px] text-textMuted">{r.stars}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="text-accent">
+              <line x1="6" y1="20" x2="6" y2="14" />
+              <line x1="12" y1="20" x2="12" y2="4" />
+              <line x1="18" y1="20" x2="18" y2="10" />
+            </svg>
+            <span className="text-[13px] font-semibold text-textPrimary">Crypto: vốn hoá & khối lượng giao dịch</span>
+          </div>
+          <div className="flex flex-col gap-3">
+            {data.cryptoRanking.map((c) => (
+              <div key={c.coinId} className="flex items-center justify-between">
+                <span className="text-xs text-textSecondary">{c.coinId}</span>
+                <span className="font-mono tabular-nums text-[11px] text-textMuted">
+                  KL {formatUsdCompact(c.volume24hUsd)}
+                </span>
+                <span className="font-mono tabular-nums text-xs text-textPrimary">
+                  {formatUsdCompact(c.marketCapUsd)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="text-accent">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+            </svg>
+            <span className="text-[13px] font-semibold text-textPrimary">Story gây tranh cãi nhất (HN)</span>
+          </div>
+          {data.hnControversial ? (
+            <div className="flex flex-col gap-2">
+              <a
+                href={data.hnControversial.url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[15px] leading-snug font-semibold text-textPrimary transition-colors hover:text-accent"
+              >
+                {data.hnControversial.title}
+              </a>
+              <span className="font-mono tabular-nums text-[11px] text-textMuted">
+                {data.hnControversial.comments} bình luận / {data.hnControversial.score} điểm (tỉ lệ{" "}
+                {(data.hnControversial.comments / data.hnControversial.score).toFixed(1)}) · {data.hnControversial.author}
               </span>
             </div>
           ) : (
