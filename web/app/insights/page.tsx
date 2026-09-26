@@ -86,7 +86,7 @@ export default function InsightsPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 items-start">
-        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-3 min-h-0">
+        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="text-accent">
               <path d="M3 17 9 11 13 15 21 7M21 7h-6M21 7v6" />
@@ -109,7 +109,7 @@ export default function InsightsPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-3 min-h-0">
+        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="text-accent">
               <circle cx="12" cy="12" r="9" />
@@ -132,7 +132,7 @@ export default function InsightsPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-3 min-h-0">
+        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="text-accent">
               <circle cx="9" cy="12" r="6" />
@@ -156,7 +156,7 @@ export default function InsightsPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-3 min-h-0 overflow-hidden">
+        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="text-accent">
               <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
@@ -165,7 +165,7 @@ export default function InsightsPage() {
               Thời tiết · {data.weatherSnapshot.length} khu vực
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-2.5 overflow-auto">
+          <div className="grid grid-cols-2 gap-2.5">
             {data.weatherSnapshot.map((w) => (
               <div key={w.location} className="rounded-lg border border-border bg-bg px-3 py-2.5">
                 <span className="text-[11px] text-textSecondary">{w.location}</span>
@@ -176,7 +176,7 @@ export default function InsightsPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-3 min-h-0">
+        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="text-accent">
               <path d="M16 18 22 12 16 6" />
@@ -200,7 +200,7 @@ export default function InsightsPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-3 min-h-0">
+        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="text-accent">
               <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
@@ -208,12 +208,12 @@ export default function InsightsPage() {
             <span className="text-[13px] font-semibold text-textPrimary">Story nổi bật nhất (HN)</span>
           </div>
           {data.hnSpotlight ? (
-            <div className="flex flex-col gap-2 min-h-0 overflow-hidden">
+            <div className="flex flex-col gap-2">
               <a
                 href={data.hnSpotlight.url}
                 target="_blank"
                 rel="noreferrer"
-                className="text-[15px] leading-snug font-semibold text-textPrimary transition-colors hover:text-accent line-clamp-3"
+                className="text-[15px] leading-snug font-semibold text-textPrimary transition-colors hover:text-accent"
               >
                 {data.hnSpotlight.title}
               </a>
