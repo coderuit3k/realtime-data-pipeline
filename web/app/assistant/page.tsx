@@ -168,9 +168,6 @@ export default function AssistantPage() {
     <div className="p-9 flex flex-col gap-5 h-screen">
       <div>
         <h1 className="font-heading text-2xl font-semibold text-textPrimary">RAG Assistant</h1>
-        <p className="mt-1.5 text-sm text-textSecondary">
-          Agentic RAG — agent tự quyết định gọi tool truy xuất dữ liệu đã ingest hoặc tìm trên web.
-        </p>
       </div>
       <div className="grid grid-cols-[260px_1.5fr_1fr] gap-5 flex-grow min-h-0">
         <div className="flex flex-col gap-2 min-h-0">

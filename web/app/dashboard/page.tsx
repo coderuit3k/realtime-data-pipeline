@@ -163,13 +163,6 @@ export default function DashboardPage() {
     <div className="p-9 flex flex-col gap-5">
       <div>
         <h1 className="font-heading text-2xl font-semibold text-textPrimary">Live Metrics & Ops</h1>
-        <p className="mt-1.5 text-sm text-textSecondary">
-          {data.sourcesHealthy}/{data.sourcesTotal} nguồn OK · EventBridge {data.schedule.scheduleExpression}{" "}
-          <span className={data.schedule.enabled ? "text-success" : "text-error"}>
-            {data.schedule.enabled ? "ENABLED" : "DISABLED"}
-          </span>{" "}
-          · {data.alarmsTotal} CloudWatch alarm
-        </p>
       </div>
 
       <div className="grid grid-cols-3 gap-4">

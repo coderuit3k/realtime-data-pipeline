@@ -20,13 +20,6 @@ const inter = localFont({
   ],
   variable: "--font-inter",
 });
-const jetbrainsMono = localFont({
-  src: [
-    { path: "./fonts/JetBrainsMono-Variable.woff2", weight: "400" },
-    { path: "./fonts/JetBrainsMono-Variable.woff2", weight: "500" },
-  ],
-  variable: "--font-jetbrains-mono",
-});
 
 export const metadata: Metadata = {
   title: "DataPulse",
@@ -35,7 +28,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="vi" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+    <html lang="vi" className={inter.variable}>
       <body>
         <div className="flex min-h-screen">
           <Sidebar />

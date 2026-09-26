@@ -65,12 +65,6 @@ export default function ExplorerPage() {
     <div className="p-9 flex flex-col gap-5">
       <div>
         <h1 className="font-heading text-2xl font-semibold text-textPrimary">Data Explorer</h1>
-        {samples && (
-          <p className="mt-1.5 text-sm text-textSecondary">
-            Workgroup <span className="font-mono">{samples.workgroup}</span> · DB{" "}
-            <span className="font-mono">{samples.database}</span>
-          </p>
-        )}
       </div>
 
       <div className="flex gap-4 flex-grow min-h-0">

@@ -31,9 +31,12 @@ const config: Config = {
         glassPanel: "0 8px 32px rgba(0, 0, 0, 0.5)",
       },
       fontFamily: {
+        // One typeface across the whole app -- font-mono kept as an alias
+        // (rather than stripping it from every usage) so existing
+        // font-mono classes on data/labels still resolve, just to Inter.
         heading: ["var(--font-inter)"],
         body: ["var(--font-inter)"],
-        mono: ["var(--font-jetbrains-mono)"],
+        mono: ["var(--font-inter)"],
       },
       keyframes: {
         flowDot: {

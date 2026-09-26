@@ -365,7 +365,6 @@ export default function LandingPage() {
               </span>
             ))}
           </div>
-          <p className="mt-[6px] text-[11.5px] text-textMuted">Xây dựng để ứng tuyển vị trí Data Engineer Intern · 2026</p>
         </section>
       </div>
 
