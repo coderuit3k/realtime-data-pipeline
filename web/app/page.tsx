@@ -222,10 +222,6 @@ export default function LandingPage() {
     <div className="flex gap-4 p-9">
       <div className="flex-[2.6] min-w-0 flex flex-col gap-5">
         <section className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-10 py-12 flex flex-col items-center text-center gap-5">
-          <span className="flex items-center gap-2 font-mono text-[11px] tracking-wide text-accent bg-accent/10 px-3.5 py-1.5 rounded-full">
-            <span className="w-1.5 h-1.5 rounded-full bg-accent animate-ping motion-reduce:animate-none" />
-            PORTFOLIO PROJECT · DATA ENGINEERING
-          </span>
           <h1 className="max-w-3xl font-heading text-[40px] leading-[1.15] font-bold text-textPrimary">
             Pipeline dữ liệu real-time, serverless, chạy thật trên AWS
           </h1>
