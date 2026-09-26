@@ -6,6 +6,7 @@ import { KpiCard } from "@/components/KpiCard";
 import { SourceVolumeChart } from "@/components/SourceVolumeChart";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { LiveBadge } from "@/components/LiveBadge";
+import { LakehouseStorageChart } from "@/components/LakehouseStorageChart";
 import type { DashboardResponse, CostResponse } from "@/lib/types";
 
 // sourceId matches lib/settingsMeta.ts's DATA_SOURCES ids and
@@ -93,19 +94,6 @@ function logLevelColor(level: "ERROR" | "WARN" | "INFO"): string {
   if (level === "ERROR") return "text-error";
   if (level === "WARN") return "text-warning";
   return "text-accent";
-}
-
-function formatBytes(bytes: number | null): string {
-  if (bytes === null) return "—";
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let value = bytes / 1024;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex++;
-  }
-  return `${value.toFixed(1)} ${units[unitIndex]}`;
 }
 
 export default function DashboardPage() {
@@ -226,9 +214,6 @@ export default function DashboardPage() {
 
       <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-4 flex flex-col gap-3">
         <span className="text-[13px] font-semibold text-textPrimary">Realtime Ingestion Streams (5 nguồn dị chủng)</span>
-        <span className="text-[10.5px] text-textMuted">
-          ● OK nghĩa là Lambda chạy không lỗi -- một nguồn có thể OK nhưng ghi 0 bản ghi hôm nay nếu không có dữ liệu mới.
-        </span>
         <div className="grid grid-cols-5 gap-3">
           {SOURCES.map(({ sourceId, label, lambdaLabel, icon }) => {
             const health = healthBySource.get(lambdaLabel);
@@ -257,22 +242,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 gap-4">
         <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-4 flex flex-col gap-3">
           <span className="text-[13px] font-semibold text-textPrimary">Lakehouse Storage</span>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <span className="text-[11px] text-textSecondary">S3 raw</span>
-              <span className="font-mono tabular-nums text-sm text-textPrimary">{formatBytes(data.rawStorage.sizeBytes)}</span>
-              <span className="font-mono tabular-nums text-[10.5px] text-textMuted">
-                {data.rawStorage.objectCount === null ? "—" : `${data.rawStorage.objectCount} object`}
-              </span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-[11px] text-textSecondary">S3 curated</span>
-              <span className="font-mono tabular-nums text-sm text-textPrimary">{formatBytes(data.curatedStorage.sizeBytes)}</span>
-              <span className="font-mono tabular-nums text-[10.5px] text-textMuted">
-                {data.curatedStorage.objectCount === null ? "—" : `${data.curatedStorage.objectCount} object`}
-              </span>
-            </div>
-          </div>
+          <LakehouseStorageChart rawStorage={data.rawStorage} curatedStorage={data.curatedStorage} />
           <div className="flex flex-col gap-1 pt-1 border-t border-border">
             <span className="text-[11px] text-textSecondary">Athena avg query time (24h)</span>
             <span className="font-mono tabular-nums text-sm text-textPrimary">
@@ -333,9 +303,6 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
-          <span className="text-[10.5px] text-textMuted">
-            4 hạng mục có giá cụ thể nhất -- ước tính tĩnh/tháng từ infra/README.md, không phải số liệu Cost Explorer theo thời gian thực. Xem infra/README.md.
-          </span>
         </div>
 
         <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-4 flex flex-col gap-2.5">
