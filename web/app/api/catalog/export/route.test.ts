@@ -29,10 +29,11 @@ const mockedRun = vi.mocked(runAthenaQueryWithStats);
 const mockedBuild = vi.mocked(buildCatalogWorkbook);
 const mockedUpload = vi.mocked(uploadAndPresign);
 
-function makeRequest(): NextRequest {
+function makeRequest(body?: unknown): NextRequest {
   return new NextRequest("http://localhost/api/catalog/export", {
     method: "POST",
     headers: { "x-forwarded-for": "9.9.9.9" },
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
 
@@ -95,6 +96,51 @@ describe("POST /api/catalog/export", () => {
       Buffer.from("fake-xlsx"),
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     );
+  });
+
+  it("exports only the requested table as a single sheet", async () => {
+    mockedCheckRateLimit.mockResolvedValue({ allowed: true, remaining: 2 });
+    mockedRun.mockResolvedValue({
+      columns: ["coin_id"],
+      rows: [athenaRow("coin_id"), athenaRow("bitcoin")],
+      stats: { dataScannedInBytes: 0, engineExecutionTimeMs: 0 },
+      hasMoreRows: false,
+    });
+    mockedBuild.mockResolvedValue(Buffer.from("fake-xlsx"));
+    mockedUpload.mockResolvedValue("https://example.r2.dev/signed-url");
+
+    const response = await POST(makeRequest({ table: "crypto_prices" }));
+
+    expect(response.status).toBe(200);
+    expect(mockedRun).toHaveBeenCalledTimes(1);
+    const where = partitionWhere(todayUtcParts());
+    expect(mockedRun).toHaveBeenCalledWith(
+      expect.anything(),
+      `SELECT * FROM crypto_prices ${where} ORDER BY ingested_at DESC LIMIT 999`,
+      1000
+    );
+    expect(mockedBuild).toHaveBeenCalledWith([
+      { name: "crypto_prices", columns: ["coin_id"], rows: [["bitcoin"]] },
+    ]);
+    expect(mockedUpload).toHaveBeenCalledWith(
+      expect.anything(),
+      "fake-R2_EXCEL_BUCKET_NAME",
+      expect.stringMatching(/^exports\/catalog-crypto_prices-.*\.xlsx$/),
+      Buffer.from("fake-xlsx"),
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+  });
+
+  it("rejects a table name that isn't one of the 5 curated tables, without querying Athena", async () => {
+    mockedCheckRateLimit.mockResolvedValue({ allowed: true, remaining: 2 });
+
+    const response = await POST(makeRequest({ table: "gmail_messages" }));
+
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.error).toBe("Bảng không hợp lệ.");
+    expect(mockedCheckRateLimit).not.toHaveBeenCalled();
+    expect(mockedRun).not.toHaveBeenCalled();
   });
 
   it("returns a safe 500 and never uploads when an Athena query fails", async () => {

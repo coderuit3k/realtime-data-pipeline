@@ -20,6 +20,13 @@ const EXPORT_TABLES = [
 const XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 export async function POST(request: NextRequest) {
+  const body = await request.json().catch(() => null);
+  const requestedTable = typeof body?.table === "string" ? body.table : null;
+  if (requestedTable !== null && !EXPORT_TABLES.includes(requestedTable)) {
+    return NextResponse.json({ error: "Bảng không hợp lệ." }, { status: 400 });
+  }
+  const tables = requestedTable ? [requestedTable] : EXPORT_TABLES;
+
   const rateLimit = await checkRateLimit(clientIp(request), getExportLimiter());
   if (!rateLimit.allowed) {
     return NextResponse.json({ error: "Đợi một chút rồi thử xuất lại." }, { status: 429 });
@@ -35,7 +42,7 @@ export async function POST(request: NextRequest) {
     // + 1 header row = exactly maxResults: 1000, Athena's per-call ceiling.
     const where = partitionWhere(todayUtcParts());
     const sheets: ExportSheet[] = await Promise.all(
-      EXPORT_TABLES.map(async (table) => {
+      tables.map(async (table) => {
         const { columns, rows } = await runAthenaQueryWithStats(
           athenaClient,
           `SELECT * FROM ${table} ${where} ORDER BY ingested_at DESC LIMIT 999`,
@@ -46,7 +53,8 @@ export async function POST(request: NextRequest) {
     );
 
     const buffer = await buildCatalogWorkbook(sheets);
-    const key = `exports/catalog-${new Date().toISOString().replace(/[:.]/g, "-")}.xlsx`;
+    const suffix = requestedTable ? `${requestedTable}-` : "";
+    const key = `exports/catalog-${suffix}${new Date().toISOString().replace(/[:.]/g, "-")}.xlsx`;
     const url = await uploadAndPresign(
       getR2Client(),
       requiredEnv("R2_EXCEL_BUCKET_NAME"),
