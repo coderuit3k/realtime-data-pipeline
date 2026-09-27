@@ -3,13 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import {
-  DATA_SOURCE_COUNT,
-  LAMBDA_COUNT,
-  TEST_COUNT,
-  MONTHLY_COST_USD,
-  WEATHER_LOCATION_COUNT,
-} from "@/lib/landingMeta";
+import { DATA_SOURCE_COUNT, LAMBDA_COUNT, TEST_COUNT, MONTHLY_COST_USD } from "@/lib/landingMeta";
 import type { CommitsResponse, GithubCommit, LogEntry } from "@/lib/types";
 import { LiveBadge } from "@/components/LiveBadge";
 import { ArchitectureFlow } from "@/components/ArchitectureFlow";
@@ -126,7 +120,7 @@ const TECH_STACK: { name: string; icon: ReactNode }[] = [
   },
 ];
 
-function FeatureCard({ icon, title, description, accent = "cyan" }: { icon: ReactNode; title: string; description: string; accent?: "cyan" | "indigo" }) {
+function FeatureCard({ icon, title, accent = "cyan" }: { icon: ReactNode; title: string; accent?: "cyan" | "indigo" }) {
   return (
     <div
       className={`rounded-lg border bg-surface/75 backdrop-blur-md px-6 py-[22px] flex flex-col gap-2 ${
@@ -135,7 +129,6 @@ function FeatureCard({ icon, title, description, accent = "cyan" }: { icon: Reac
     >
       {icon}
       <span className="text-sm font-semibold text-textPrimary">{title}</span>
-      <span className="text-[12.5px] leading-relaxed text-textSecondary">{description}</span>
     </div>
   );
 }
@@ -310,7 +303,6 @@ export default function LandingPage() {
               </svg>
             }
             title={`${DATA_SOURCE_COUNT} nguồn dữ liệu dị chủng`}
-            description={`Hacker News, News API, thời tiết Open-Meteo (${WEATHER_LOCATION_COUNT} khu vực), giá crypto CoinGecko, GitHub trending — ingest mỗi 30 phút.`}
           />
           <FeatureCard
             icon={
@@ -322,7 +314,6 @@ export default function LandingPage() {
               </svg>
             }
             title="100% serverless trên AWS"
-            description="Lambda, EventBridge, S3, Glue, Athena — không quản lý server, không crawler, partition projection."
           />
           <FeatureCard
             accent="indigo"
@@ -332,7 +323,6 @@ export default function LandingPage() {
               </svg>
             }
             title="Agentic RAG thật"
-            description="Agent tự quyết định gọi tool search_knowledge_base hoặc search_web (Tavily) qua Bedrock Converse API, không phải pipeline retrieve → generate cố định."
           />
           <FeatureCard
             icon={
@@ -344,7 +334,6 @@ export default function LandingPage() {
               </svg>
             }
             title="IaC + CI/CD thật"
-            description={`Terraform 2-stack, GitHub Actions qua OIDC, gate phê duyệt thủ công trước khi apply production, ${TEST_COUNT} test tự động.`}
           />
         </section>
 
