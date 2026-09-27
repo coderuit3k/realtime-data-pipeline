@@ -26,6 +26,7 @@ def normalize_repo(item: dict) -> dict:
         "forks": item.get("forks_count"),
         "created_at": item.get("created_at"),
         "pushed_at": item.get("pushed_at"),
+        "avatar_url": (item.get("owner") or {}).get("avatar_url") or "",
         "ingested_at": datetime.now(timezone.utc).isoformat(),
     }
 

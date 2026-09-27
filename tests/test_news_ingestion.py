@@ -10,6 +10,7 @@ def test_normalize_article_maps_fields():
         "description": "Some description",
         "url": "https://example.com/article",
         "publishedAt": "2026-09-18T12:00:00Z",
+        "urlToImage": "https://example.com/thumb.jpg",
     }
 
     result = normalize_article(article)
@@ -20,6 +21,7 @@ def test_normalize_article_maps_fields():
     assert result["title"] == "Some title"
     assert result["description"] == "Some description"
     assert result["published_at"] == "2026-09-18T12:00:00Z"
+    assert result["image_url"] == "https://example.com/thumb.jpg"
     assert "ingested_at" in result
 
 
@@ -29,6 +31,22 @@ def test_normalize_article_handles_missing_source():
     result = normalize_article(article)
 
     assert result["provider"] is None
+
+
+def test_normalize_article_handles_missing_image():
+    article = {"title": "No image", "url": "https://example.com/x"}
+
+    result = normalize_article(article)
+
+    assert result["image_url"] == ""
+
+
+def test_normalize_article_handles_null_image():
+    article = {"title": "Null image", "url": "https://example.com/x", "urlToImage": None}
+
+    result = normalize_article(article)
+
+    assert result["image_url"] == ""
 
 
 @patch("ingestion.news_ingestion.write_records")

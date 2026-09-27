@@ -25,18 +25,19 @@ function rows(header: string[], data: string[][]) {
 
 // Matches the Promise.all order in route.ts: keywords, cryptoMentions,
 // githubHnOverlap, weatherSnapshot, githubLanguages, hnSpotlight,
-// githubStars, cryptoRanking, hnControversial.
+// githubStars, cryptoRanking, hnControversial, newsSpotlight.
 function mockAllEmpty() {
   mockedRun
     .mockResolvedValueOnce(rows(["keyword", "mentions"], []))
     .mockResolvedValueOnce(rows(["coin_id", "price_usd", "change_24h_pct", "mention_count"], []))
     .mockResolvedValueOnce(rows(["keyword", "overlap_count"], []))
-    .mockResolvedValueOnce(rows(["location", "temperature_c", "humidity_pct"], []))
+    .mockResolvedValueOnce(rows(["location", "temperature_c", "humidity_pct", "weather_code"], []))
     .mockResolvedValueOnce(rows(["language", "repo_count"], []))
     .mockResolvedValueOnce(rows(["title", "score", "num_comments", "author", "link"], []))
-    .mockResolvedValueOnce(rows(["full_name", "stars", "forks", "language"], []))
+    .mockResolvedValueOnce(rows(["full_name", "stars", "forks", "language", "avatar_url"], []))
     .mockResolvedValueOnce(rows(["coin_id", "market_cap_usd", "volume_24h_usd"], []))
-    .mockResolvedValueOnce(rows(["title", "score", "num_comments", "author", "link"], []));
+    .mockResolvedValueOnce(rows(["title", "score", "num_comments", "author", "link"], []))
+    .mockResolvedValueOnce(rows(["title", "provider", "url", "image_url", "published_at"], []));
 }
 
 beforeEach(() => {
@@ -51,7 +52,12 @@ describe("GET /api/insights", () => {
         rows(["coin_id", "price_usd", "change_24h_pct", "mention_count"], [["bitcoin", "81314.2", "2.4", "18"]])
       )
       .mockResolvedValueOnce(rows(["keyword", "overlap_count"], [["agent", "7"]]))
-      .mockResolvedValueOnce(rows(["location", "temperature_c", "humidity_pct"], [["Ho Chi Minh City", "31", "68"]]))
+      .mockResolvedValueOnce(
+        rows(
+          ["location", "temperature_c", "humidity_pct", "weather_code"],
+          [["Ho Chi Minh City", "31", "68", "3"]]
+        )
+      )
       .mockResolvedValueOnce(rows(["language", "repo_count"], [["Python", "174"]]))
       .mockResolvedValueOnce(
         rows(
@@ -61,8 +67,8 @@ describe("GET /api/insights", () => {
       )
       .mockResolvedValueOnce(
         rows(
-          ["full_name", "stars", "forks", "language"],
-          [["zai-org/ZCode", "6819", "2049", "TypeScript"]]
+          ["full_name", "stars", "forks", "language", "avatar_url"],
+          [["zai-org/ZCode", "6819", "2049", "TypeScript", "https://avatars.githubusercontent.com/u/1"]]
         )
       )
       .mockResolvedValueOnce(
@@ -72,6 +78,20 @@ describe("GET /api/insights", () => {
         rows(
           ["title", "score", "num_comments", "author", "link"],
           [["Can AI Shopping Agents Be Trusted?", "14", "26", "ddaniel10", "https://example.com/agents"]]
+        )
+      )
+      .mockResolvedValueOnce(
+        rows(
+          ["title", "provider", "url", "image_url", "published_at"],
+          [
+            [
+              "AI regulation heats up",
+              "BBC News",
+              "https://example.com/news-article",
+              "https://example.com/thumb.jpg",
+              "2026-09-20T08:00:00Z",
+            ],
+          ]
         )
       );
 
@@ -84,7 +104,9 @@ describe("GET /api/insights", () => {
       { coinId: "bitcoin", priceUsd: 81314.2, change24hPct: 2.4, mentionCount: 18 },
     ]);
     expect(body.githubHnOverlap).toEqual([{ keyword: "agent", overlapCount: 7 }]);
-    expect(body.weatherSnapshot).toEqual([{ location: "Ho Chi Minh City", temperatureC: 31, humidityPct: 68 }]);
+    expect(body.weatherSnapshot).toEqual([
+      { location: "Ho Chi Minh City", temperatureC: 31, humidityPct: 68, weatherCode: 3 },
+    ]);
     expect(body.githubLanguages).toEqual([{ language: "Python", repoCount: 174 }]);
     expect(body.hnSpotlight).toEqual({
       title: "Breaking Up with Google Play",
@@ -94,7 +116,13 @@ describe("GET /api/insights", () => {
       url: "https://example.com/story",
     });
     expect(body.githubStars).toEqual([
-      { fullName: "zai-org/ZCode", stars: 6819, forks: 2049, language: "TypeScript" },
+      {
+        fullName: "zai-org/ZCode",
+        stars: 6819,
+        forks: 2049,
+        language: "TypeScript",
+        avatarUrl: "https://avatars.githubusercontent.com/u/1",
+      },
     ]);
     expect(body.cryptoRanking).toEqual([
       { coinId: "bitcoin", marketCapUsd: 1686742462959.38, volume24hUsd: 22084196107.17 },
@@ -105,6 +133,13 @@ describe("GET /api/insights", () => {
       comments: 26,
       author: "ddaniel10",
       url: "https://example.com/agents",
+    });
+    expect(body.newsSpotlight).toEqual({
+      title: "AI regulation heats up",
+      provider: "BBC News",
+      url: "https://example.com/news-article",
+      imageUrl: "https://example.com/thumb.jpg",
+      publishedAt: "2026-09-20T08:00:00Z",
     });
   });
 
@@ -124,13 +159,14 @@ describe("GET /api/insights", () => {
     expect(body.range).toBe("today");
   });
 
-  it("returns null hnSpotlight and hnControversial when there are no stories in range", async () => {
+  it("returns null hnSpotlight, hnControversial, and newsSpotlight when there's nothing in range", async () => {
     mockAllEmpty();
 
     const response = await GET(makeRequest("http://localhost/api/insights"));
     const body = await response.json();
     expect(body.hnSpotlight).toBeNull();
     expect(body.hnControversial).toBeNull();
+    expect(body.newsSpotlight).toBeNull();
   });
 
   it("returns 500 with a safe message when Athena fails", async () => {

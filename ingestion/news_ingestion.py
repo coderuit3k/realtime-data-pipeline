@@ -24,6 +24,7 @@ def normalize_article(article: dict) -> dict:
         "description": article.get("description"),
         "url": article.get("url"),
         "published_at": article.get("publishedAt"),
+        "image_url": article.get("urlToImage") or "",
         "ingested_at": datetime.now(timezone.utc).isoformat(),
     }
 

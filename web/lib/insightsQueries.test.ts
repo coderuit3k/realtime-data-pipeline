@@ -9,6 +9,7 @@ import {
   buildHnSpotlightQuery,
   buildHnControversialQuery,
   buildWeatherSnapshotQuery,
+  buildNewsSpotlightQuery,
 } from "./insightsQueries";
 
 const PARTS_TODAY = [{ year: "2026", month: "09", day: "20" }];
@@ -71,6 +72,11 @@ describe("buildGithubStarsQuery", () => {
     expect(sql).toContain("ORDER BY stars DESC");
     expect(sql).toContain("LIMIT 6");
   });
+
+  it("selects avatar_url for rendering the repo owner's avatar", () => {
+    const sql = buildGithubStarsQuery(PARTS_TODAY);
+    expect(sql).toContain("avatar_url");
+  });
 });
 
 describe("buildCryptoRankingQuery", () => {
@@ -105,5 +111,26 @@ describe("buildWeatherSnapshotQuery", () => {
     const sql = buildWeatherSnapshotQuery(PARTS_TODAY[0]);
     expect(sql).toContain("ROW_NUMBER() OVER (PARTITION BY location ORDER BY observed_at DESC)");
     expect(sql).toContain("day='20'");
+  });
+
+  it("selects weather_code for rendering a per-location icon", () => {
+    const sql = buildWeatherSnapshotQuery(PARTS_TODAY[0]);
+    expect(sql).toContain("weather_code");
+  });
+});
+
+describe("buildNewsSpotlightQuery", () => {
+  it("picks the most recent article that has a thumbnail image", () => {
+    const sql = buildNewsSpotlightQuery(PARTS_TODAY);
+    expect(sql).toContain("FROM news_articles");
+    expect(sql).toContain("image_url <> ''");
+    expect(sql).toContain("ORDER BY published_at DESC");
+    expect(sql).toContain("LIMIT 1");
+  });
+
+  it("references every day in a multi-day range", () => {
+    const sql = buildNewsSpotlightQuery(PARTS_7D);
+    expect(sql).toContain("day='20'");
+    expect(sql).toContain("day='19'");
   });
 });

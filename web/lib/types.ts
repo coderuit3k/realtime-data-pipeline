@@ -52,12 +52,30 @@ export type ExplorerQueryResult = {
 export type TopKeyword = { keyword: string; mentions: number };
 export type CryptoMention = { coinId: string; priceUsd: number; change24hPct: number; mentionCount: number };
 export type GithubHnOverlap = { keyword: string; overlapCount: number };
-export type WeatherSnapshot = { location: string; temperatureC: number; humidityPct: number };
+export type WeatherSnapshot = {
+  location: string;
+  temperatureC: number;
+  humidityPct: number;
+  weatherCode: number;
+};
 export type GithubLanguage = { language: string; repoCount: number };
 export type HnSpotlight = { title: string; score: number; comments: number; author: string; url: string };
-export type GithubStarRepo = { fullName: string; stars: number; forks: number; language: string };
+export type GithubStarRepo = {
+  fullName: string;
+  stars: number;
+  forks: number;
+  language: string;
+  avatarUrl: string;
+};
 export type CryptoRanking = { coinId: string; marketCapUsd: number; volume24hUsd: number };
 export type HnControversial = { title: string; score: number; comments: number; author: string; url: string };
+export type NewsSpotlight = {
+  title: string;
+  provider: string;
+  url: string;
+  imageUrl: string;
+  publishedAt: string;
+};
 
 export type InsightsResponse = {
   range: "today" | "7d";
@@ -70,6 +88,7 @@ export type InsightsResponse = {
   githubStars: GithubStarRepo[];
   cryptoRanking: CryptoRanking[];
   hnControversial: HnControversial | null;
+  newsSpotlight: NewsSpotlight | null;
 };
 
 export type LambdaHealthRow = {

@@ -12,6 +12,7 @@ import {
   buildCryptoRankingQuery,
   buildHnControversialQuery,
   buildWeatherSnapshotQuery,
+  buildNewsSpotlightQuery,
 } from "@/lib/insightsQueries";
 import type { InsightsResponse } from "@/lib/types";
 
@@ -34,6 +35,7 @@ export async function GET(request: NextRequest) {
       starsRows,
       rankingRows,
       controversialRows,
+      newsSpotlightRows,
     ] = await Promise.all([
       runAthenaQuery(athena, buildTopKeywordsQuery(partsList)),
       runAthenaQuery(athena, buildCryptoMentionsQuery(partsList)),
@@ -44,6 +46,7 @@ export async function GET(request: NextRequest) {
       runAthenaQuery(athena, buildGithubStarsQuery(partsList)),
       runAthenaQuery(athena, buildCryptoRankingQuery(partsList)),
       runAthenaQuery(athena, buildHnControversialQuery(partsList)),
+      runAthenaQuery(athena, buildNewsSpotlightQuery(partsList)),
     ]);
 
     const response: InsightsResponse = {
@@ -66,6 +69,7 @@ export async function GET(request: NextRequest) {
         location: cols[0] ?? "",
         temperatureC: Number(cols[1] ?? 0),
         humidityPct: Number(cols[2] ?? 0),
+        weatherCode: Number(cols[3] ?? 0),
       })),
       githubLanguages: parseAthenaRows(languageRows, (cols) => ({
         language: cols[0] ?? "",
@@ -84,6 +88,7 @@ export async function GET(request: NextRequest) {
         stars: Number(cols[1] ?? 0),
         forks: Number(cols[2] ?? 0),
         language: cols[3] ?? "",
+        avatarUrl: cols[4] ?? "",
       })),
       cryptoRanking: parseAthenaRows(rankingRows, (cols) => ({
         coinId: cols[0] ?? "",
@@ -97,6 +102,14 @@ export async function GET(request: NextRequest) {
           comments: Number(cols[2] ?? 0),
           author: cols[3] ?? "",
           url: cols[4] ?? "",
+        }))[0] ?? null,
+      newsSpotlight:
+        parseAthenaRows(newsSpotlightRows, (cols) => ({
+          title: cols[0] ?? "",
+          provider: cols[1] ?? "",
+          url: cols[2] ?? "",
+          imageUrl: cols[3] ?? "",
+          publishedAt: cols[4] ?? "",
         }))[0] ?? null,
     };
 

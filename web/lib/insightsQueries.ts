@@ -73,9 +73,9 @@ LIMIT 1`;
 
 export function buildGithubStarsQuery(partsList: TodayParts[]): string {
   const where = partitionPredicateAny(partsList);
-  return `SELECT full_name, stars, forks, language
+  return `SELECT full_name, stars, forks, language, avatar_url
 FROM (
-  SELECT full_name, stars, forks, language,
+  SELECT full_name, stars, forks, language, avatar_url,
          ROW_NUMBER() OVER (PARTITION BY repo_id ORDER BY ingested_at DESC) AS rn
   FROM github_repos
   WHERE ${where}
@@ -112,13 +112,22 @@ LIMIT 1`;
 
 export function buildWeatherSnapshotQuery(parts: TodayParts): string {
   const where = partitionPredicateAny([parts]);
-  return `SELECT location, temperature_c, humidity_pct
+  return `SELECT location, temperature_c, humidity_pct, weather_code
 FROM (
-  SELECT location, temperature_c, humidity_pct,
+  SELECT location, temperature_c, humidity_pct, weather_code,
          ROW_NUMBER() OVER (PARTITION BY location ORDER BY observed_at DESC) AS rn
   FROM weather_observations
   WHERE ${where}
 ) ranked
 WHERE rn = 1
 ORDER BY location`;
+}
+
+export function buildNewsSpotlightQuery(partsList: TodayParts[]): string {
+  const where = partitionPredicateAny(partsList);
+  return `SELECT title, provider, url, image_url, published_at
+FROM news_articles
+WHERE (${where}) AND image_url <> ''
+ORDER BY published_at DESC
+LIMIT 1`;
 }

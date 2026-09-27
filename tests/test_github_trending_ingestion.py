@@ -14,6 +14,7 @@ def test_normalize_repo_maps_fields():
         "forks_count": 430,
         "created_at": "2026-09-16T21:30:12Z",
         "pushed_at": "2026-09-18T16:28:35Z",
+        "owner": {"avatar_url": "https://avatars.githubusercontent.com/u/1?v=4"},
     }
 
     result = normalize_repo(item)
@@ -26,6 +27,7 @@ def test_normalize_repo_maps_fields():
     assert result["language"] == "Python"
     assert result["stars"] == 6699
     assert result["forks"] == 430
+    assert result["avatar_url"] == "https://avatars.githubusercontent.com/u/1?v=4"
     assert "ingested_at" in result
 
 
@@ -36,6 +38,40 @@ def test_normalize_repo_handles_missing_description_and_language():
 
     assert result["description"] == ""
     assert result["language"] == ""
+
+
+def test_normalize_repo_handles_missing_owner():
+    item = {"id": 1, "full_name": "org/repo", "html_url": "https://github.com/org/repo"}
+
+    result = normalize_repo(item)
+
+    assert result["avatar_url"] == ""
+
+
+def test_normalize_repo_handles_null_owner():
+    item = {
+        "id": 1,
+        "full_name": "org/repo",
+        "html_url": "https://github.com/org/repo",
+        "owner": None,
+    }
+
+    result = normalize_repo(item)
+
+    assert result["avatar_url"] == ""
+
+
+def test_normalize_repo_handles_owner_without_avatar_url():
+    item = {
+        "id": 1,
+        "full_name": "org/repo",
+        "html_url": "https://github.com/org/repo",
+        "owner": {"login": "org"},
+    }
+
+    result = normalize_repo(item)
+
+    assert result["avatar_url"] == ""
 
 
 @patch("ingestion.github_trending_ingestion.write_records")

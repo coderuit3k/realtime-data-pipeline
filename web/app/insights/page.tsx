@@ -2,6 +2,31 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { InsightsResponse } from "@/lib/types";
+import { weatherIconGroup, WEATHER_ICON_PATHS } from "@/lib/weatherIcons";
+import { cryptoTicker } from "@/lib/cryptoIcons";
+
+function WeatherIcon({ code }: { code: number }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="text-accent shrink-0"
+    >
+      <path d={WEATHER_ICON_PATHS[weatherIconGroup(code)]} />
+    </svg>
+  );
+}
+
+function CryptoTickerBadge({ coinId }: { coinId: string }) {
+  const { symbol, colorClass } = cryptoTicker(coinId);
+  return <span className={`font-mono text-[10px] font-semibold ${colorClass}`}>{symbol}</span>;
+}
 
 type Range = "today" | "7d";
 
@@ -131,7 +156,10 @@ export default function InsightsPage() {
           <div className="flex flex-col gap-3">
             {data.cryptoMentions.map((c) => (
               <div key={c.coinId} className="flex items-center justify-between">
-                <span className="text-xs text-textSecondary">{c.coinId}</span>
+                <span className="flex items-center gap-1.5 text-xs text-textSecondary">
+                  <CryptoTickerBadge coinId={c.coinId} />
+                  {c.coinId}
+                </span>
                 <span className="font-mono tabular-nums text-[11px] text-textMuted">{c.mentionCount} mentions</span>
                 <span className={`font-mono tabular-nums text-xs ${c.change24hPct >= 0 ? "text-success" : "text-error"}`}>
                   {c.change24hPct >= 0 ? "+" : ""}
@@ -178,7 +206,10 @@ export default function InsightsPage() {
           <div className="grid grid-cols-2 gap-2.5">
             {data.weatherSnapshot.map((w) => (
               <div key={w.location} className="rounded-lg border border-border bg-bg px-3 py-2.5">
-                <span className="text-[11px] text-textSecondary">{w.location}</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-textSecondary">{w.location}</span>
+                  <WeatherIcon code={w.weatherCode} />
+                </div>
                 <div className="font-mono tabular-nums text-base text-textPrimary">{w.temperatureC.toFixed(0)}°C</div>
                 <span className="text-[10.5px] text-textMuted">độ ẩm <span className="tabular-nums">{w.humidityPct.toFixed(0)}%</span></span>
               </div>
@@ -246,6 +277,20 @@ export default function InsightsPage() {
           <div className="flex flex-col gap-2.5">
             {data.githubStars.map((r, i) => (
               <div key={r.fullName} className="flex items-center gap-2.5">
+                {r.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={r.avatarUrl}
+                    alt=""
+                    width={16}
+                    height={16}
+                    loading="lazy"
+                    className="h-4 w-4 shrink-0 rounded-full"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
+                ) : null}
                 <span className="w-32 text-[11.5px] text-textSecondary">{r.fullName}</span>
                 <div className="flex-grow h-2 rounded bg-border">
                   <div
@@ -271,7 +316,10 @@ export default function InsightsPage() {
           <div className="flex flex-col gap-3">
             {data.cryptoRanking.map((c) => (
               <div key={c.coinId} className="flex items-center justify-between">
-                <span className="text-xs text-textSecondary">{c.coinId}</span>
+                <span className="flex items-center gap-1.5 text-xs text-textSecondary">
+                  <CryptoTickerBadge coinId={c.coinId} />
+                  {c.coinId}
+                </span>
                 <span className="font-mono tabular-nums text-[11px] text-textMuted">
                   KL {formatUsdCompact(c.volume24hUsd)}
                 </span>
@@ -307,6 +355,45 @@ export default function InsightsPage() {
             </div>
           ) : (
             <span className="text-[11px] text-textMuted">Chưa có story nào.</span>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="text-accent">
+              <rect x="3" y="4" width="18" height="14" rx="2" />
+              <path d="m3 15 5-4 4 3 4-5 5 4" />
+            </svg>
+            <span className="text-[13px] font-semibold text-textPrimary">Tin nổi bật (News)</span>
+          </div>
+          {data.newsSpotlight ? (
+            <div className="flex gap-3">
+              {data.newsSpotlight.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={data.newsSpotlight.imageUrl}
+                  alt=""
+                  className="h-16 w-24 shrink-0 rounded-lg object-cover"
+                  loading="lazy"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
+                />
+              ) : null}
+              <div className="flex flex-col gap-1.5 min-w-0">
+                <a
+                  href={data.newsSpotlight.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[13.5px] leading-snug font-semibold text-textPrimary transition-colors hover:text-accent line-clamp-2"
+                >
+                  {data.newsSpotlight.title}
+                </a>
+                <span className="text-[11px] text-textMuted">{data.newsSpotlight.provider}</span>
+              </div>
+            </div>
+          ) : (
+            <span className="text-[11px] text-textMuted">Chưa có tin nào.</span>
           )}
         </div>
       </div>

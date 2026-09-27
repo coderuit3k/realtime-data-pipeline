@@ -41,6 +41,7 @@ locals {
     { name = "published_at", type = "string", comment = "Publish time as reported by NewsAPI (publisher-supplied, not independently verified)." },
     { name = "ingested_at", type = "string", comment = "Time this record was fetched by the ingestion Lambda, ISO 8601 UTC." },
     { name = "keywords", type = "string", comment = "Comma-separated topical keywords extracted from title/description by the transform step (LLM via Bedrock, falls back to regex on failure)." },
+    { name = "image_url", type = "string", comment = "Article thumbnail (NewsAPI's urlToImage), empty string when NewsAPI didn't provide one. Rows ingested before this column existed read back NULL, not empty string." },
   ]
 
   weather_columns = [
@@ -85,6 +86,7 @@ locals {
     { name = "pushed_at", type = "string", comment = "Timestamp of the most recent push to the repo, ISO 8601, as reported by GitHub." },
     { name = "ingested_at", type = "string", comment = "Time this record was fetched by the ingestion Lambda, ISO 8601 UTC." },
     { name = "keywords", type = "string", comment = "Comma-separated topical keywords extracted from description by the transform step (LLM via Bedrock, falls back to regex on failure)." },
+    { name = "avatar_url", type = "string", comment = "Repository owner's GitHub avatar image URL, empty string if GitHub didn't return an owner. Rows ingested before this column existed read back NULL, not empty string." },
   ]
 
   gmail_columns = [
