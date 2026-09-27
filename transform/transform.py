@@ -206,6 +206,43 @@ def transform_records(source: str, records: list[dict]) -> list[dict]:
         raise ValueError(f"Unknown source: {source}")
 
 
+# A batch that collapses this much (or more) after dedup/cleaning, once it's
+# large enough to rule out small-sample noise, usually means an upstream API
+# changed shape (e.g. the id field used for dedup started coming back empty
+# for every record, collapsing them all onto one key) rather than genuine
+# duplicates. Note this minimum has no observable effect below raw_count=6:
+# for raw_count in [3, 5], the only way to exceed the 0.8 threshold without
+# hitting cleaned_count == 0 (the separate zero-output branch above) doesn't
+# exist -- e.g. crypto's batches (CRYPTO_COIN_IDS, 3 coins) can only ever hit
+# the zero-output check, never this one.
+DUPLICATE_COLLAPSE_MIN_RAW_RECORDS = 3
+DUPLICATE_COLLAPSE_RATE_THRESHOLD = 0.8
+
+
+def detect_data_quality_issues(raw_records: list[dict], cleaned_records: list[dict]) -> list[str]:
+    """Source-agnostic anomaly checks run after transform_records -- doesn't
+    know about any source's specific fields, just the before/after counts.
+    Returns human-readable reason strings; empty list means no issues found."""
+    raw_count = len(raw_records)
+    cleaned_count = len(cleaned_records)
+
+    if raw_count == 0:
+        return []
+
+    if cleaned_count == 0:
+        return [f"zero output records from {raw_count} raw record(s)"]
+
+    if raw_count >= DUPLICATE_COLLAPSE_MIN_RAW_RECORDS:
+        collapse_rate = (raw_count - cleaned_count) / raw_count
+        if collapse_rate > DUPLICATE_COLLAPSE_RATE_THRESHOLD:
+            return [
+                f"{collapse_rate:.0%} of {raw_count} raw record(s) collapsed to "
+                f"{cleaned_count} after cleaning/dedup"
+            ]
+
+    return []
+
+
 def source_from_key(key: str) -> str:
     match = re.match(r"source=([^/]+)/", key)
     if not match:
@@ -267,6 +304,10 @@ def lambda_handler(event, context):
 
         raw_records = read_ndjson(bucket, key)
         cleaned = transform_records(source, raw_records)
+
+        for issue in detect_data_quality_issues(raw_records, cleaned):
+            logger.warning("DATA_QUALITY_ALERT source=%s reason=%s", source, issue)
+
         curated_key = write_parquet(cleaned, source)
 
         logger.info(

@@ -215,6 +215,96 @@ def test_transform_records_rejects_unknown_source():
         pass
 
 
+def test_detect_data_quality_issues_returns_empty_when_healthy():
+    raw = [{"id": i} for i in range(10)]
+    cleaned = [{"id": i} for i in range(8)]  # 20% drop, unremarkable
+    assert transform.detect_data_quality_issues(raw, cleaned) == []
+
+
+def test_detect_data_quality_issues_ignores_small_batches_below_minimum():
+    raw = [{"id": 1}, {"id": 2}]
+    cleaned = [{"id": 1}]  # 50% drop, but below the minimum raw-count guard
+    assert transform.detect_data_quality_issues(raw, cleaned) == []
+
+
+def test_detect_data_quality_issues_flags_zero_output_from_nonzero_input():
+    raw = [{"id": 1}, {"id": 2}, {"id": 3}]
+    cleaned = []
+
+    issues = transform.detect_data_quality_issues(raw, cleaned)
+
+    assert len(issues) == 1
+    assert "zero output" in issues[0]
+
+
+def test_detect_data_quality_issues_flags_zero_output_even_for_a_single_record():
+    assert len(transform.detect_data_quality_issues([{"id": 1}], [])) == 1
+
+
+def test_detect_data_quality_issues_returns_empty_for_empty_raw_batch():
+    assert transform.detect_data_quality_issues([], []) == []
+
+
+def test_detect_data_quality_issues_does_not_flag_exactly_at_the_threshold():
+    raw = [{"id": i} for i in range(10)]
+    cleaned = [{"id": 0}, {"id": 1}]  # exactly 80% collapse -- the threshold is ">", not ">="
+    assert transform.detect_data_quality_issues(raw, cleaned) == []
+
+
+def test_detect_data_quality_issues_flags_high_duplicate_collapse_rate():
+    raw = [{"id": i} for i in range(10)]
+    cleaned = [{"id": 0}]  # 90% collapsed to one record -- above the 80% threshold
+
+    issues = transform.detect_data_quality_issues(raw, cleaned)
+
+    assert len(issues) == 1
+    assert "collapsed" in issues[0]
+
+
+def test_detect_data_quality_issues_does_not_double_flag_zero_output_batch():
+    raw = [{"id": i} for i in range(10)]
+    cleaned = []  # also a 100% collapse, but zero-output already covers it
+
+    issues = transform.detect_data_quality_issues(raw, cleaned)
+
+    assert len(issues) == 1
+
+
+def test_lambda_handler_logs_data_quality_warning_for_zero_output_batch(monkeypatch, caplog):
+    monkeypatch.setattr(transform, "read_ndjson", lambda bucket, key: [{"story_id": "1"}])
+    monkeypatch.setattr(transform, "transform_records", lambda source, records: [])
+    monkeypatch.setattr(transform, "write_parquet", lambda records, source: "")
+
+    event = {
+        "Records": [
+            {"s3": {"bucket": {"name": "b"}, "object": {"key": "source=hackernews/x.json"}}}
+        ]
+    }
+
+    with caplog.at_level("WARNING"):
+        transform.lambda_handler(event, None)
+
+    assert any("DATA_QUALITY_ALERT" in message for message in caplog.messages)
+    assert any("hackernews" in message for message in caplog.messages)
+
+
+def test_lambda_handler_logs_no_warning_for_healthy_batch(monkeypatch, caplog):
+    monkeypatch.setattr(transform, "read_ndjson", lambda bucket, key: [{"story_id": "1"}])
+    monkeypatch.setattr(transform, "transform_records", lambda source, records: [{"story_id": "1"}])
+    monkeypatch.setattr(transform, "write_parquet", lambda records, source: "key")
+
+    event = {
+        "Records": [
+            {"s3": {"bucket": {"name": "b"}, "object": {"key": "source=hackernews/x.json"}}}
+        ]
+    }
+
+    with caplog.at_level("WARNING"):
+        transform.lambda_handler(event, None)
+
+    assert not any("DATA_QUALITY_ALERT" in message for message in caplog.messages)
+
+
 def test_source_from_key_parses_prefix():
     key = "source=hackernews/year=2026/month=09/day=18/file.json"
     assert transform.source_from_key(key) == "hackernews"
