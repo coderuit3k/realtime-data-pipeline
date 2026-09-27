@@ -155,7 +155,7 @@ resource "aws_lambda_function" "rag_agent" {
   runtime       = var.lambda_runtime
   # 90s was enough headroom for the original 4 tools; query_athena adds a
   # worst-case ~20s blocking poll per call (see ATHENA_MAX_POLL_ATTEMPTS *
-  # ATHENA_POLL_INTERVAL_SECONDS in rag/agent.py), and MAX_ITERATIONS (6)
+  # ATHENA_POLL_INTERVAL_SECONDS in common/athena.py), and MAX_ITERATIONS (6)
   # means it can be called more than once in a single request -- bumped for
   # that tail latency, not because this project's own tiny datasets are
   # actually slow to query.

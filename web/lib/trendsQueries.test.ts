@@ -21,4 +21,10 @@ describe("buildTrendEventsQuery", () => {
     expect(sql).toContain("day='27'");
     expect(sql).toContain("day='26'");
   });
+
+  it("dedupes by event_id, keeping the most recently detected row", () => {
+    const sql = buildTrendEventsQuery(PARTS_TODAY);
+    expect(sql).toContain("ROW_NUMBER() OVER (PARTITION BY event_id ORDER BY detected_at DESC)");
+    expect(sql).toContain("WHERE rn = 1");
+  });
 });
