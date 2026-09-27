@@ -123,12 +123,12 @@ const TECH_STACK: { name: string; icon: ReactNode }[] = [
 function FeatureCard({ icon, title, accent = "cyan" }: { icon: ReactNode; title: string; accent?: "cyan" | "indigo" }) {
   return (
     <div
-      className={`rounded-lg border bg-surface/75 backdrop-blur-md px-6 py-[22px] flex flex-col gap-2 ${
+      className={`rounded-lg border bg-surface/75 backdrop-blur-md px-5 py-5 flex items-center gap-4 transition-transform hover:scale-[1.01] ${
         accent === "indigo" ? "border-secondary/25" : "border-border"
       }`}
     >
-      {icon}
-      <span className="text-sm font-semibold text-textPrimary">{title}</span>
+      <span className="w-11 h-11 flex-shrink-0 rounded-md bg-bg flex items-center justify-center">{icon}</span>
+      <span className="text-[15px] font-semibold text-textPrimary leading-snug">{title}</span>
     </div>
   );
 }
