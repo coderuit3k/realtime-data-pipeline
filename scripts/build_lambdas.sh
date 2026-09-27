@@ -42,6 +42,7 @@ package_with_requests github_trending_ingestion ingestion/github_trending_ingest
 package_with_requests gmail_ingestion ingestion/gmail_ingestion.py
 package_no_deps transform transform/transform.py
 package_no_deps rag_build_index rag/build_index.py
+package_no_deps trend_scan trends/trend_scan.py
 package_with_requests rag_agent rag/agent.py
 
 echo "Lambda build artifacts ready under $BUILD_DIR"

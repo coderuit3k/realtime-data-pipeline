@@ -391,6 +391,64 @@ resource "aws_glue_catalog_table" "gmail_messages" {
   }
 }
 
+locals {
+  trend_events_columns = [
+    { name = "event_id", type = "string", comment = "Synthetic id \"{keyword}-{event_date}\", unique per keyword per day (not guaranteed unique across a re-run of the same day -- see trends/trend_scan.py)." },
+    { name = "keyword", type = "string", comment = "The qualifying keyword, lowercase." },
+    { name = "event_date", type = "string", comment = "YYYY-MM-DD of the scanned UTC day (also encoded in the year/month/day partition keys, kept here too for easy display without date reassembly)." },
+    { name = "github_count", type = "bigint", comment = "Distinct trending GitHub repos mentioning the keyword that day." },
+    { name = "hn_count", type = "bigint", comment = "Distinct Hacker News stories mentioning the keyword that day." },
+    { name = "news_count", type = "bigint", comment = "Distinct news articles mentioning the keyword that day." },
+    { name = "detected_at", type = "string", comment = "ISO 8601 UTC timestamp of when trend_scan ran." },
+  ]
+}
+
+resource "aws_glue_catalog_table" "trend_events" {
+  name          = "trend_events"
+  database_name = aws_glue_catalog_database.curated.name
+  table_type    = "EXTERNAL_TABLE"
+
+  parameters = merge(local.partition_projection_base, {
+    "classification"            = "parquet"
+    "storage.location.template" = "s3://${aws_s3_bucket.curated.bucket}/source=trend_events/year=$${year}/month=$${month}/day=$${day}/"
+  })
+
+  partition_keys {
+    name    = "year"
+    type    = "string"
+    comment = "Partition key, derived from the S3 key path (year=YYYY) via Athena partition projection -- not a column stored in the file itself."
+  }
+  partition_keys {
+    name    = "month"
+    type    = "string"
+    comment = "Partition key, derived from the S3 key path (month=MM, zero-padded) via Athena partition projection -- not a column stored in the file itself."
+  }
+  partition_keys {
+    name    = "day"
+    type    = "string"
+    comment = "Partition key, derived from the S3 key path (day=DD, zero-padded) via Athena partition projection -- not a column stored in the file itself."
+  }
+
+  storage_descriptor {
+    location      = "s3://${aws_s3_bucket.curated.bucket}/source=trend_events/"
+    input_format  = "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat"
+    output_format = "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat"
+
+    ser_de_info {
+      serialization_library = "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe"
+    }
+
+    dynamic "columns" {
+      for_each = local.trend_events_columns
+      content {
+        name    = columns.value.name
+        type    = columns.value.type
+        comment = columns.value.comment
+      }
+    }
+  }
+}
+
 resource "aws_athena_workgroup" "main" {
   name = "${local.name_prefix}-analytics"
 

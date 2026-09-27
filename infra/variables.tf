@@ -132,3 +132,27 @@ variable "rag_top_k" {
   type        = number
   default     = 5
 }
+
+variable "trend_scan_schedule" {
+  description = "EventBridge schedule expression for the daily trend_scan Lambda"
+  type        = string
+  default     = "cron(0 23 * * ? *)"
+}
+
+variable "trend_hn_min_stories" {
+  description = "Minimum distinct Hacker News stories mentioning a keyword in one day for it to qualify as a Trend Event"
+  type        = number
+  default     = 3
+}
+
+variable "trend_news_min_articles" {
+  description = "Minimum distinct News API articles mentioning a keyword in one day for it to qualify as a Trend Event"
+  type        = number
+  default     = 2
+}
+
+variable "trend_max_events_per_day" {
+  description = "Max number of Trend Events trend_scan will write in a single run"
+  type        = number
+  default     = 3
+}

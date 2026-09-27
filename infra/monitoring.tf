@@ -23,6 +23,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
     github_trending_ingestion = aws_lambda_function.github_trending_ingestion.function_name
     gmail_ingestion           = aws_lambda_function.gmail_ingestion.function_name
     transform                 = aws_lambda_function.transform.function_name
+    trend_scan                = aws_lambda_function.trend_scan.function_name
   }
 
   alarm_name          = "${local.name_prefix}-${each.key}-errors"
