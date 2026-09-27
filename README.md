@@ -31,6 +31,11 @@ flowchart TD
     Q[Question] --> AG[Lambda: rag_agent<br/>tool-calling loop]
     L --> AG
     AG -->|LLM decides tools/retries| R2[Answer + sources]
+
+    T[EventBridge Scheduler<br/>daily] --> TS[Lambda: trend_scan]
+    I -->|3-way keyword join| TS
+    TS --> TE[S3 trend_events<br/>Parquet]
+    TE --> H
 ```
 
 - `ingestion/` -- Lambda functions that pull from Hacker News (public,
@@ -45,6 +50,12 @@ flowchart TD
   keywords, writes Parquet to the S3 curated zone.
 - `rag/` -- on-demand serverless Agentic RAG over the curated zone (see
   [Agentic RAG](#agentic-rag) below).
+- `trends/` -- `trend_scan.py` (Lambda `<project>-trend-scan`, daily EventBridge
+  schedule): detects keywords trending simultaneously across GitHub Trending,
+  Hacker News, and News API for the current UTC day (distinct story/article/repo
+  counts per keyword, not raw mention counts -- see the module docstring),
+  writes qualifying keywords as Trend Events to the curated zone. Surfaced on
+  the web app's `/trends` page.
 - `common/` -- shared config/secrets/S3 helpers used by both.
 - `infra/` -- Terraform for the buckets, Lambdas, EventBridge schedule, S3
   trigger, Secrets Manager, IAM roles, CloudWatch alarms, the Glue
