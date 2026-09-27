@@ -18,9 +18,9 @@ import {
 } from "./conversations";
 
 describe("formatDateTitle", () => {
-  it("formats as dd/mm/yy using UTC, zero-padded", () => {
-    const date = new Date(Date.UTC(2026, 8, 5)); // month is 0-indexed: 8 = September
-    expect(formatDateTitle(date)).toBe("05/09/26");
+  it("formats as dd/mm/yy h:m:s using UTC, zero-padded", () => {
+    const date = new Date(Date.UTC(2026, 8, 5, 9, 5, 3)); // month is 0-indexed: 8 = September
+    expect(formatDateTitle(date)).toBe("05/09/26 09:05:03");
   });
 });
 

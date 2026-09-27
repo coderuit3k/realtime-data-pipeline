@@ -19,7 +19,10 @@ export function formatDateTitle(date: Date): string {
   const dd = String(date.getUTCDate()).padStart(2, "0");
   const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
   const yy = String(date.getUTCFullYear()).slice(-2);
-  return `${dd}/${mm}/${yy}`;
+  const h = String(date.getUTCHours()).padStart(2, "0");
+  const m = String(date.getUTCMinutes()).padStart(2, "0");
+  const s = String(date.getUTCSeconds()).padStart(2, "0");
+  return `${dd}/${mm}/${yy} ${h}:${m}:${s}`;
 }
 
 export function nextConversationTitle(base: string, existingTitles: string[]): string {
