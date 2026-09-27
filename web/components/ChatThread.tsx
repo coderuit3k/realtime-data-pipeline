@@ -1,4 +1,5 @@
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
 import type { AssistantResult, AssistantSource, ChatMessage } from "@/lib/assistant";
 
@@ -20,6 +21,20 @@ const answerMarkdownComponents: Components = {
     </a>
   ),
   code: ({ children }) => <code className="font-mono text-[12px] bg-bg rounded px-1 py-0.5 text-accent">{children}</code>,
+  table: ({ children }) => (
+    <div className="overflow-x-auto rounded border border-border">
+      <table className="w-full text-sm border-collapse">{children}</table>
+    </div>
+  ),
+  thead: ({ children }) => <thead className="bg-bg">{children}</thead>,
+  tbody: ({ children }) => <tbody>{children}</tbody>,
+  tr: ({ children }) => <tr className="border-b border-border last:border-b-0">{children}</tr>,
+  th: ({ children }) => (
+    <th className="px-3 py-2 text-left font-semibold text-textPrimary whitespace-nowrap">{children}</th>
+  ),
+  td: ({ children }) => (
+    <td className="px-3 py-2 text-textSecondary whitespace-nowrap">{children}</td>
+  ),
 };
 
 function QuestionBubble({ question }: { question: string }) {
@@ -48,7 +63,9 @@ function AnswerBubble({ answer, sources }: { answer: string; sources: AssistantS
       </span>
       <div className="max-w-[80%] rounded-lg rounded-bl-sm border border-border bg-surface/75 backdrop-blur-md px-4 py-3 flex flex-col gap-3">
         <div className="flex flex-col gap-2">
-          <ReactMarkdown components={answerMarkdownComponents}>{answer}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={answerMarkdownComponents}>
+            {answer}
+          </ReactMarkdown>
         </div>
         <div className="flex flex-wrap gap-2">
           {sources.map((s, i) => (
