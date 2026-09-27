@@ -1,5 +1,5 @@
 export type SourceVolume = { source: string; records: number };
-export type ActivityItem = { source: string; label: string; ingestedAt: string };
+export type ActivityItem = { source: string; label: string; ingestedAt: string; imageUrl: string | null };
 
 export type DashboardResponse = {
   recordsToday: number;

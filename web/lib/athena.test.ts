@@ -33,6 +33,15 @@ describe("buildRecentActivityQuery", () => {
     expect(sql).toContain("ORDER BY ingested_at DESC LIMIT 5");
     expect(sql).toContain("weather_observations");
   });
+
+  it("selects a 4th image_url column, real for news/github and NULL for the rest", () => {
+    const sql = buildRecentActivityQuery({ year: "2026", month: "09", day: "19" });
+    expect(sql).toContain("title AS label, ingested_at, image_url FROM news_articles");
+    expect(sql).toContain("full_name AS label, ingested_at, avatar_url AS image_url FROM github_repos");
+    expect(sql).toContain("title AS label, ingested_at, CAST(NULL AS varchar) AS image_url FROM hackernews_stories");
+    expect(sql).toContain("location AS label, ingested_at, CAST(NULL AS varchar) AS image_url FROM weather_observations");
+    expect(sql).toContain("coin_id AS label, ingested_at, CAST(NULL AS varchar) AS image_url FROM crypto_prices");
+  });
 });
 
 describe("parseAthenaRows", () => {

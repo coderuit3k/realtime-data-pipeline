@@ -46,12 +46,15 @@ export function buildSourceVolumeQuery(parts: TodayParts): string {
 
 export function buildRecentActivityQuery(parts: TodayParts): string {
   const where = partitionWhere(parts);
+  // image_url is a real thumbnail column for news/github, and an explicit
+  // CAST(NULL AS varchar) for the other three -- UNION ALL branches must
+  // all return the same column count/types.
   const union = [
-    `SELECT 'hackernews' AS source, title AS label, ingested_at FROM hackernews_stories ${where}`,
-    `SELECT 'news' AS source, title AS label, ingested_at FROM news_articles ${where}`,
-    `SELECT 'weather' AS source, location AS label, ingested_at FROM weather_observations ${where}`,
-    `SELECT 'crypto' AS source, coin_id AS label, ingested_at FROM crypto_prices ${where}`,
-    `SELECT 'github' AS source, full_name AS label, ingested_at FROM github_repos ${where}`,
+    `SELECT 'hackernews' AS source, title AS label, ingested_at, CAST(NULL AS varchar) AS image_url FROM hackernews_stories ${where}`,
+    `SELECT 'news' AS source, title AS label, ingested_at, image_url FROM news_articles ${where}`,
+    `SELECT 'weather' AS source, location AS label, ingested_at, CAST(NULL AS varchar) AS image_url FROM weather_observations ${where}`,
+    `SELECT 'crypto' AS source, coin_id AS label, ingested_at, CAST(NULL AS varchar) AS image_url FROM crypto_prices ${where}`,
+    `SELECT 'github' AS source, full_name AS label, ingested_at, avatar_url AS image_url FROM github_repos ${where}`,
   ].join("\nUNION ALL\n");
   return `SELECT * FROM (\n${union}\n) ORDER BY ingested_at DESC LIMIT 5`;
 }

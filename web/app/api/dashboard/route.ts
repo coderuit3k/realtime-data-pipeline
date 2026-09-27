@@ -71,6 +71,7 @@ export async function GET() {
       source: cols[0] ?? "",
       label: cols[1] ?? "",
       ingestedAt: cols[2] ?? "",
+      imageUrl: cols[3] || null,
     }));
 
     const recordsToday = sourceVolumes.reduce((sum, s) => sum + s.records, 0);

@@ -53,6 +53,12 @@ describe("buildSampleQueryGroups", () => {
     const query = groups.flatMap((g) => g.queries).find((q) => q.id === "github-stars-ranking");
     expect(query?.sql).toContain("ROW_NUMBER() OVER (PARTITION BY repo_id ORDER BY ingested_at DESC)");
     expect(query?.sql).toContain("ORDER BY stars DESC");
+    expect(query?.sql).toContain("avatar_url");
+  });
+
+  it("the trending-repos query selects avatar_url so results show the owner's avatar", () => {
+    const query = groups.flatMap((g) => g.queries).find((q) => q.id === "trending-repos");
+    expect(query?.sql).toContain("avatar_url");
   });
 
   it("the crypto-market-cap-ranking query dedupes by coin_id (latest observed_at)", () => {

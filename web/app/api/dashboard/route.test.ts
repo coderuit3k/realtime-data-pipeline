@@ -61,8 +61,34 @@ describe("GET /api/dashboard", () => {
         { Data: [{ VarCharValue: "news" }, { VarCharValue: "0" }] },
       ])
       .mockResolvedValueOnce([
-        { Data: [{ VarCharValue: "source" }, { VarCharValue: "label" }, { VarCharValue: "ingested_at" }] },
-        { Data: [{ VarCharValue: "hackernews" }, { VarCharValue: "Some title" }, { VarCharValue: "2026-09-19T10:00:00Z" }] },
+        {
+          Data: [
+            { VarCharValue: "source" },
+            { VarCharValue: "label" },
+            { VarCharValue: "ingested_at" },
+            { VarCharValue: "image_url" },
+          ],
+        },
+        {
+          Data: [
+            { VarCharValue: "github" },
+            { VarCharValue: "owner/repo" },
+            { VarCharValue: "2026-09-19T10:00:00Z" },
+            { VarCharValue: "https://avatars.githubusercontent.com/u/1" },
+          ],
+        },
+        {
+          // image_url as an empty string (NewsAPI/GitHub's own "no thumbnail"
+          // sentinel per infra/glue.tf's column comments) must normalize to
+          // null, not pass through as "" -- this is why the mapper uses
+          // `cols[3] || null`, not `cols[3] ?? null`.
+          Data: [
+            { VarCharValue: "hackernews" },
+            { VarCharValue: "Some other title" },
+            { VarCharValue: "2026-09-19T09:00:00Z" },
+            { VarCharValue: "" },
+          ],
+        },
       ]);
     mockedAlarms.mockResolvedValue({ alarmsBreaching: 1, alarmsTotal: 3 });
     mockedSchedule.mockResolvedValue({ scheduleExpression: "rate(10 minutes)", enabled: true });
@@ -85,7 +111,9 @@ describe("GET /api/dashboard", () => {
     expect(body.sourcesTotal).toBe(5);
     expect(body.alarmsBreaching).toBe(1);
     expect(body.alarmsTotal).toBe(3);
-    expect(body.recentActivity).toHaveLength(1);
+    expect(body.recentActivity).toHaveLength(2);
+    expect(body.recentActivity[0].imageUrl).toBe("https://avatars.githubusercontent.com/u/1");
+    expect(body.recentActivity[1].imageUrl).toBeNull();
     expect(body.schedule).toEqual({ scheduleExpression: "rate(10 minutes)", enabled: true });
     expect(body.lambdaHealth).toHaveLength(1);
     expect(body.recentLogs).toHaveLength(1);

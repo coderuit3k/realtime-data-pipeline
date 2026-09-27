@@ -9,6 +9,33 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
+// Explorer runs arbitrary user SQL, so a result column can be image_url/
+// avatar_url in any position/alias -- detect by column name at render time
+// rather than relying on a fixed query shape.
+const IMAGE_CELL_CLASS: Record<string, string> = {
+  avatar_url: "w-6 h-6 rounded-full object-cover",
+  image_url: "w-16 h-10 rounded object-cover",
+};
+
+function ExplorerCell({ column, value }: { column: string; value: string | null }) {
+  const imageClass = IMAGE_CELL_CLASS[column.toLowerCase()];
+  if (imageClass && value) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={value}
+        alt=""
+        className={imageClass}
+        loading="lazy"
+        onError={(e) => {
+          e.currentTarget.style.display = "none";
+        }}
+      />
+    );
+  }
+  return <>{value ?? ""}</>;
+}
+
 export default function ExplorerPage() {
   const [samples, setSamples] = useState<SamplesResponse | null>(null);
   const [samplesError, setSamplesError] = useState<string | null>(null);
@@ -151,7 +178,7 @@ export default function ExplorerPage() {
                     <tr key={i}>
                       {row.map((cell, j) => (
                         <td key={j} className="tabular-nums text-textSecondary border-b border-border py-2 px-2.5">
-                          {cell ?? ""}
+                          <ExplorerCell column={result.columns[j] ?? ""} value={cell} />
                         </td>
                       ))}
                     </tr>

@@ -83,7 +83,7 @@ LIMIT 20`,
         {
           id: "trending-repos",
           label: "Trending repos hôm nay",
-          sql: `SELECT full_name, language, stars, forks, pushed_at
+          sql: `SELECT full_name, language, stars, forks, pushed_at, avatar_url
 FROM github_repos
 ${where}
 ORDER BY stars DESC
@@ -107,9 +107,9 @@ LIMIT 10`,
         {
           id: "github-stars-ranking",
           label: "Repo GitHub nhiều sao nhất",
-          sql: `SELECT full_name, stars, forks, language
+          sql: `SELECT full_name, stars, forks, language, avatar_url
 FROM (
-  SELECT full_name, stars, forks, language,
+  SELECT full_name, stars, forks, language, avatar_url,
          ROW_NUMBER() OVER (PARTITION BY repo_id ORDER BY ingested_at DESC) AS rn
   FROM github_repos
   ${where}
