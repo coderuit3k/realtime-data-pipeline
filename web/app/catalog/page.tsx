@@ -61,17 +61,12 @@ function StageIcon({ status }: { status: PipelineStage["status"] }) {
   );
 }
 
-const EXPORT_SCOPE_ALL = "all";
-
 export default function CatalogPage() {
   const [tables, setTables] = useState<CatalogTable[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [cicd, setCicd] = useState<CicdResponse | null>(null);
   const [costBreakdown, setCostBreakdown] = useState<CostBreakdownEntry[] | null>(null);
-  const [exportScope, setExportScope] = useState<string>(EXPORT_SCOPE_ALL);
-  const [exporting, setExporting] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
 
   async function load() {
     setError(null);
@@ -83,25 +78,6 @@ export default function CatalogPage() {
       setSelected((current) => current ?? body[0]?.name ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không tải được Data Catalog.");
-    }
-  }
-
-  async function handleExport() {
-    setExporting(true);
-    setExportError(null);
-    try {
-      const res = await fetch("/api/catalog/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(exportScope === EXPORT_SCOPE_ALL ? {} : { table: exportScope }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error ?? "Không xuất được file Excel.");
-      window.location.href = body.url;
-    } catch (err) {
-      setExportError(err instanceof Error ? err.message : "Không xuất được file Excel.");
-    } finally {
-      setExporting(false);
     }
   }
 
@@ -158,49 +134,11 @@ export default function CatalogPage() {
 
   return (
     <div className="p-9 flex flex-col gap-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-2xl font-semibold text-textPrimary">Architecture & Lakehouse</h1>
-          <p className="mt-1.5 text-sm text-textSecondary tabular-nums">
-            Kiến trúc pipeline, trạng thái CI/CD, chi phí hạ tầng, và {tables.length} bảng trong Glue Data Catalog
-          </p>
-        </div>
-        <div className="flex flex-col items-end gap-1.5 shrink-0">
-          <div className="flex items-stretch rounded-lg border border-border bg-surface/75 backdrop-blur-md overflow-hidden transition-shadow hover:shadow-glowCyan">
-            <div className="relative">
-              <select
-                value={exportScope}
-                onChange={(e) => setExportScope(e.target.value)}
-                aria-label="Chọn bảng để xuất"
-                className="h-full appearance-none bg-transparent border-r border-border pl-3.5 pr-7 py-2 text-xs font-semibold text-textPrimary cursor-pointer focus:outline-none"
-              >
-                <option value={EXPORT_SCOPE_ALL} className="bg-surface text-textPrimary">
-                  Tất cả {tables.length} bảng
-                </option>
-                {tables.map((table) => (
-                  <option key={table.name} value={table.name} className="bg-surface text-textPrimary">
-                    {table.name}
-                  </option>
-                ))}
-              </select>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-textMuted">
-                <path d="m6 9 6 6 6-6" />
-              </svg>
-            </div>
-            <button
-              onClick={handleExport}
-              disabled={exporting}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-textPrimary disabled:opacity-50"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-                <path d="M12 3v12m0 0 4-4m-4 4-4-4" />
-                <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-              </svg>
-              {exporting ? "Đang xuất..." : "Xuất Excel"}
-            </button>
-          </div>
-          {exportError && <p className="text-error text-[11px] max-w-[220px] text-right">{exportError}</p>}
-        </div>
+      <div>
+        <h1 className="font-heading text-2xl font-semibold text-textPrimary">Architecture & Lakehouse</h1>
+        <p className="mt-1.5 text-sm text-textSecondary tabular-nums">
+          Kiến trúc pipeline, trạng thái CI/CD, chi phí hạ tầng, và {tables.length} bảng trong Glue Data Catalog
+        </p>
       </div>
 
       <ArchitectureFlow />
