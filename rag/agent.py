@@ -1,6 +1,7 @@
 import json
 import logging
 import math
+import time
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 
@@ -11,14 +12,18 @@ import requests
 
 from common import config
 from common.secrets import get_secret
+from common.sql_guard import validate_read_only_select
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 _s3_client = None
 _bedrock_client = None
+_athena_client = None
 
 MAX_ITERATIONS = 6
+ATHENA_POLL_INTERVAL_SECONDS = 0.5
+ATHENA_MAX_POLL_ATTEMPTS = 40  # ~20s cap per query
 
 TOOLS = [
     {
@@ -77,6 +82,45 @@ TOOLS = [
     },
     {
         "toolSpec": {
+            "name": "query_athena",
+            "description": (
+                "Run a read-only SQL SELECT against this pipeline's own Athena "
+                "tables for aggregate/analytical questions the other tools can't "
+                "answer -- averages, counts, time windows, correlations across "
+                "sources. Five tables, all in the curated database: "
+                "hackernews_stories(story_id, title, text, author, score, "
+                "num_comments, url, created_at, keywords), "
+                "news_articles(article_id, provider, title, description, url, "
+                "published_at, keywords), "
+                "weather_observations(location, temperature_c, humidity_pct, "
+                "precipitation_mm, wind_speed_kmh, observed_at), "
+                "crypto_prices(coin_id, price_usd, market_cap_usd, "
+                "volume_24h_usd, change_24h_pct, observed_at), "
+                "github_repos(full_name, description, language, stars, forks, "
+                "created_at, pushed_at, keywords). Every table is also "
+                "partitioned by year/month/day (strings, e.g. year='2026', "
+                "month='03', day='30') -- filter on these to avoid scanning the "
+                "whole table. Only SELECT/WITH statements are allowed; no "
+                "INSERT/UPDATE/DELETE/DDL. Prefer this over search_knowledge_base "
+                "for anything requiring counting, averaging, or aggregating "
+                "across many records."
+            ),
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "sql": {
+                            "type": "string",
+                            "description": "A single read-only SQL SELECT statement",
+                        }
+                    },
+                    "required": ["sql"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
             "name": "search_web",
             "description": (
                 "Search the public web. Use this when the knowledge base has "
@@ -101,7 +145,9 @@ SYSTEM_PROMPT = (
     "unverified memory. For every question:\n"
     "1. Decide which tool(s) to call, and with what input. Reformulate and "
     "search again if the first results are weak, or the question has "
-    "multiple parts that need separate searches.\n"
+    "multiple parts that need separate searches. For questions asking to "
+    "count, average, or otherwise aggregate across many records, use "
+    "query_athena instead of search_knowledge_base.\n"
     "2. Only stop calling tools once you have enough grounded information, "
     "or you've tried the relevant tools and found nothing useful.\n"
     "3. Call at most one tool per turn, then look at its results before "
@@ -125,6 +171,13 @@ def _bedrock():
     if _bedrock_client is None:
         _bedrock_client = boto3.client("bedrock-runtime", region_name=config.AWS_REGION)
     return _bedrock_client
+
+
+def _athena():
+    global _athena_client
+    if _athena_client is None:
+        _athena_client = boto3.client("athena", region_name=config.AWS_REGION)
+    return _athena_client
 
 
 def embed_text(text: str) -> list[float]:
@@ -198,6 +251,51 @@ def search_knowledge_base(query: str, documents: list[dict], top_k: int) -> list
     scored = [{**doc, "score": cosine_similarity(embedding, doc["embedding"])} for doc in documents]
     scored.sort(key=lambda d: d["score"], reverse=True)
     return scored[:top_k]
+
+
+def query_athena(sql: str, max_rows: int = 25) -> tuple[list[dict], bool]:
+    """Runs a read-only SELECT against the curated Athena tables. Returns
+    (rows, truncated) -- rows as column-name-keyed dicts, truncated True if
+    more rows existed than max_rows. Raises ValueError for SQL the guard
+    rejects, RuntimeError if the Athena query itself fails or times out."""
+    ok, reason = validate_read_only_select(sql)
+    if not ok:
+        raise ValueError(reason)
+
+    client = _athena()
+    execution_id = client.start_query_execution(
+        QueryString=sql,
+        QueryExecutionContext={"Database": config.ATHENA_DATABASE},
+        WorkGroup=config.ATHENA_WORKGROUP,
+    )["QueryExecutionId"]
+
+    for _ in range(ATHENA_MAX_POLL_ATTEMPTS):
+        execution = client.get_query_execution(QueryExecutionId=execution_id)["QueryExecution"]
+        status = execution["Status"]
+        state = status["State"]
+        if state == "SUCCEEDED":
+            break
+        if state in ("FAILED", "CANCELLED"):
+            reason = status.get("StateChangeReason", "unknown reason")
+            raise RuntimeError(f"Athena query {state.lower()}: {reason}")
+        time.sleep(ATHENA_POLL_INTERVAL_SECONDS)
+    else:
+        raise RuntimeError("Athena query timed out waiting for SUCCEEDED state")
+
+    # MaxResults counts the header row, so ask for max_rows+2 (header + up to
+    # max_rows+1 data rows) -- seeing that extra (max_rows+1)-th data row is
+    # what proves more data existed than max_rows allows through.
+    results = client.get_query_results(QueryExecutionId=execution_id, MaxResults=max_rows + 2)
+    result_set = results["ResultSet"]
+    columns = [c["Name"] for c in result_set["ResultSetMetadata"]["ColumnInfo"]]
+    data_rows = result_set["Rows"][1:]  # first row is the header
+    truncated = len(data_rows) > max_rows
+    data_rows = data_rows[:max_rows]
+    rows = [
+        {col: cell.get("VarCharValue") for col, cell in zip(columns, row["Data"])}
+        for row in data_rows
+    ]
+    return rows, truncated
 
 
 def get_crypto_prices() -> list[dict]:
@@ -291,6 +389,18 @@ def run_tool(name: str, tool_input: dict, documents: list[dict]) -> tuple[list[d
         }
         sources = [weather_source] if records else []
         return summary, sources
+
+    if name == "query_athena":
+        sql = (tool_input or {}).get("sql", "")
+        try:
+            rows, truncated = query_athena(sql)
+        except Exception as e:
+            logger.exception("query_athena tool failed")
+            return [{"error": str(e)}], []
+        summary = list(rows)
+        if truncated:
+            summary.append({"note": f"Results truncated to {len(rows)} rows."})
+        return summary, []
 
     if name == "search_web":
         try:

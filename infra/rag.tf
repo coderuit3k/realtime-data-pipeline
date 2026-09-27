@@ -65,6 +65,45 @@ data "aws_iam_policy_document" "rag_permissions" {
     actions   = ["secretsmanager:GetSecretValue"]
     resources = [aws_secretsmanager_secret.tavily_api.arn]
   }
+
+  # query_athena tool: same workgroup/database the public Data Explorer page
+  # queries (infra/glue.tf) -- scoped to the "curated" Glue database only, the
+  # gmail database stays excluded, same boundary the Explorer page enforces.
+  statement {
+    sid       = "RunAthenaQueries"
+    actions   = ["athena:StartQueryExecution", "athena:GetQueryExecution", "athena:GetQueryResults"]
+    resources = [aws_athena_workgroup.main.arn]
+  }
+
+  statement {
+    sid = "ReadGlueCuratedSchema"
+    # GetPartitions is likely unused in practice -- all curated tables use
+    # partition projection (infra/glue.tf), so Athena computes partition
+    # locations itself without calling Glue for them. Kept for defense in
+    # depth (e.g. a future non-projected table) since it's scoped to the
+    # curated database only either way.
+    actions = ["glue:GetDatabase", "glue:GetTable", "glue:GetPartitions"]
+    resources = [
+      "arn:aws:glue:*:${data.aws_caller_identity.current.account_id}:catalog",
+      aws_glue_catalog_database.curated.arn,
+      "arn:aws:glue:*:${data.aws_caller_identity.current.account_id}:table/${aws_glue_catalog_database.curated.name}/*",
+    ]
+  }
+
+  # Athena writes query results to S3 as the calling principal, not its own
+  # service role -- GetObject/ListBucket on the curated bucket are already
+  # granted above, this adds the write + bucket-location calls Athena needs.
+  statement {
+    sid       = "WriteAthenaResults"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.curated.arn}/athena-results/*"]
+  }
+
+  statement {
+    sid       = "AthenaResultsBucketLocation"
+    actions   = ["s3:GetBucketLocation"]
+    resources = [aws_s3_bucket.curated.arn]
+  }
 }
 
 resource "aws_iam_role_policy" "rag_permissions" {
@@ -110,11 +149,17 @@ resource "aws_cloudwatch_log_group" "rag_build_index" {
 }
 
 resource "aws_lambda_function" "rag_agent" {
-  function_name    = "${local.name_prefix}-rag-agent"
-  role             = aws_iam_role.rag_lambda.arn
-  handler          = "agent.lambda_handler"
-  runtime          = var.lambda_runtime
-  timeout          = 90
+  function_name = "${local.name_prefix}-rag-agent"
+  role          = aws_iam_role.rag_lambda.arn
+  handler       = "agent.lambda_handler"
+  runtime       = var.lambda_runtime
+  # 90s was enough headroom for the original 4 tools; query_athena adds a
+  # worst-case ~20s blocking poll per call (see ATHENA_MAX_POLL_ATTEMPTS *
+  # ATHENA_POLL_INTERVAL_SECONDS in rag/agent.py), and MAX_ITERATIONS (6)
+  # means it can be called more than once in a single request -- bumped for
+  # that tail latency, not because this project's own tiny datasets are
+  # actually slow to query.
+  timeout          = 180
   memory_size      = 512
   filename         = data.archive_file.rag_agent.output_path
   source_code_hash = data.archive_file.rag_agent.output_base64sha256
@@ -127,6 +172,8 @@ resource "aws_lambda_function" "rag_agent" {
       BEDROCK_TEXT_MODEL_ID  = var.bedrock_text_model_id
       RAG_TOP_K              = tostring(var.rag_top_k)
       TAVILY_SECRET_NAME     = aws_secretsmanager_secret.tavily_api.name
+      ATHENA_WORKGROUP       = aws_athena_workgroup.main.name
+      ATHENA_DATABASE        = aws_glue_catalog_database.curated.name
     }
   }
 }

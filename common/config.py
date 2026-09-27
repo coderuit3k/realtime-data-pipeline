@@ -66,3 +66,9 @@ RAG_INDEX_KEY = os.environ.get("RAG_INDEX_KEY", "rag-index/index.json")
 # Web search tool for the agent (Tavily -- api.tavily.com), used when it
 # decides the knowledge base has nothing relevant.
 TAVILY_SECRET_NAME = os.environ.get("TAVILY_SECRET_NAME", "data-pipeline/tavily-api")
+
+# Athena SQL tool for the agent -- same workgroup/database the public Data
+# Explorer page queries (see infra/glue.tf), reused here for aggregate/
+# analytical questions get_crypto_prices/get_weather can't answer.
+ATHENA_WORKGROUP = os.environ.get("ATHENA_WORKGROUP", "")
+ATHENA_DATABASE = os.environ.get("ATHENA_DATABASE", "")

@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+import pytest
+
 from rag import agent
 
 
@@ -193,6 +195,136 @@ def test_run_tool_search_web_failure_returns_empty_raw(monkeypatch):
     assert "error" in summary[0]
 
 
+class FakeAthena:
+    """Scripts a sequence of canned Athena API responses, keyed by call type."""
+
+    def __init__(self, execution_states, results):
+        self._execution_states = list(execution_states)
+        self._results = results
+        self.start_query_execution_calls = []
+
+    def start_query_execution(self, **kwargs):
+        self.start_query_execution_calls.append(kwargs)
+        return {"QueryExecutionId": "qe1"}
+
+    def get_query_execution(self, **kwargs):
+        state = self._execution_states.pop(0)
+        status = {"State": state}
+        if state in ("FAILED", "CANCELLED"):
+            status["StateChangeReason"] = "table not found"
+        return {"QueryExecution": {"Status": status}}
+
+    def get_query_results(self, **kwargs):
+        max_results = kwargs.get("MaxResults")
+        if max_results is None:
+            return self._results
+        # Real Athena counts the header row toward MaxResults.
+        limited_rows = self._results["ResultSet"]["Rows"][:max_results]
+        return {
+            "ResultSet": {
+                "ResultSetMetadata": self._results["ResultSet"]["ResultSetMetadata"],
+                "Rows": limited_rows,
+            }
+        }
+
+
+def _athena_results(columns: list[str], rows: list[list[str]]) -> dict:
+    return {
+        "ResultSet": {
+            "ResultSetMetadata": {"ColumnInfo": [{"Name": c} for c in columns]},
+            "Rows": [{"Data": [{"VarCharValue": c} for c in columns]}]
+            + [{"Data": [{"VarCharValue": v} for v in row]} for row in rows],
+        }
+    }
+
+
+def test_query_athena_rejects_invalid_sql_without_calling_athena(monkeypatch):
+    def fail_if_called():
+        raise AssertionError("should not reach Athena for invalid SQL")
+
+    monkeypatch.setattr(agent, "_athena", fail_if_called)
+
+    with pytest.raises(ValueError):
+        agent.query_athena("DROP TABLE crypto_prices")
+
+
+def test_query_athena_polls_until_succeeded_and_returns_rows(monkeypatch):
+    fake = FakeAthena(
+        execution_states=["RUNNING", "SUCCEEDED"],
+        results=_athena_results(["coin_id", "avg_price"], [["bitcoin", "88420.5"]]),
+    )
+    monkeypatch.setattr(agent, "_athena", lambda: fake)
+    monkeypatch.setattr(agent.time, "sleep", lambda seconds: None)
+
+    rows, truncated = agent.query_athena(
+        "SELECT coin_id, AVG(price_usd) AS avg_price FROM crypto_prices"
+    )
+
+    assert rows == [{"coin_id": "bitcoin", "avg_price": "88420.5"}]
+    assert truncated is False
+    assert fake.start_query_execution_calls[0]["QueryString"].startswith("SELECT")
+
+
+def test_query_athena_raises_on_failed_query_state(monkeypatch):
+    fake = FakeAthena(execution_states=["FAILED"], results=_athena_results([], []))
+    monkeypatch.setattr(agent, "_athena", lambda: fake)
+    monkeypatch.setattr(agent.time, "sleep", lambda seconds: None)
+
+    with pytest.raises(RuntimeError, match="table not found"):
+        agent.query_athena("SELECT 1")
+
+
+def test_query_athena_marks_truncated_when_more_rows_than_max(monkeypatch):
+    fake = FakeAthena(
+        execution_states=["SUCCEEDED"],
+        results=_athena_results(["n"], [["1"], ["2"], ["3"]]),
+    )
+    monkeypatch.setattr(agent, "_athena", lambda: fake)
+    monkeypatch.setattr(agent.time, "sleep", lambda seconds: None)
+
+    rows, truncated = agent.query_athena("SELECT n FROM t", max_rows=2)
+
+    assert rows == [{"n": "1"}, {"n": "2"}]
+    assert truncated is True
+
+
+def test_run_tool_query_athena_returns_summary_and_no_sources(monkeypatch):
+    monkeypatch.setattr(
+        agent, "query_athena", lambda sql, **kwargs: ([{"coin_id": "bitcoin"}], False)
+    )
+
+    summary, raw = agent.run_tool(
+        "query_athena", {"sql": "SELECT * FROM crypto_prices"}, documents=[]
+    )
+
+    assert summary == [{"coin_id": "bitcoin"}]
+    assert raw == []
+
+
+def test_run_tool_query_athena_appends_truncation_note(monkeypatch):
+    monkeypatch.setattr(
+        agent, "query_athena", lambda sql, **kwargs: ([{"n": "1"}], True)
+    )
+
+    summary, raw = agent.run_tool("query_athena", {"sql": "SELECT n FROM t"}, documents=[])
+
+    assert summary[0] == {"n": "1"}
+    assert "note" in summary[1]
+    assert raw == []
+
+
+def test_run_tool_query_athena_failure_returns_error_summary(monkeypatch):
+    def failing_query(sql, **kwargs):
+        raise ValueError("Only SELECT statements are allowed (optionally starting with WITH).")
+
+    monkeypatch.setattr(agent, "query_athena", failing_query)
+
+    summary, raw = agent.run_tool("query_athena", {"sql": "DROP TABLE x"}, documents=[])
+
+    assert raw == []
+    assert "error" in summary[0]
+
+
 def test_run_tool_unknown_tool_name():
     summary, raw = agent.run_tool("not_a_real_tool", {}, documents=[])
     assert raw == []
@@ -286,6 +418,39 @@ def test_run_agent_calls_get_crypto_prices_tool_then_returns_final_answer(monkey
     assert result["answer"] == "Bitcoin is $88,420, up 2.4% in 24h [1]."
     assert result["trace"][0]["tool"] == "get_crypto_prices"
     assert result["sources"][0]["url"] == "https://www.coingecko.com/en/coins/bitcoin"
+
+
+def test_run_agent_calls_query_athena_tool_then_returns_final_answer(monkeypatch):
+    monkeypatch.setattr(
+        agent, "query_athena", lambda sql, **kwargs: ([{"avg_price": "88420.5"}], False)
+    )
+
+    tool_use = {
+        "stopReason": "tool_use",
+        "output": {
+            "message": {
+                "role": "assistant",
+                "content": [
+                    {
+                        "toolUse": {
+                            "toolUseId": "tu1",
+                            "name": "query_athena",
+                            "input": {
+                                "sql": "SELECT AVG(price_usd) AS avg_price FROM crypto_prices"
+                            },
+                        }
+                    }
+                ],
+            }
+        },
+    }
+    fake = FakeBedrock([tool_use, _final_response("The average price was $88,420.50.")])
+    monkeypatch.setattr(agent, "_bedrock", lambda: fake)
+
+    result = agent.run_agent("What was the average BTC price?", documents=[])
+
+    assert result["answer"] == "The average price was $88,420.50."
+    assert result["trace"][0]["tool"] == "query_athena"
 
 
 def test_run_agent_answers_directly_with_no_tool_calls(monkeypatch):

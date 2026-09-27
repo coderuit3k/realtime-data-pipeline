@@ -131,14 +131,19 @@ Lambda-memory cosine similarity is plenty, and it avoids a service that bills
   from cache).
 - `rag/agent.py` (Lambda `<project>-rag-agent`, on-demand): a genuine
   **tool-calling agent** over Bedrock's **Converse API** -- the model gets
-  four tools and on each turn decides for itself whether to call one, with
+  five tools and on each turn decides for itself whether to call one, with
   what input, whether to reformulate and search again, or to stop and
   answer: `search_knowledge_base` (the semantic-search index above),
   `get_crypto_prices` and `get_weather` (real, live-ingested data read
   directly from the curated S3 zone -- the same numeric telemetry the
   index above deliberately excludes from semantic search, but exact and
   current, so these two tools are strictly more reliable than a web search
-  for their narrow domains), and `search_web` (Tavily), the fallback for
+  for their narrow domains), `query_athena` (a read-only-SQL tool over the
+  same Glue/Athena setup [`sql/sample_queries.sql`](sql/sample_queries.sql)
+  uses, for aggregate/analytical questions -- averages, counts, time
+  windows -- that a snapshot read or semantic search can't answer; guarded
+  by the same read-only-SELECT check as the public Data Explorer page's
+  free-form queries), and `search_web` (Tavily), the fallback for
   everything else. The loop runs until the model returns a plain text turn
   (no more tool calls) or `MAX_ITERATIONS` (6) is hit, at which point one
   final call asks for a best-effort answer with tools withdrawn. Every
