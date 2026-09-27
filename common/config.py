@@ -72,3 +72,8 @@ TAVILY_SECRET_NAME = os.environ.get("TAVILY_SECRET_NAME", "data-pipeline/tavily-
 # analytical questions get_crypto_prices/get_weather can't answer.
 ATHENA_WORKGROUP = os.environ.get("ATHENA_WORKGROUP", "")
 ATHENA_DATABASE = os.environ.get("ATHENA_DATABASE", "")
+
+# Trend Events (trends/trend_scan.py) -- daily cross-source keyword detection.
+TREND_HN_MIN_STORIES = int(os.environ.get("TREND_HN_MIN_STORIES", "3"))
+TREND_NEWS_MIN_ARTICLES = int(os.environ.get("TREND_NEWS_MIN_ARTICLES", "2"))
+TREND_MAX_EVENTS_PER_DAY = int(os.environ.get("TREND_MAX_EVENTS_PER_DAY", "3"))
