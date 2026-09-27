@@ -196,3 +196,14 @@ export type HealthResponse = {
 export type CostResponse = {
   monthToDateCostUsd: number;
 };
+
+export type TrendEvent = {
+  eventId: string;
+  keyword: string;
+  eventDate: string;
+  githubCount: number;
+  hnCount: number;
+  newsCount: number;
+};
+
+export type TrendsResponse = { events: TrendEvent[] };
