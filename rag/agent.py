@@ -1,7 +1,6 @@
 import json
 import logging
 import math
-import time
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 
@@ -10,7 +9,7 @@ import numpy as np
 import pandas as pd
 import requests
 
-from common import config
+from common import athena, config
 from common.secrets import get_secret
 from common.sql_guard import validate_read_only_select
 
@@ -19,11 +18,8 @@ logger.setLevel(logging.INFO)
 
 _s3_client = None
 _bedrock_client = None
-_athena_client = None
 
 MAX_ITERATIONS = 6
-ATHENA_POLL_INTERVAL_SECONDS = 0.5
-ATHENA_MAX_POLL_ATTEMPTS = 40  # ~20s cap per query
 
 TOOLS = [
     {
@@ -173,13 +169,6 @@ def _bedrock():
     return _bedrock_client
 
 
-def _athena():
-    global _athena_client
-    if _athena_client is None:
-        _athena_client = boto3.client("athena", region_name=config.AWS_REGION)
-    return _athena_client
-
-
 def embed_text(text: str) -> list[float]:
     response = _bedrock().invoke_model(
         modelId=config.BEDROCK_EMBED_MODEL_ID,
@@ -254,48 +243,14 @@ def search_knowledge_base(query: str, documents: list[dict], top_k: int) -> list
 
 
 def query_athena(sql: str, max_rows: int = 25) -> tuple[list[dict], bool]:
-    """Runs a read-only SELECT against the curated Athena tables. Returns
-    (rows, truncated) -- rows as column-name-keyed dicts, truncated True if
-    more rows existed than max_rows. Raises ValueError for SQL the guard
-    rejects, RuntimeError if the Athena query itself fails or times out."""
+    """Runs a read-only SELECT against the curated Athena tables via
+    common/athena.py's shared run_query. Raises ValueError for SQL the
+    guard rejects, RuntimeError if the Athena query itself fails or
+    times out (propagated from common/athena.py)."""
     ok, reason = validate_read_only_select(sql)
     if not ok:
         raise ValueError(reason)
-
-    client = _athena()
-    execution_id = client.start_query_execution(
-        QueryString=sql,
-        QueryExecutionContext={"Database": config.ATHENA_DATABASE},
-        WorkGroup=config.ATHENA_WORKGROUP,
-    )["QueryExecutionId"]
-
-    for _ in range(ATHENA_MAX_POLL_ATTEMPTS):
-        execution = client.get_query_execution(QueryExecutionId=execution_id)["QueryExecution"]
-        status = execution["Status"]
-        state = status["State"]
-        if state == "SUCCEEDED":
-            break
-        if state in ("FAILED", "CANCELLED"):
-            reason = status.get("StateChangeReason", "unknown reason")
-            raise RuntimeError(f"Athena query {state.lower()}: {reason}")
-        time.sleep(ATHENA_POLL_INTERVAL_SECONDS)
-    else:
-        raise RuntimeError("Athena query timed out waiting for SUCCEEDED state")
-
-    # MaxResults counts the header row, so ask for max_rows+2 (header + up to
-    # max_rows+1 data rows) -- seeing that extra (max_rows+1)-th data row is
-    # what proves more data existed than max_rows allows through.
-    results = client.get_query_results(QueryExecutionId=execution_id, MaxResults=max_rows + 2)
-    result_set = results["ResultSet"]
-    columns = [c["Name"] for c in result_set["ResultSetMetadata"]["ColumnInfo"]]
-    data_rows = result_set["Rows"][1:]  # first row is the header
-    truncated = len(data_rows) > max_rows
-    data_rows = data_rows[:max_rows]
-    rows = [
-        {col: cell.get("VarCharValue") for col, cell in zip(columns, row["Data"])}
-        for row in data_rows
-    ]
-    return rows, truncated
+    return athena.run_query(sql, max_rows)
 
 
 def get_crypto_prices() -> list[dict]:
