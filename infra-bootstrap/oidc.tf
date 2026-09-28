@@ -77,6 +77,31 @@ data "aws_iam_policy_document" "deploy_permissions" {
     ]
   }
 
+  # Full table lifecycle for Terraform-managed DynamoDB tables that are actual
+  # infra (e.g. infra/rag.tf's rag_memory cache), as opposed to the narrower
+  # item-level access TerraformStateLock above grants for the lock table.
+  # Terraform's aws_dynamodb_table resource calls DescribeContinuousBackups
+  # and DescribeTimeToLive on every refresh, not just on create -- missing
+  # either makes `terraform plan` fail even with no actual changes pending.
+  statement {
+    sid = "ManageProjectDynamoDbTables"
+    actions = [
+      "dynamodb:CreateTable",
+      "dynamodb:DeleteTable",
+      "dynamodb:UpdateTable",
+      "dynamodb:DescribeTable",
+      "dynamodb:DescribeContinuousBackups",
+      "dynamodb:DescribeTimeToLive",
+      "dynamodb:UpdateTimeToLive",
+      "dynamodb:TagResource",
+      "dynamodb:UntagResource",
+      "dynamodb:ListTagsOfResource",
+    ]
+    resources = [
+      "arn:aws:dynamodb:*:${data.aws_caller_identity.current.account_id}:table/${var.project_name}-*",
+    ]
+  }
+
   # Bedrock: read-only model discovery + inference only (no fine-tuning,
   # provisioned throughput, or guardrail management -- narrower than the
   # blanket "*:*" pattern used above on purpose, since Bedrock usage is
