@@ -139,6 +139,12 @@ variable "trend_scan_schedule" {
   default     = "cron(0 23 * * ? *)"
 }
 
+variable "rag_build_index_schedule" {
+  description = "EventBridge schedule expression for the nightly rag_build_index Lambda -- runs after trend_scan (23:00 UTC) and after the day's ingestion so the RAG index reflects that day's curated data before it's queried the next day."
+  type        = string
+  default     = "cron(0 0 * * ? *)"
+}
+
 variable "trend_hn_min_stories" {
   description = "Minimum distinct Hacker News stories mentioning a keyword in one day for it to qualify as a Trend Event"
   type        = number

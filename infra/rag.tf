@@ -1,11 +1,14 @@
-# Serverless Agentic RAG over the curated zone: build_index (on-demand) embeds
-# every curated record via Bedrock Titan and writes a JSON index to S3; agent
-# (on-demand) is a Bedrock Converse tool-calling loop that decides for itself
-# whether/when to query that index (search_knowledge_base) or fall back to a
-# real web search (search_web, Tavily). No EventBridge schedule and no vector
-# database (e.g. OpenSearch Serverless) -- both would run 24/7 and cost real
-# money even idle. At this dataset's size, Lambda-memory cosine search is
-# plenty and costs $0 when not invoked.
+# Serverless Agentic RAG over the curated zone: build_index embeds every
+# curated record via Bedrock Titan and writes a JSON index to S3 (now also on
+# a nightly EventBridge schedule, see rag_build_index_schedule below -- still
+# cache-aware via build_index.py's model_id-keyed cache, so a nightly run only
+# re-embeds genuinely new/changed documents, not the whole curated zone);
+# agent (on-demand only, unchanged) is a Bedrock Converse tool-calling loop
+# that decides for itself whether/when to query that index
+# (search_knowledge_base) or fall back to a real web search (search_web,
+# Tavily). Still no vector database (e.g. OpenSearch Serverless) -- that
+# would run 24/7 and cost real money even idle; at this dataset's size,
+# Lambda-memory cosine search is plenty and costs $0 outside a run.
 
 resource "aws_iam_role" "rag_lambda" {
   name               = "${local.name_prefix}-rag-lambda"
@@ -146,6 +149,28 @@ resource "aws_lambda_function" "rag_build_index" {
 resource "aws_cloudwatch_log_group" "rag_build_index" {
   name              = "/aws/lambda/${aws_lambda_function.rag_build_index.function_name}"
   retention_in_days = var.log_retention_days
+}
+
+resource "aws_cloudwatch_event_rule" "rag_build_index_schedule" {
+  name                = "${local.name_prefix}-rag-build-index-schedule"
+  schedule_expression = var.rag_build_index_schedule
+  state               = var.enable_ingestion_schedule ? "ENABLED" : "DISABLED"
+}
+
+resource "aws_cloudwatch_event_target" "rag_build_index" {
+  rule = aws_cloudwatch_event_rule.rag_build_index_schedule.name
+  arn  = aws_lambda_function.rag_build_index.arn
+  # build_index.lambda_handler ignores its event payload entirely (it always
+  # rescans the whole curated zone and diffs against the cache) -- no input
+  # needed here, unlike rag_agent which requires {"question": ...}.
+}
+
+resource "aws_lambda_permission" "allow_eventbridge_rag_build_index" {
+  statement_id  = "AllowEventBridgeInvokeRagBuildIndex"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.rag_build_index.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.rag_build_index_schedule.arn
 }
 
 resource "aws_lambda_function" "rag_agent" {
