@@ -1,6 +1,8 @@
+import hashlib
 import json
 import logging
 import math
+import time
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 
@@ -18,8 +20,20 @@ logger.setLevel(logging.INFO)
 
 _s3_client = None
 _bedrock_client = None
+_dynamodb_resource = None
 
 MAX_ITERATIONS = 6
+
+# Question/answer memory (DynamoDB) -- lets a repeated question skip the
+# Bedrock tool-calling loop entirely instead of re-answering it from scratch.
+# Empty string disables caching (get/store become no-ops), matching the
+# common/config.py pattern of "unset env var = feature off" used elsewhere.
+RAG_MEMORY_TABLE = config.RAG_MEMORY_TABLE
+RAG_MEMORY_TTL_SECONDS = config.RAG_MEMORY_TTL_SECONDS
+# A question asked at least this many times has proven to recur -- the cache
+# entry is promoted to permanent (no TTL) instead of expiring like a one-off
+# question's short-term entry would.
+RAG_MEMORY_PROMOTE_AFTER_HITS = config.RAG_MEMORY_PROMOTE_AFTER_HITS
 
 TOOLS = [
     {
@@ -167,6 +181,55 @@ def _bedrock():
     if _bedrock_client is None:
         _bedrock_client = boto3.client("bedrock-runtime", region_name=config.AWS_REGION)
     return _bedrock_client
+
+
+def _dynamodb():
+    global _dynamodb_resource
+    if _dynamodb_resource is None:
+        _dynamodb_resource = boto3.resource("dynamodb", region_name=config.AWS_REGION)
+    return _dynamodb_resource
+
+
+def normalize_question(question: str) -> str:
+    """Collapses whitespace/case differences so "What is trending?" and
+    "what   is trending?" hit the same cache entry."""
+    return " ".join(question.strip().lower().split())
+
+
+def question_hash(question: str) -> str:
+    return hashlib.sha256(normalize_question(question).encode("utf-8")).hexdigest()
+
+
+def get_cached_answer(question: str) -> dict | None:
+    """Returns the cached item (answer/sources/hit_count) if this question
+    has been asked before and the entry hasn't expired, else None. A no-op
+    (returns None) when RAG_MEMORY_TABLE is unset."""
+    if not RAG_MEMORY_TABLE:
+        return None
+    table = _dynamodb().Table(RAG_MEMORY_TABLE)
+    response = table.get_item(Key={"question_hash": question_hash(question)})
+    return response.get("Item")
+
+
+def store_cached_answer(question: str, answer: str, sources: list[dict], hit_count: int) -> None:
+    """No-op when RAG_MEMORY_TABLE is unset. Below RAG_MEMORY_PROMOTE_AFTER_HITS,
+    the item carries a `ttl` (short-term -- DynamoDB expires it automatically).
+    At/above that hit count the question has proven to recur, so it's written
+    without `ttl` (long-term / permanent) instead."""
+    if not RAG_MEMORY_TABLE:
+        return
+    table = _dynamodb().Table(RAG_MEMORY_TABLE)
+    item = {
+        "question_hash": question_hash(question),
+        "question": question,
+        "answer": answer,
+        "sources": json.dumps(sources),
+        "hit_count": hit_count,
+        "last_asked_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if hit_count < RAG_MEMORY_PROMOTE_AFTER_HITS:
+        item["ttl"] = int(time.time()) + RAG_MEMORY_TTL_SECONDS
+    table.put_item(Item=item)
 
 
 def embed_text(text: str) -> list[float]:
@@ -442,8 +505,33 @@ def lambda_handler(event, context):
     if not question:
         return {"statusCode": 400, "error": "Missing 'question' in event"}
 
+    cached = get_cached_answer(question)
+    if cached is not None:
+        sources = json.loads(cached["sources"])
+        # Re-store to bump hit_count and, once RAG_MEMORY_PROMOTE_AFTER_HITS is
+        # reached, promote the entry from short-term (TTL) to long-term
+        # (permanent) -- a question that keeps recurring earns a permanent
+        # cache entry instead of expiring like a one-off would.
+        hit_count = int(cached.get("hit_count", 1)) + 1
+        store_cached_answer(question, cached["answer"], sources, hit_count)
+        return {
+            "statusCode": 200,
+            "question": question,
+            "answer": cached["answer"],
+            "grounded": bool(sources),
+            "tool_calls": [],
+            "sources": sources,
+            "cached": True,
+        }
+
     documents = load_index()
     result = run_agent(question, documents)
+
+    sources = [
+        {"title": s.get("title", ""), "url": s.get("url", ""), "source": s.get("source", "")}
+        for s in result["sources"]
+    ]
+    store_cached_answer(question, result["answer"], sources, hit_count=1)
 
     return {
         "statusCode": 200,
@@ -451,10 +539,8 @@ def lambda_handler(event, context):
         "answer": result["answer"],
         "grounded": bool(result["sources"]),
         "tool_calls": result["trace"],
-        "sources": [
-            {"title": s.get("title", ""), "url": s.get("url", ""), "source": s.get("source", "")}
-            for s in result["sources"]
-        ],
+        "sources": sources,
+        "cached": False,
     }
 
 

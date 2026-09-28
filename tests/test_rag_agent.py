@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 
 import pytest
@@ -416,3 +417,123 @@ def test_run_agent_forces_final_answer_after_max_iterations(monkeypatch):
 def test_lambda_handler_rejects_missing_question():
     result = agent.lambda_handler({}, None)
     assert result["statusCode"] == 400
+
+
+def test_normalize_question_collapses_case_and_whitespace():
+    assert agent.normalize_question("  What IS   trending?  ") == "what is trending?"
+
+
+def test_question_hash_is_stable_across_equivalent_phrasing():
+    assert agent.question_hash("What is trending?") == agent.question_hash("what is   trending?")
+
+
+class FakeTable:
+    """In-memory stand-in for a boto3 DynamoDB Table resource."""
+
+    def __init__(self):
+        self.items = {}
+
+    def get_item(self, Key):
+        item = self.items.get(Key["question_hash"])
+        return {"Item": item} if item is not None else {}
+
+    def put_item(self, Item):
+        self.items[Item["question_hash"]] = Item
+
+
+class FakeDynamoDB:
+    def __init__(self, table):
+        self._table = table
+
+    def Table(self, name):
+        return self._table
+
+
+def test_get_cached_answer_returns_none_when_memory_disabled(monkeypatch):
+    monkeypatch.setattr(agent, "RAG_MEMORY_TABLE", "")
+    assert agent.get_cached_answer("anything") is None
+
+
+def test_store_then_get_cached_answer_round_trips(monkeypatch):
+    table = FakeTable()
+    monkeypatch.setattr(agent, "RAG_MEMORY_TABLE", "rag-memory")
+    monkeypatch.setattr(agent, "_dynamodb", lambda: FakeDynamoDB(table))
+
+    agent.store_cached_answer(
+        "What is trending?", "AI agents.", [{"url": "https://x"}], hit_count=1
+    )
+    cached = agent.get_cached_answer("what is   trending?")
+
+    assert cached["answer"] == "AI agents."
+    assert json.loads(cached["sources"]) == [{"url": "https://x"}]
+
+
+def test_store_cached_answer_sets_ttl_below_promotion_threshold(monkeypatch):
+    table = FakeTable()
+    monkeypatch.setattr(agent, "RAG_MEMORY_TABLE", "rag-memory")
+    monkeypatch.setattr(agent, "RAG_MEMORY_PROMOTE_AFTER_HITS", 2)
+    monkeypatch.setattr(agent, "_dynamodb", lambda: FakeDynamoDB(table))
+
+    agent.store_cached_answer("Q", "A", [], hit_count=1)
+
+    item = table.items[agent.question_hash("Q")]
+    assert "ttl" in item
+
+
+def test_store_cached_answer_promotes_to_permanent_at_threshold(monkeypatch):
+    table = FakeTable()
+    monkeypatch.setattr(agent, "RAG_MEMORY_TABLE", "rag-memory")
+    monkeypatch.setattr(agent, "RAG_MEMORY_PROMOTE_AFTER_HITS", 2)
+    monkeypatch.setattr(agent, "_dynamodb", lambda: FakeDynamoDB(table))
+
+    agent.store_cached_answer("Q", "A", [], hit_count=2)
+
+    item = table.items[agent.question_hash("Q")]
+    assert "ttl" not in item
+
+
+def test_lambda_handler_returns_cached_answer_without_calling_run_agent(monkeypatch):
+    table = FakeTable()
+    monkeypatch.setattr(agent, "RAG_MEMORY_TABLE", "rag-memory")
+    monkeypatch.setattr(agent, "_dynamodb", lambda: FakeDynamoDB(table))
+    agent.store_cached_answer(
+        "What is trending?", "AI agents.", [{"url": "https://x"}], hit_count=1
+    )
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("run_agent should not be called on a cache hit")
+
+    monkeypatch.setattr(agent, "load_index", fail_if_called)
+    monkeypatch.setattr(agent, "run_agent", fail_if_called)
+
+    result = agent.lambda_handler({"question": "what is trending?"}, None)
+
+    assert result["cached"] is True
+    assert result["answer"] == "AI agents."
+    assert result["sources"] == [{"url": "https://x"}]
+    # Re-asking bumped hit_count from 1 -> 2.
+    assert table.items[agent.question_hash("What is trending?")]["hit_count"] == 2
+
+
+def test_lambda_handler_runs_agent_and_caches_on_miss(monkeypatch):
+    table = FakeTable()
+    monkeypatch.setattr(agent, "RAG_MEMORY_TABLE", "rag-memory")
+    monkeypatch.setattr(agent, "_dynamodb", lambda: FakeDynamoDB(table))
+    monkeypatch.setattr(agent, "load_index", lambda: [])
+    monkeypatch.setattr(
+        agent,
+        "run_agent",
+        lambda question, documents: {
+            "answer": "Fresh answer.",
+            "trace": [],
+            "sources": [{"title": "T", "url": "https://y", "source": "news"}],
+        },
+    )
+
+    result = agent.lambda_handler({"question": "New question?"}, None)
+
+    assert result["cached"] is False
+    assert result["answer"] == "Fresh answer."
+    cached_item = table.items[agent.question_hash("New question?")]
+    assert cached_item["hit_count"] == 1
+    assert "ttl" in cached_item

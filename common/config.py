@@ -63,6 +63,11 @@ BEDROCK_TEXT_MODEL_ID = os.environ.get(
     "BEDROCK_TEXT_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 )
 RAG_TOP_K = int(os.environ.get("RAG_TOP_K", "5"))
+
+# Question/answer cache (DynamoDB) -- unset (empty string) disables it.
+RAG_MEMORY_TABLE = os.environ.get("RAG_MEMORY_TABLE", "")
+RAG_MEMORY_TTL_SECONDS = int(os.environ.get("RAG_MEMORY_TTL_SECONDS", str(7 * 24 * 3600)))
+RAG_MEMORY_PROMOTE_AFTER_HITS = int(os.environ.get("RAG_MEMORY_PROMOTE_AFTER_HITS", "2"))
 RAG_INDEX_KEY = os.environ.get("RAG_INDEX_KEY", "rag-index/index.json")
 
 # Web search tool for the agent (Tavily -- api.tavily.com), used when it

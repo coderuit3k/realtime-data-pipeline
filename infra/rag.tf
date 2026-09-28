@@ -10,6 +10,33 @@
 # would run 24/7 and cost real money even idle; at this dataset's size,
 # Lambda-memory cosine search is plenty and costs $0 outside a run.
 
+# Question/answer cache for rag_agent: a repeated question is served straight
+# from here instead of re-running the Bedrock tool-calling loop. On-demand
+# billing (pay per request, $0 idle) plus TTL make this cheaper than any
+# always-on cache -- see the DynamoDB-vs-Redis/Supabase cost comparison this
+# replaced (Redis/ElastiCache has a real monthly floor even serverless;
+# Supabase's free tier pauses after a week of inactivity, and its paid tier
+# alone costs more than this project's entire current AWS bill).
+resource "aws_dynamodb_table" "rag_memory" {
+  name         = "${local.name_prefix}-rag-memory"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "question_hash"
+
+  attribute {
+    name = "question_hash"
+    type = "S"
+  }
+
+  # Short-term entries (a question asked fewer than
+  # RAG_MEMORY_PROMOTE_AFTER_HITS times) carry a `ttl` and expire
+  # automatically. Long-term (promoted) entries omit `ttl` and are never
+  # expired by DynamoDB -- see rag/agent.py store_cached_answer.
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
+}
+
 resource "aws_iam_role" "rag_lambda" {
   name               = "${local.name_prefix}-rag-lambda"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
@@ -107,6 +134,12 @@ data "aws_iam_policy_document" "rag_permissions" {
     actions   = ["s3:GetBucketLocation"]
     resources = [aws_s3_bucket.curated.arn]
   }
+
+  statement {
+    sid       = "ReadWriteRagMemory"
+    actions   = ["dynamodb:GetItem", "dynamodb:PutItem"]
+    resources = [aws_dynamodb_table.rag_memory.arn]
+  }
 }
 
 resource "aws_iam_role_policy" "rag_permissions" {
@@ -199,6 +232,7 @@ resource "aws_lambda_function" "rag_agent" {
       TAVILY_SECRET_NAME     = aws_secretsmanager_secret.tavily_api.name
       ATHENA_WORKGROUP       = aws_athena_workgroup.main.name
       ATHENA_DATABASE        = aws_glue_catalog_database.curated.name
+      RAG_MEMORY_TABLE       = aws_dynamodb_table.rag_memory.name
     }
   }
 }
