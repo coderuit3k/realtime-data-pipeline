@@ -4,7 +4,7 @@ AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 RAW_BUCKET = os.environ.get("RAW_BUCKET", "")
 CURATED_BUCKET = os.environ.get("CURATED_BUCKET", "")
 
-NEWS_SECRET_NAME = os.environ.get("NEWS_SECRET_NAME", "data-pipeline/news-api")
+NEWS_SECRET_NAME = os.environ.get("NEWS_SECRET_NAME", "realtime-data-pipeline-dev/news-api")
 
 # Hacker News' API is public and needs no key/auth.
 HN_FEED = os.environ.get("HN_FEED", "newstories")  # or "topstories", "beststories"
@@ -45,7 +45,9 @@ CRYPTO_COIN_IDS = ["bitcoin", "ethereum", "solana"]
 GITHUB_TRENDING_DAYS = int(os.environ.get("GITHUB_TRENDING_DAYS", "7"))
 GITHUB_TRENDING_LIMIT = int(os.environ.get("GITHUB_TRENDING_LIMIT", "20"))
 
-GMAIL_SECRET_NAME = os.environ.get("GMAIL_SECRET_NAME", "data-pipeline/gmail-ingestion")
+GMAIL_SECRET_NAME = os.environ.get(
+    "GMAIL_SECRET_NAME", "realtime-data-pipeline-dev/gmail-ingestion"
+)
 GMAIL_MESSAGE_LIMIT = int(os.environ.get("GMAIL_MESSAGE_LIMIT", "50"))
 GMAIL_R2_BUCKET_NAME = os.environ.get("GMAIL_R2_BUCKET_NAME", "")
 
@@ -65,7 +67,7 @@ RAG_INDEX_KEY = os.environ.get("RAG_INDEX_KEY", "rag-index/index.json")
 
 # Web search tool for the agent (Tavily -- api.tavily.com), used when it
 # decides the knowledge base has nothing relevant.
-TAVILY_SECRET_NAME = os.environ.get("TAVILY_SECRET_NAME", "data-pipeline/tavily-api")
+TAVILY_SECRET_NAME = os.environ.get("TAVILY_SECRET_NAME", "realtime-data-pipeline-dev/tavily-api")
 
 # Athena SQL tool for the agent -- same workgroup/database the public Data
 # Explorer page queries (see infra/glue.tf), reused here for aggregate/
