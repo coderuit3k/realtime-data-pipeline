@@ -56,9 +56,9 @@ variable "gmail_message_limit" {
 }
 
 variable "gmail_r2_bucket_name" {
-  description = "Real Cloudflare R2 bucket name for archiving raw Gmail messages (not secret -- the real R2 API credentials are in the gmail_ingestion Secrets Manager secret)"
+  description = "Real Cloudflare R2 bucket name for archiving raw Gmail messages (not secret -- the real R2 API credentials are in the gmail_ingestion Secrets Manager secret). Defaulted here rather than left to terraform.tfvars because that file is gitignored and CI never sees it -- an empty default would make every CI-driven apply silently wipe this env var off the deployed Lambda."
   type        = string
-  default     = ""
+  default     = "rdp-gmail"
 }
 
 variable "ingestion_schedule" {
