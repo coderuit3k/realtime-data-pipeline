@@ -1,3 +1,5 @@
+import json
+
 import pandas as pd
 
 from common import config
@@ -56,25 +58,55 @@ def test_build_keyword_prompt_numbers_each_item():
     assert "[2] second item" in prompt
 
 
-def test_parse_keyword_response_parses_plain_json_array():
-    result = transform.parse_keyword_response('["bitcoin, rally", "ether, defi"]', expected_count=2)
+def test_parse_keyword_response_parses_indexed_json_array():
+    raw = '[{"i": 1, "keywords": "bitcoin, rally"}, {"i": 2, "keywords": "ether, defi"}]'
+    result = transform.parse_keyword_response(raw, expected_count=2)
 
     assert result == [["bitcoin", "rally"], ["ether", "defi"]]
 
 
 def test_parse_keyword_response_strips_markdown_code_fence():
-    raw = '```json\n["bitcoin, rally"]\n```'
+    raw = '```json\n[{"i": 1, "keywords": "bitcoin, rally"}]\n```'
     result = transform.parse_keyword_response(raw, expected_count=1)
 
     assert result == [["bitcoin", "rally"]]
 
 
-def test_parse_keyword_response_rejects_wrong_count():
-    try:
-        transform.parse_keyword_response('["only, one"]', expected_count=2)
-        assert False, "expected ValueError"
-    except ValueError:
-        pass
+def test_parse_keyword_response_returns_none_for_item_the_model_skipped():
+    # The model only returned "i": 1 out of an expected 2 -- item 2 (0-indexed
+    # position 1) must come back None, not raise and discard item 1's result.
+    raw = '[{"i": 1, "keywords": "only, one"}]'
+    result = transform.parse_keyword_response(raw, expected_count=2)
+
+    assert result == [["only", "one"], None]
+
+
+def test_parse_keyword_response_ignores_out_of_range_index():
+    raw = '[{"i": 1, "keywords": "a, b"}, {"i": 99, "keywords": "c, d"}]'
+    result = transform.parse_keyword_response(raw, expected_count=2)
+
+    assert result == [["a", "b"], None]
+
+
+def test_extract_keywords_llm_falls_back_to_regex_for_skipped_item_only(monkeypatch):
+    class FakeBody:
+        def read(self):
+            return json.dumps(
+                {"content": [{"text": '[{"i": 1, "keywords": "bitcoin, rally"}]'}]}
+            ).encode("utf-8")
+
+    class FakeBedrock:
+        def invoke_model(self, **kwargs):
+            return {"body": FakeBody()}
+
+    monkeypatch.setattr(transform, "_bedrock", lambda: FakeBedrock())
+
+    result = transform.extract_keywords_llm(["Bitcoin surges", "Ethereum upgrade rollout delayed"])
+
+    assert result[0] == ["bitcoin", "rally"]
+    # Item 2 was skipped by the model -- must fall back to regex for just this
+    # one item, not discard item 1's real LLM-extracted keywords too.
+    assert "ethereum" in result[1]
 
 
 def test_attach_keywords_uses_llm_result(monkeypatch):

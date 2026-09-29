@@ -67,20 +67,38 @@ def build_keyword_prompt(texts: list[str]) -> str:
     return (
         "For each numbered item below, extract up to 5 short topical keywords "
         "(lowercase, comma-separated, no generic filler words). Respond with ONLY "
-        "a JSON array of strings -- one comma-separated keyword string per item, "
-        "in the same order, no other text.\n\n"
+        'a JSON array of objects -- {"i": <item number>, "keywords": "a, b, c"} -- '
+        "one per item, using the item's own [N] number as \"i\" (skip an item "
+        "instead of guessing if its text is empty/unclear). No other text.\n\n"
         f"{items}"
     )
 
 
-def parse_keyword_response(raw: str, expected_count: int) -> list[list[str]]:
+def parse_keyword_response(raw: str, expected_count: int) -> list[list[str] | None]:
+    """Returns one entry per input item, in order; an item the model skipped
+    (or tagged with an out-of-range/duplicate "i") comes back as None so the
+    caller can fall back to regex extraction for just that item, instead of
+    discarding every item in the batch over one bad "i" -- unlike positional
+    matching, a missing/wrong "i" can't silently misattribute keywords to the
+    wrong item, it can only leave that one item unfilled."""
     cleaned = raw.strip()
     if cleaned.startswith("```"):
         cleaned = re.sub(r"^```(?:json)?\n|\n```$", "", cleaned)
-    keyword_strings = json.loads(cleaned)
-    if not isinstance(keyword_strings, list) or len(keyword_strings) != expected_count:
-        raise ValueError(f"Expected {expected_count} keyword strings, got: {keyword_strings!r}")
-    return [[kw.strip().lower() for kw in ks.split(",") if kw.strip()] for ks in keyword_strings]
+    entries = json.loads(cleaned)
+    if not isinstance(entries, list):
+        raise ValueError(f"Expected a JSON array, got: {entries!r}")
+
+    by_index: dict[int, list[str]] = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        i = entry.get("i")
+        if not isinstance(i, int) or not (1 <= i <= expected_count):
+            continue
+        keywords = entry.get("keywords") or ""
+        by_index[i] = [kw.strip().lower() for kw in keywords.split(",") if kw.strip()]
+
+    return [by_index.get(i + 1) for i in range(expected_count)]
 
 
 def extract_keywords_llm(texts: list[str]) -> list[list[str]]:
@@ -97,7 +115,13 @@ def extract_keywords_llm(texts: list[str]) -> list[list[str]]:
         ),
     )
     body = json.loads(response["body"].read())
-    return parse_keyword_response(body["content"][0]["text"], len(texts))
+    keyword_lists = parse_keyword_response(body["content"][0]["text"], len(texts))
+    # Per-item regex fallback for anything the model skipped, rather than
+    # discarding the whole batch's LLM output over one missed item.
+    return [
+        kws if kws is not None else extract_keywords(texts[i])
+        for i, kws in enumerate(keyword_lists)
+    ]
 
 
 def record_text(record: dict, source: str) -> str:
