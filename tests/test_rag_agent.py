@@ -481,12 +481,19 @@ def test_store_then_get_cached_answer_round_trips(monkeypatch):
     monkeypatch.setattr(agent, "_dynamodb", lambda: FakeDynamoDB(table))
 
     agent.store_cached_answer(
-        "What is trending?", "AI agents.", [{"url": "https://x"}], hit_count=1
+        "What is trending?",
+        "AI agents.",
+        [{"url": "https://x"}],
+        [{"tool": "search_web", "input": {"query": "trending"}, "result_count": 1}],
+        hit_count=1,
     )
     cached = agent.get_cached_answer("what is   trending?")
 
     assert cached["answer"] == "AI agents."
     assert json.loads(cached["sources"]) == [{"url": "https://x"}]
+    assert json.loads(cached["tool_calls"]) == [
+        {"tool": "search_web", "input": {"query": "trending"}, "result_count": 1}
+    ]
 
 
 def test_store_cached_answer_sets_ttl_below_promotion_threshold(monkeypatch):
@@ -495,7 +502,7 @@ def test_store_cached_answer_sets_ttl_below_promotion_threshold(monkeypatch):
     monkeypatch.setattr(agent, "RAG_MEMORY_PROMOTE_AFTER_HITS", 2)
     monkeypatch.setattr(agent, "_dynamodb", lambda: FakeDynamoDB(table))
 
-    agent.store_cached_answer("Q", "A", [], hit_count=1)
+    agent.store_cached_answer("Q", "A", [], [], hit_count=1)
 
     item = table.items[agent.question_hash("Q")]
     assert "ttl" in item
@@ -507,7 +514,7 @@ def test_store_cached_answer_promotes_to_permanent_at_threshold(monkeypatch):
     monkeypatch.setattr(agent, "RAG_MEMORY_PROMOTE_AFTER_HITS", 2)
     monkeypatch.setattr(agent, "_dynamodb", lambda: FakeDynamoDB(table))
 
-    agent.store_cached_answer("Q", "A", [], hit_count=2)
+    agent.store_cached_answer("Q", "A", [], [], hit_count=2)
 
     item = table.items[agent.question_hash("Q")]
     assert "ttl" not in item
@@ -517,8 +524,9 @@ def test_lambda_handler_returns_cached_answer_without_calling_run_agent(monkeypa
     table = FakeTable()
     monkeypatch.setattr(agent, "RAG_MEMORY_TABLE", "rag-memory")
     monkeypatch.setattr(agent, "_dynamodb", lambda: FakeDynamoDB(table))
+    original_trace = [{"tool": "search_web", "input": {"query": "trending"}, "result_count": 1}]
     agent.store_cached_answer(
-        "What is trending?", "AI agents.", [{"url": "https://x"}], hit_count=1
+        "What is trending?", "AI agents.", [{"url": "https://x"}], original_trace, hit_count=1
     )
 
     def fail_if_called(*args, **kwargs):
@@ -532,8 +540,30 @@ def test_lambda_handler_returns_cached_answer_without_calling_run_agent(monkeypa
     assert result["cached"] is True
     assert result["answer"] == "AI agents."
     assert result["sources"] == [{"url": "https://x"}]
+    # The answer was really grounded via search_web when first computed --
+    # a cache hit must say so, not claim no tool was used.
+    assert result["tool_calls"] == original_trace
     # Re-asking bumped hit_count from 1 -> 2.
     assert table.items[agent.question_hash("What is trending?")]["hit_count"] == 2
+
+
+def test_lambda_handler_cache_hit_defaults_to_empty_trace_for_pre_existing_entries(monkeypatch):
+    # A cache entry written before tool_calls was persisted (see
+    # store_cached_answer) has no "tool_calls" key at all -- must not KeyError.
+    table = FakeTable()
+    table.items[agent.question_hash("Old question")] = {
+        "question_hash": agent.question_hash("Old question"),
+        "answer": "Old answer.",
+        "sources": "[]",
+        "hit_count": 1,
+    }
+    monkeypatch.setattr(agent, "RAG_MEMORY_TABLE", "rag-memory")
+    monkeypatch.setattr(agent, "_dynamodb", lambda: FakeDynamoDB(table))
+
+    result = agent.lambda_handler({"question": "Old question"}, None)
+
+    assert result["cached"] is True
+    assert result["tool_calls"] == []
 
 
 def test_lambda_handler_runs_agent_and_caches_on_miss(monkeypatch):
@@ -541,12 +571,13 @@ def test_lambda_handler_runs_agent_and_caches_on_miss(monkeypatch):
     monkeypatch.setattr(agent, "RAG_MEMORY_TABLE", "rag-memory")
     monkeypatch.setattr(agent, "_dynamodb", lambda: FakeDynamoDB(table))
     monkeypatch.setattr(agent, "load_index", lambda: [])
+    fresh_trace = [{"tool": "query_athena", "input": {"sql": "SELECT 1"}, "result_count": 1}]
     monkeypatch.setattr(
         agent,
         "run_agent",
         lambda question, documents: {
             "answer": "Fresh answer.",
-            "trace": [],
+            "trace": fresh_trace,
             "sources": [{"title": "T", "url": "https://y", "source": "news"}],
         },
     )
@@ -555,6 +586,10 @@ def test_lambda_handler_runs_agent_and_caches_on_miss(monkeypatch):
 
     assert result["cached"] is False
     assert result["answer"] == "Fresh answer."
+    assert result["tool_calls"] == fresh_trace
     cached_item = table.items[agent.question_hash("New question?")]
     assert cached_item["hit_count"] == 1
     assert "ttl" in cached_item
+    # The trace from this fresh run must be persisted too, so the next cache
+    # hit on this same question can show real grounding, not an empty list.
+    assert json.loads(cached_item["tool_calls"]) == fresh_trace

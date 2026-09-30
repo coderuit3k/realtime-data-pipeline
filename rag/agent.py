@@ -247,11 +247,18 @@ def get_cached_answer(question: str) -> dict | None:
     return response.get("Item")
 
 
-def store_cached_answer(question: str, answer: str, sources: list[dict], hit_count: int) -> None:
+def store_cached_answer(
+    question: str, answer: str, sources: list[dict], tool_calls: list[dict], hit_count: int
+) -> None:
     """No-op when RAG_MEMORY_TABLE is unset. Below RAG_MEMORY_PROMOTE_AFTER_HITS,
     the item carries a `ttl` (short-term -- DynamoDB expires it automatically).
     At/above that hit count the question has proven to recur, so it's written
-    without `ttl` (long-term / permanent) instead."""
+    without `ttl` (long-term / permanent) instead.
+
+    tool_calls is stored (not just sources) so a later cache hit can show what
+    actually grounded this answer -- returning "tool_calls: []" on every hit
+    would misrepresent a real, tool-grounded answer as one the model made up,
+    just because this particular invocation didn't re-run those tools."""
     if not RAG_MEMORY_TABLE:
         return
     table = _dynamodb().Table(RAG_MEMORY_TABLE)
@@ -260,6 +267,7 @@ def store_cached_answer(question: str, answer: str, sources: list[dict], hit_cou
         "question": question,
         "answer": answer,
         "sources": json.dumps(sources),
+        "tool_calls": json.dumps(tool_calls),
         "hit_count": hit_count,
         "last_asked_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -545,18 +553,25 @@ def lambda_handler(event, context):
     cached = get_cached_answer(question)
     if cached is not None:
         sources = json.loads(cached["sources"])
+        # Pre-existing cache entries written before tool_calls was persisted
+        # (see store_cached_answer) won't have this field -- fall back to []
+        # rather than a KeyError; they'll carry a real trace once re-stored.
+        tool_calls = json.loads(cached.get("tool_calls") or "[]")
         # Re-store to bump hit_count and, once RAG_MEMORY_PROMOTE_AFTER_HITS is
         # reached, promote the entry from short-term (TTL) to long-term
         # (permanent) -- a question that keeps recurring earns a permanent
         # cache entry instead of expiring like a one-off would.
         hit_count = int(cached.get("hit_count", 1)) + 1
-        store_cached_answer(question, cached["answer"], sources, hit_count)
+        store_cached_answer(question, cached["answer"], sources, tool_calls, hit_count)
         return {
             "statusCode": 200,
             "question": question,
             "answer": cached["answer"],
             "grounded": bool(sources),
-            "tool_calls": [],
+            # The real trace from when this answer was first computed, not
+            # tools run just now -- callers can tell the two apart via
+            # "cached" below and label a cached reply accordingly.
+            "tool_calls": tool_calls,
             "sources": sources,
             "cached": True,
         }
@@ -568,7 +583,7 @@ def lambda_handler(event, context):
         {"title": s.get("title", ""), "url": s.get("url", ""), "source": s.get("source", "")}
         for s in result["sources"]
     ]
-    store_cached_answer(question, result["answer"], sources, hit_count=1)
+    store_cached_answer(question, result["answer"], sources, result["trace"], hit_count=1)
 
     return {
         "statusCode": 200,
