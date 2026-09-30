@@ -14,19 +14,19 @@ vi.mock("@/lib/conversations", async () => {
   const actual = await vi.importActual<typeof import("@/lib/conversations")>("@/lib/conversations");
   return {
     ...actual,
-    conversationBelongsToSession: vi.fn(),
+    listMessagesForConversation: vi.fn(),
     insertMessage: vi.fn(),
   };
 });
 
 import { getLambdaClient } from "@/lib/aws";
 import { checkRateLimit } from "@/lib/ratelimit";
-import { conversationBelongsToSession, insertMessage } from "@/lib/conversations";
+import { listMessagesForConversation, insertMessage } from "@/lib/conversations";
 import { POST } from "./route";
 
 const mockedGetLambdaClient = vi.mocked(getLambdaClient);
 const mockedCheckRateLimit = vi.mocked(checkRateLimit);
-const mockedBelongsToSession = vi.mocked(conversationBelongsToSession);
+const mockedListMessages = vi.mocked(listMessagesForConversation);
 const mockedInsertMessage = vi.mocked(insertMessage);
 
 function makeRequest(body: unknown): NextRequest {
@@ -40,7 +40,7 @@ function makeRequest(body: unknown): NextRequest {
 beforeEach(() => {
   mockedCheckRateLimit.mockReset();
   mockedGetLambdaClient.mockReset();
-  mockedBelongsToSession.mockReset();
+  mockedListMessages.mockReset();
   mockedInsertMessage.mockReset();
 });
 
@@ -139,7 +139,7 @@ describe("POST /api/assistant", () => {
 
   it("returns 404 without calling the Lambda when conversationId belongs to a different session", async () => {
     mockedCheckRateLimit.mockResolvedValue({ allowed: true, remaining: 4 });
-    mockedBelongsToSession.mockResolvedValue(false);
+    mockedListMessages.mockResolvedValue(null);
 
     const request = new NextRequest("http://localhost/api/assistant", {
       method: "POST",
@@ -159,7 +159,7 @@ describe("POST /api/assistant", () => {
 
   it("persists the turn to the conversation on success", async () => {
     mockedCheckRateLimit.mockResolvedValue({ allowed: true, remaining: 4 });
-    mockedBelongsToSession.mockResolvedValue(true);
+    mockedListMessages.mockResolvedValue([]);
     mockedInsertMessage.mockResolvedValue(undefined);
     const payload = {
       statusCode: 200,
@@ -195,7 +195,7 @@ describe("POST /api/assistant", () => {
 
   it("still returns the real answer when persisting the turn fails", async () => {
     mockedCheckRateLimit.mockResolvedValue({ allowed: true, remaining: 4 });
-    mockedBelongsToSession.mockResolvedValue(true);
+    mockedListMessages.mockResolvedValue([]);
     mockedInsertMessage.mockRejectedValue(new Error("db down"));
     const payload = {
       statusCode: 200,
@@ -243,7 +243,62 @@ describe("POST /api/assistant", () => {
     const response = await POST(makeRequest({ question: "hi" }));
 
     expect(response.status).toBe(200);
-    expect(mockedBelongsToSession).not.toHaveBeenCalled();
+    expect(mockedListMessages).not.toHaveBeenCalled();
     expect(mockedInsertMessage).not.toHaveBeenCalled();
+  });
+
+  it("sends prior conversation turns as context to the Lambda, but keeps the original question in the response", async () => {
+    mockedCheckRateLimit.mockResolvedValue({ allowed: true, remaining: 4 });
+    mockedListMessages.mockResolvedValue([
+      {
+        id: "m1",
+        question: "Ngày nào GitHub có nhiều repo mới nhất?",
+        answer: "Ngày 23/09 và 24/09, mỗi ngày 2,880 repo.",
+        grounded: true,
+        tool_calls: [],
+        sources: [],
+        created_at: "2026-09-29T00:00:00Z",
+      },
+    ]);
+    mockedInsertMessage.mockResolvedValue(undefined);
+    const payload = {
+      statusCode: 200,
+      // The Lambda echoes back whatever it was sent -- simulate it echoing
+      // the context-augmented question, to prove the route overrides it.
+      question: "Các câu hỏi/trả lời trước đó...\n\nCâu hỏi hiện tại, trả lời đúng câu này: Vậy tại sao?",
+      answer: "Vì đợt đó có nhiều repo mới được tạo hàng loạt.",
+      grounded: true,
+      tool_calls: [],
+      sources: [],
+    };
+    const send = vi.fn().mockResolvedValue({ Payload: Buffer.from(JSON.stringify(payload)) });
+    mockedGetLambdaClient.mockReturnValue({ send } as never);
+
+    const request = new NextRequest("http://localhost/api/assistant", {
+      method: "POST",
+      body: JSON.stringify({ question: "Vậy tại sao?", conversationId: "conv-1" }),
+      headers: {
+        "content-type": "application/json",
+        "x-forwarded-for": "9.9.9.9",
+        "x-session-id": "session-1",
+      },
+    });
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.question).toBe("Vậy tại sao?");
+
+    const invokeArg = send.mock.calls[0][0];
+    const sentPayload = JSON.parse(Buffer.from(invokeArg.input.Payload).toString("utf-8"));
+    expect(sentPayload.question).toContain("Ngày nào GitHub có nhiều repo mới nhất?");
+    expect(sentPayload.question).toContain("Vậy tại sao?");
+
+    expect(mockedInsertMessage).toHaveBeenCalledWith(
+      expect.anything(),
+      "conv-1",
+      expect.objectContaining({ question: "Vậy tại sao?" })
+    );
   });
 });

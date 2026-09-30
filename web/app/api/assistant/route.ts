@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { InvokeCommand } from "@aws-sdk/client-lambda";
 import { getLambdaClient, requiredEnv } from "@/lib/aws";
 import { checkRateLimit } from "@/lib/ratelimit";
-import { normalizeAssistantResult } from "@/lib/assistant";
+import { normalizeAssistantResult, buildContextualQuestion } from "@/lib/assistant";
 import { clientIp } from "@/lib/clientIp";
 import { getSupabaseClient } from "@/lib/supabase";
-import { conversationBelongsToSession, insertMessage, getSessionIdHeader } from "@/lib/conversations";
+import { insertMessage, getSessionIdHeader, listMessagesForConversation } from "@/lib/conversations";
 
 // rag_agent's own Lambda timeout is 90s (see infra/rag.tf); 60 is Vercel's ceiling
 // on non-Pro plans, so this may still not be enough headroom on a Hobby plan.
@@ -35,23 +35,35 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    let priorMessages: { question: string; answer: string }[] = [];
     if (conversationId) {
       const sessionId = getSessionIdHeader(request.headers);
-      const belongs = sessionId && (await conversationBelongsToSession(getSupabaseClient(), sessionId, conversationId));
-      if (!belongs) {
+      const history = sessionId
+        ? await listMessagesForConversation(getSupabaseClient(), sessionId, conversationId)
+        : null;
+      if (history === null) {
         return NextResponse.json({ error: "Không tìm thấy cuộc trò chuyện." }, { status: 404 });
       }
+      priorMessages = history;
     }
 
     const functionName = requiredEnv("RAG_AGENT_FUNCTION_NAME");
+    const questionForLambda = buildContextualQuestion(question, priorMessages);
     const response = await getLambdaClient().send(
-      new InvokeCommand({ FunctionName: functionName, Payload: Buffer.from(JSON.stringify({ question })) })
+      new InvokeCommand({
+        FunctionName: functionName,
+        Payload: Buffer.from(JSON.stringify({ question: questionForLambda })),
+      })
     );
     const payload = JSON.parse(Buffer.from(response.Payload ?? new Uint8Array()).toString("utf-8"));
     if (payload.statusCode !== 200) {
       return NextResponse.json({ error: payload.error ?? "Lambda trả lỗi." }, { status: 502 });
     }
     const result = normalizeAssistantResult(payload);
+    // rag_agent echoes back whatever question it was sent -- keep the
+    // user's original text (not the context-augmented one) for display and
+    // for what gets persisted to the conversation below.
+    result.question = question;
 
     if (conversationId) {
       try {
