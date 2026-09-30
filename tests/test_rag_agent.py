@@ -10,6 +10,27 @@ def test_cosine_similarity_identical_vectors_is_one():
     assert agent.cosine_similarity([1.0, 0.0], [1.0, 0.0]) == 1.0
 
 
+def test_build_system_prompt_states_the_given_date():
+    now = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    prompt = agent.build_system_prompt(now)
+
+    assert "2026-10-01" in prompt
+    assert prompt.endswith(agent.SYSTEM_PROMPT)
+
+
+def test_build_system_prompt_defaults_to_the_real_current_date(monkeypatch):
+    fixed_now = datetime(2026, 3, 15, tzinfo=timezone.utc)
+
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed_now
+
+    monkeypatch.setattr(agent, "datetime", FixedDatetime)
+
+    assert "2026-03-15" in agent.build_system_prompt()
+
+
 def test_read_latest_curated_snapshot_picks_most_recent_key_today(monkeypatch):
     now = datetime(2026, 3, 30, 12, 0, tzinfo=timezone.utc)
     keys_by_prefix = {

@@ -186,6 +186,25 @@ SYSTEM_PROMPT = (
 )
 
 
+def build_system_prompt(now: datetime | None = None) -> str:
+    """Prepends today's actual date to SYSTEM_PROMPT. Nothing else in this
+    Lambda's Bedrock call carries the current date, so without this the model
+    has no ground truth for a relative expression ("this month", "since
+    yesterday") and has been observed guessing an arbitrary, wrong one (e.g.
+    querying year/month='2026'/'03' for "from the start of the month" when
+    the actual current month was '10') -- that wrong guess then silently
+    drives which partitions get queried, well before rule 4 above's "verify
+    with a tool call" check would ever catch it."""
+    now = now or datetime.now(timezone.utc)
+    date_line = (
+        f"Today's date is {now:%Y-%m-%d} (UTC). Resolve any relative time "
+        'expression in the question ("this month", "last week", "since '
+        'yesterday", "this year") into actual year/month/day values from '
+        "this date -- never guess or assume one.\n\n"
+    )
+    return date_line + SYSTEM_PROMPT
+
+
 def _s3():
     global _s3_client
     if _s3_client is None:
@@ -459,11 +478,12 @@ def run_agent(question: str, documents: list[dict]) -> dict:
     messages = [{"role": "user", "content": [{"text": question}]}]
     trace = []
     sources_by_url: dict[str, dict] = {}
+    system_prompt = build_system_prompt()
 
     for _ in range(MAX_ITERATIONS):
         response = _bedrock().converse(
             modelId=config.BEDROCK_TEXT_MODEL_ID,
-            system=[{"text": SYSTEM_PROMPT}],
+            system=[{"text": system_prompt}],
             messages=messages,
             toolConfig={"tools": TOOLS},
             inferenceConfig={"maxTokens": 800},
@@ -503,7 +523,7 @@ def run_agent(question: str, documents: list[dict]) -> dict:
     # Exhausted MAX_ITERATIONS without a final text turn (e.g. the model kept
     # calling tools) -- ask once more with tools withdrawn so it must answer
     # from whatever it already gathered, instead of erroring the invocation.
-    force_answer_system = SYSTEM_PROMPT + "\n\nYou must give your final answer now, no more tools."
+    force_answer_system = system_prompt + "\n\nYou must give your final answer now, no more tools."
     response = _bedrock().converse(
         modelId=config.BEDROCK_TEXT_MODEL_ID,
         system=[{"text": force_answer_system}],
