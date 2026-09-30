@@ -113,7 +113,15 @@ TOOLS = [
                 "whole table. Only SELECT/WITH statements are allowed; no "
                 "INSERT/UPDATE/DELETE/DDL. Prefer this over search_knowledge_base "
                 "for anything requiring counting, averaging, or aggregating "
-                "across many records."
+                "across many records. IMPORTANT: ingested_at/created_at/"
+                "published_at/observed_at/pushed_at are plain strings with "
+                "MICROSECOND precision (e.g. '2026-09-27T11:31:29.142944+00:00') "
+                "-- CAST(... AS DATE/TIMESTAMP), DATE(...), date_trunc(...), and "
+                "format_datetime(...) all fail on this exact format with "
+                "INVALID_CAST_ARGUMENT or FUNCTION_NOT_FOUND. To group/filter by "
+                "calendar day, use SUBSTR(column, 1, 10) directly (no cast) to "
+                "get 'YYYY-MM-DD' as a string -- that works. Don't burn several "
+                "tool calls rediscovering this."
             ),
             "inputSchema": {
                 "json": {
@@ -182,7 +190,14 @@ SYSTEM_PROMPT = (
     "5. When you give your final answer (no more tool calls), cite sources "
     "by URL for every factual claim taken from a tool result. If no tool "
     "result was relevant, say so explicitly and answer from general "
-    "knowledge, clearly flagged as ungrounded."
+    "knowledge, clearly flagged as ungrounded.\n"
+    "6. If every attempt at a query_athena/search call for this question "
+    "failed or errored (no tool call actually returned usable rows), you "
+    "have NO grounded numbers to report. Do not state specific counts, "
+    "tables, or statistics in that case -- say plainly that the query kept "
+    "failing (briefly note why, e.g. a SQL error) and offer to try a "
+    "different approach, rather than presenting any number as if it came "
+    "from this pipeline's data."
 )
 
 
