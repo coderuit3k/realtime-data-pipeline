@@ -17,7 +17,7 @@
 - `gmail_ingestion` gets its own EventBridge rule at `rate(4 hours)` (`var.gmail_ingestion_schedule`), never the shared 30-minute `ingestion_schedule` rule.
 - Every AWS/R2-touching function takes its client as its first parameter (dependency injection) — this project's established testability pattern (e.g. `common/s3_writer.py`'s `write_records`, `web/lib/eventbridge.ts`'s `getScheduleStatus`).
 - Real credentials (Gmail OAuth2 client_id/client_secret/refresh_token, R2 account id/access key/secret key) live in one AWS Secrets Manager secret (`${name_prefix}/gmail-ingestion`) that the user populates themselves via `aws secretsmanager put-secret-value` — no task in this plan ever invents, requests, or handles a real credential value.
-- The R2 bucket name (`GMAIL_R2_BUCKET_NAME`) is a plain Lambda env var, not a secret value (mirrors `R2_EXCEL_BUCKET_NAME` being a plain Vercel env var for the Excel export feature).
+- The R2 bucket name (`GMAIL_R2_BUCKET_NAME`) is a plain Lambda env var, not a secret value.
 - No `web/` changes anywhere in this plan (RAG index inclusion and "6 nguồn" web copy is a separate, later sub-project).
 - Terraform's only automated check is `terraform validate`/`terraform fmt -check` (run in CI already) — no unit tests for `.tf` files; real verification is a real `terraform plan`/`apply` the user runs and approves, same as every other infra change this project has shipped.
 
@@ -938,8 +938,7 @@ gate as every other infra change), the user must:
    '{"client_id":"...","client_secret":"...","refresh_token":"...","r2_account_id":"...","r2_access_key_id":"...","r2_secret_access_key":"..."}'`
    themselves, with their own real values.
 3. Set `gmail_r2_bucket_name` in their `terraform.tfvars` to the real R2
-   bucket name (`mail`'s real name, e.g. matching the pattern of the
-   `excel` bucket's real name `rdp-excel`) and re-`apply`.
+   bucket name and re-`apply`.
 4. A real `aws lambda invoke` against `gmail_ingestion` is the final
    end-to-end proof — same live-verification pattern used for every
    other ingestion Lambda this project has shipped.

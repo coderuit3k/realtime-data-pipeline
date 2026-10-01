@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build and deploy a public Next.js app with two screens — a Dashboard (live Athena + CloudWatch data) and a RAG Assistant (invokes the deployed `rag_query`/`rag_agent` Lambdas) — reusing the existing AWS pipeline with no changes to its Lambda code.
+**Goal:** Build and deploy a public Next.js app with two screens — a Dashboard (live Athena + CloudWatch data) and a RAG Assistant (invokes the deployed `rag_agent` Lambda) — reusing the existing AWS pipeline with no changes to its Lambda code.
 
 **Architecture:** A `web/` Next.js 15 App Router project with two API routes (`/api/dashboard`, `/api/assistant`) as the only AWS-facing code; everything else is presentational React. A new least-privilege IAM user (Terraform) supplies the AWS credentials Vercel's serverless functions use at runtime. Upstash rate-limits the Bedrock-backed assistant endpoint.
 
@@ -43,7 +43,6 @@ web/
     KpiCard.tsx
     SourceVolumeChart.tsx
     ActivityFeed.tsx
-    ModeToggle.tsx
     ChatThread.tsx
     ToolTrace.tsx
   package.json, tsconfig.json, tailwind.config.ts, postcss.config.js, next.config.ts, vitest.config.ts
@@ -849,7 +848,7 @@ git commit -m "Add Upstash sliding-window rate limiter for the assistant endpoin
 
 **Interfaces:**
 - Consumes: nothing (pure module).
-- Produces: `type AssistantMode = "crag" | "agent"`, `type AssistantSource = { title: string; url: string; source: string; score?: number | null; grade?: string }`, `type AssistantResult = { mode: AssistantMode; question: string; answer: string; grounded: boolean; sources: AssistantSource[]; cragDetail?: { answerSource: string; discarded: Array<{ title: string; grade: string }> }; agentDetail?: { toolCalls: unknown[] } }`, `normalizeAssistantResult(mode: AssistantMode, raw: unknown): AssistantResult` — consumed by Tasks 7, 10, 11.
+- Produces: `type AssistantSource = { title: string; url: string; source: string }`, `type AssistantResult = { question: string; answer: string; grounded: boolean; sources: AssistantSource[]; toolCalls: unknown[] }`, `normalizeAssistantResult(raw: unknown): AssistantResult` — consumed by Tasks 7, 10, 11.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -859,30 +858,6 @@ import { describe, expect, it } from "vitest";
 import { normalizeAssistantResult } from "./assistant";
 
 describe("normalizeAssistantResult", () => {
-  it("normalizes a rag_query (CRAG) payload", () => {
-    const raw = {
-      statusCode: 200,
-      question: "Xu hướng AI agent tuần này?",
-      answer: "HN thảo luận nhiều về tool-calling agent.",
-      grounded: true,
-      answer_source: "local_knowledge_base",
-      sources: [{ title: "Building a tool-calling agent loop", url: "https://hn/1", source: "hackernews", score: 0.83, grade: "relevant" }],
-      discarded_low_relevance: [{ title: "Unrelated story", grade: "irrelevant" }],
-    };
-
-    const result = normalizeAssistantResult("crag", raw);
-
-    expect(result.mode).toBe("crag");
-    expect(result.answer).toBe(raw.answer);
-    expect(result.grounded).toBe(true);
-    expect(result.sources).toEqual(raw.sources);
-    expect(result.cragDetail).toEqual({
-      answerSource: "local_knowledge_base",
-      discarded: [{ title: "Unrelated story", grade: "irrelevant" }],
-    });
-    expect(result.agentDetail).toBeUndefined();
-  });
-
   it("normalizes a rag_agent payload", () => {
     const raw = {
       statusCode: 200,
@@ -893,12 +868,13 @@ describe("normalizeAssistantResult", () => {
       sources: [{ title: "agent-loop-examples", url: "https://gh/1", source: "github" }],
     };
 
-    const result = normalizeAssistantResult("agent", raw);
+    const result = normalizeAssistantResult(raw);
 
-    expect(result.mode).toBe("agent");
+    expect(result.question).toBe(raw.question);
+    expect(result.answer).toBe(raw.answer);
+    expect(result.grounded).toBe(true);
     expect(result.sources).toEqual(raw.sources);
-    expect(result.agentDetail).toEqual({ toolCalls: raw.tool_calls });
-    expect(result.cragDetail).toBeUndefined();
+    expect(result.toolCalls).toEqual(raw.tool_calls);
   });
 });
 ```
@@ -912,33 +888,18 @@ Expected: FAIL — `normalizeAssistantResult` is not exported.
 
 ```ts
 // web/lib/assistant.ts
-export type AssistantMode = "crag" | "agent";
-
 export type AssistantSource = {
   title: string;
   url: string;
   source: string;
-  score?: number | null;
-  grade?: string;
 };
 
 export type AssistantResult = {
-  mode: AssistantMode;
   question: string;
   answer: string;
   grounded: boolean;
   sources: AssistantSource[];
-  cragDetail?: { answerSource: string; discarded: Array<{ title: string; grade: string }> };
-  agentDetail?: { toolCalls: unknown[] };
-};
-
-type RawCragPayload = {
-  question: string;
-  answer: string;
-  grounded: boolean;
-  answer_source: string;
-  sources: AssistantSource[];
-  discarded_low_relevance: Array<{ title: string; grade: string }>;
+  toolCalls: unknown[];
 };
 
 type RawAgentPayload = {
@@ -949,37 +910,28 @@ type RawAgentPayload = {
   sources: AssistantSource[];
 };
 
-export function normalizeAssistantResult(mode: AssistantMode, raw: unknown): AssistantResult {
-  const base = raw as { question: string; answer: string; grounded: boolean; sources: AssistantSource[] };
-  const shared = {
-    mode,
-    question: base.question,
-    answer: base.answer,
-    grounded: base.grounded,
-    sources: base.sources,
+export function normalizeAssistantResult(raw: unknown): AssistantResult {
+  const payload = raw as RawAgentPayload;
+  return {
+    question: payload.question,
+    answer: payload.answer,
+    grounded: payload.grounded,
+    sources: payload.sources,
+    toolCalls: payload.tool_calls,
   };
-  if (mode === "crag") {
-    const cragRaw = raw as RawCragPayload;
-    return {
-      ...shared,
-      cragDetail: { answerSource: cragRaw.answer_source, discarded: cragRaw.discarded_low_relevance },
-    };
-  }
-  const agentRaw = raw as RawAgentPayload;
-  return { ...shared, agentDetail: { toolCalls: agentRaw.tool_calls } };
 }
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd web && npx vitest run lib/assistant.test.ts`
-Expected: PASS (2 tests)
+Expected: PASS (1 test)
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add web/lib/assistant.ts web/lib/assistant.test.ts
-git commit -m "Add normalizer unifying rag_query and rag_agent Lambda payload shapes"
+git commit -m "Add normalizer for the rag_agent Lambda payload shape"
 ```
 
 ---
@@ -991,8 +943,8 @@ git commit -m "Add normalizer unifying rag_query and rag_agent Lambda payload sh
 - Test: `web/app/api/assistant/route.test.ts`
 
 **Interfaces:**
-- Consumes: `getLambdaClient`, `requiredEnv` (Task 3); `checkRateLimit` (Task 5); `normalizeAssistantResult`, `AssistantMode` (Task 6).
-- Produces: `POST /api/assistant` with body `{ question: string, mode: "crag" | "agent" }` → 200 `AssistantResult` | 400 `{error}` | 429 `{error}` | 502 `{error}` | 500 `{error}` — consumed by Task 11.
+- Consumes: `getLambdaClient`, `requiredEnv` (Task 3); `checkRateLimit` (Task 5); `normalizeAssistantResult` (Task 6).
+- Produces: `POST /api/assistant` with body `{ question: string }` → 200 `AssistantResult` | 400 `{error}` | 429 `{error}` | 502 `{error}` | 500 `{error}` — consumed by Task 11.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1004,7 +956,6 @@ import { NextRequest } from "next/server";
 vi.mock("@/lib/aws", () => ({
   getLambdaClient: vi.fn(),
   requiredEnv: vi.fn((name: string) => {
-    if (name === "RAG_QUERY_FUNCTION_NAME") return "realtime-data-pipeline-dev-rag-query";
     if (name === "RAG_AGENT_FUNCTION_NAME") return "realtime-data-pipeline-dev-rag-agent";
     throw new Error(`unexpected requiredEnv(${name})`);
   }),
@@ -1033,13 +984,13 @@ beforeEach(() => {
 
 describe("POST /api/assistant", () => {
   it("returns 400 for a missing question", async () => {
-    const response = await POST(makeRequest({ mode: "crag" }));
+    const response = await POST(makeRequest({}));
     expect(response.status).toBe(400);
   });
 
   it("returns 429 when rate limited", async () => {
     mockedCheckRateLimit.mockResolvedValue({ allowed: false, remaining: 0 });
-    const response = await POST(makeRequest({ question: "hi", mode: "crag" }));
+    const response = await POST(makeRequest({ question: "hi" }));
     expect(response.status).toBe(429);
     expect(mockedGetLambdaClient).not.toHaveBeenCalled();
   });
@@ -1051,19 +1002,18 @@ describe("POST /api/assistant", () => {
       question: "hi",
       answer: "answer text",
       grounded: true,
-      answer_source: "local_knowledge_base",
+      tool_calls: [{ tool: "search_knowledge_base", input: { query: "hi" }, result_count: 2 }],
       sources: [],
-      discarded_low_relevance: [],
     };
     mockedGetLambdaClient.mockReturnValue({
       send: vi.fn().mockResolvedValue({ Payload: Buffer.from(JSON.stringify(payload)) }),
     } as never);
 
-    const response = await POST(makeRequest({ question: "hi", mode: "crag" }));
+    const response = await POST(makeRequest({ question: "hi" }));
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.answer).toBe("answer text");
-    expect(body.cragDetail.answerSource).toBe("local_knowledge_base");
+    expect(body.toolCalls).toEqual(payload.tool_calls);
   });
 
   it("returns 502 when the Lambda itself reports an error", async () => {
@@ -1074,7 +1024,7 @@ describe("POST /api/assistant", () => {
       }),
     } as never);
 
-    const response = await POST(makeRequest({ question: "hi", mode: "crag" }));
+    const response = await POST(makeRequest({ question: "hi" }));
     expect(response.status).toBe(502);
   });
 });
@@ -1093,7 +1043,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { InvokeCommand } from "@aws-sdk/client-lambda";
 import { getLambdaClient, requiredEnv } from "@/lib/aws";
 import { checkRateLimit } from "@/lib/ratelimit";
-import { normalizeAssistantResult, type AssistantMode } from "@/lib/assistant";
+import { normalizeAssistantResult } from "@/lib/assistant";
 
 function clientIp(request: NextRequest): string {
   return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
@@ -1102,10 +1052,9 @@ function clientIp(request: NextRequest): string {
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const question = typeof body?.question === "string" ? body.question.trim() : "";
-  const mode = body?.mode as AssistantMode;
 
-  if (!question || (mode !== "crag" && mode !== "agent")) {
-    return NextResponse.json({ error: "Thiếu 'question' hoặc 'mode' không hợp lệ." }, { status: 400 });
+  if (!question) {
+    return NextResponse.json({ error: "Thiếu 'question'." }, { status: 400 });
   }
 
   const rateLimit = await checkRateLimit(clientIp(request));
@@ -1113,9 +1062,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Đợi một chút rồi hỏi tiếp." }, { status: 429 });
   }
 
-  const functionName = requiredEnv(
-    mode === "crag" ? "RAG_QUERY_FUNCTION_NAME" : "RAG_AGENT_FUNCTION_NAME"
-  );
+  const functionName = requiredEnv("RAG_AGENT_FUNCTION_NAME");
 
   try {
     const response = await getLambdaClient().send(
@@ -1125,7 +1072,7 @@ export async function POST(request: NextRequest) {
     if (payload.statusCode !== 200) {
       return NextResponse.json({ error: payload.error ?? "Lambda trả lỗi." }, { status: 502 });
     }
-    return NextResponse.json(normalizeAssistantResult(mode, payload));
+    return NextResponse.json(normalizeAssistantResult(payload));
   } catch (error) {
     console.error("Assistant API failed", error);
     return NextResponse.json({ error: "Không gọi được RAG Lambda, thử lại sau." }, { status: 500 });
@@ -1142,7 +1089,7 @@ Expected: PASS (4 tests)
 
 ```bash
 git add web/app/api/assistant/
-git commit -m "Add rate-limited assistant API route invoking rag_query/rag_agent"
+git commit -m "Add rate-limited assistant API route invoking rag_agent"
 ```
 
 ---
@@ -1373,41 +1320,13 @@ git commit -m "Wire the Dashboard page to live Athena + CloudWatch data"
 ### Task 10: Assistant presentational components
 
 **Files:**
-- Create: `web/components/ModeToggle.tsx`, `web/components/ChatThread.tsx`, `web/components/ToolTrace.tsx`
+- Create: `web/components/ChatThread.tsx`, `web/components/ToolTrace.tsx`
 
 **Interfaces:**
-- Consumes: `AssistantMode`, `AssistantResult` (Task 6).
-- Produces: `<ModeToggle mode onChange>`, `<ChatThread question result loading>`, `<ToolTrace result>` — consumed by Task 11.
+- Consumes: `AssistantResult` (Task 6).
+- Produces: `<ChatThread question result loading>`, `<ToolTrace result>` — consumed by Task 11.
 
-- [ ] **Step 1: Write `web/components/ModeToggle.tsx`**
-
-```tsx
-import type { AssistantMode } from "@/lib/assistant";
-
-export function ModeToggle({
-  mode,
-  onChange,
-}: {
-  mode: AssistantMode;
-  onChange: (mode: AssistantMode) => void;
-}) {
-  const base = "rounded-full px-4 py-2 text-sm font-semibold border";
-  const active = "bg-accent/10 text-accent border-accent";
-  const inactive = "border-border text-textSecondary";
-  return (
-    <div className="flex gap-2">
-      <button onClick={() => onChange("crag")} className={`${base} ${mode === "crag" ? active : inactive}`}>
-        Pipeline CRAG (cố định)
-      </button>
-      <button onClick={() => onChange("agent")} className={`${base} ${mode === "agent" ? active : inactive}`}>
-        Tool-calling Agent
-      </button>
-    </div>
-  );
-}
-```
-
-- [ ] **Step 2: Write `web/components/ChatThread.tsx`**
+- [ ] **Step 1: Write `web/components/ChatThread.tsx`**
 
 ```tsx
 import type { AssistantResult } from "@/lib/assistant";
@@ -1451,7 +1370,7 @@ export function ChatThread({
 }
 ```
 
-- [ ] **Step 3: Write `web/components/ToolTrace.tsx`**
+- [ ] **Step 2: Write `web/components/ToolTrace.tsx`**
 
 ```tsx
 import type { AssistantResult } from "@/lib/assistant";
@@ -1459,47 +1378,28 @@ import type { AssistantResult } from "@/lib/assistant";
 export function ToolTrace({ result }: { result: AssistantResult | null }) {
   if (!result) return null;
 
-  if (result.cragDetail) {
-    return (
-      <div className="rounded-2xl border border-border bg-surface p-5 flex flex-col gap-3">
-        <span className="text-xs font-semibold text-textPrimary">Fixed pipeline steps</span>
-        <span className="font-mono text-xs text-textSecondary">1. Embed câu hỏi (Titan Embed)</span>
-        <span className="font-mono text-xs text-textSecondary">
-          2. Grade (Claude Haiku) → {result.grounded ? "relevant" : "irrelevant/ambiguous"}
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-5 flex flex-col gap-3">
+      <span className="text-xs font-semibold text-textPrimary">Tool trace (agent tự quyết định)</span>
+      {result.toolCalls.map((call, i) => (
+        <span key={i} className="font-mono text-xs text-textSecondary">
+          {JSON.stringify(call)}
         </span>
-        <span className="font-mono text-xs text-textSecondary">
-          3. Trả lời từ {result.cragDetail.answerSource}
-        </span>
-      </div>
-    );
-  }
-
-  if (result.agentDetail) {
-    return (
-      <div className="rounded-2xl border border-border bg-surface p-5 flex flex-col gap-3">
-        <span className="text-xs font-semibold text-textPrimary">Tool trace (agent tự quyết định)</span>
-        {result.agentDetail.toolCalls.map((call, i) => (
-          <span key={i} className="font-mono text-xs text-textSecondary">
-            {JSON.stringify(call)}
-          </span>
-        ))}
-      </div>
-    );
-  }
-
-  return null;
+      ))}
+    </div>
+  );
 }
 ```
 
-- [ ] **Step 4: Typecheck**
+- [ ] **Step 3: Typecheck**
 
 Run: `cd web && npx tsc --noEmit`
 Expected: no errors.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add web/components/ModeToggle.tsx web/components/ChatThread.tsx web/components/ToolTrace.tsx
+git add web/components/ChatThread.tsx web/components/ToolTrace.tsx
 git commit -m "Add RAG Assistant presentational components"
 ```
 
@@ -1511,7 +1411,7 @@ git commit -m "Add RAG Assistant presentational components"
 - Create: `web/app/assistant/page.tsx`
 
 **Interfaces:**
-- Consumes: `AssistantMode`, `AssistantResult` (Task 6), `ModeToggle`, `ChatThread`, `ToolTrace` (Task 10), `POST /api/assistant` (Task 7).
+- Consumes: `AssistantResult` (Task 6), `ChatThread`, `ToolTrace` (Task 10), `POST /api/assistant` (Task 7).
 
 - [ ] **Step 1: Write the page**
 
@@ -1520,13 +1420,11 @@ git commit -m "Add RAG Assistant presentational components"
 "use client";
 
 import { useState } from "react";
-import { ModeToggle } from "@/components/ModeToggle";
 import { ChatThread } from "@/components/ChatThread";
 import { ToolTrace } from "@/components/ToolTrace";
-import type { AssistantMode, AssistantResult } from "@/lib/assistant";
+import type { AssistantResult } from "@/lib/assistant";
 
 export default function AssistantPage() {
-  const [mode, setMode] = useState<AssistantMode>("crag");
   const [input, setInput] = useState("");
   const [question, setQuestion] = useState<string | null>(null);
   const [result, setResult] = useState<AssistantResult | null>(null);
@@ -1544,7 +1442,7 @@ export default function AssistantPage() {
       const res = await fetch("/api/assistant", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ question: trimmed, mode }),
+        body: JSON.stringify({ question: trimmed }),
       });
       const body = await res.json();
       if (res.status === 429) {
@@ -1567,7 +1465,6 @@ export default function AssistantPage() {
       <div>
         <h1 className="font-heading text-2xl font-semibold text-textPrimary">RAG Assistant</h1>
       </div>
-      <ModeToggle mode={mode} onChange={setMode} />
       <div className="grid grid-cols-[1.5fr_1fr] gap-5">
         <div className="rounded-2xl border border-border bg-surface p-6 flex flex-col gap-4">
           <ChatThread question={question} result={result} loading={loading} />
@@ -1604,15 +1501,15 @@ Expected: no errors, build succeeds.
 
 - [ ] **Step 3: Manual verification against real AWS**
 
-Run: `cd web && AWS_ACCESS_KEY_ID=<from Task 12> AWS_SECRET_ACCESS_KEY=<from Task 12> AWS_REGION=us-east-1 RAG_QUERY_FUNCTION_NAME=realtime-data-pipeline-dev-rag-query RAG_AGENT_FUNCTION_NAME=realtime-data-pipeline-dev-rag-agent UPSTASH_REDIS_REST_URL=<from Task 12> UPSTASH_REDIS_REST_TOKEN=<from Task 12> npm run dev`
+Run: `cd web && AWS_ACCESS_KEY_ID=<from Task 12> AWS_SECRET_ACCESS_KEY=<from Task 12> AWS_REGION=us-east-1 RAG_AGENT_FUNCTION_NAME=realtime-data-pipeline-dev-rag-agent UPSTASH_REDIS_REST_URL=<from Task 12> UPSTASH_REDIS_REST_TOKEN=<from Task 12> npm run dev`
 
-Open `http://localhost:3000/assistant`, ask a real question in CRAG mode, confirm a real Bedrock-backed answer with sources; switch to Agent mode and repeat; submit 6 rapid questions and confirm the 6th shows the rate-limit notice.
+Open `http://localhost:3000/assistant`, ask a real question, confirm a real Bedrock-backed answer with sources and a tool trace; submit 6 rapid questions and confirm the 6th shows the rate-limit notice.
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add web/app/assistant/
-git commit -m "Wire the RAG Assistant page to live rag_query/rag_agent Lambdas"
+git commit -m "Wire the RAG Assistant page to the live rag_agent Lambda"
 ```
 
 ---
@@ -1624,7 +1521,7 @@ git commit -m "Wire the RAG Assistant page to live rag_query/rag_agent Lambdas"
 - Modify: `infra/outputs.tf`
 
 **Interfaces:**
-- Consumes: `data.aws_caller_identity.current`, `var.aws_region`, `aws_athena_workgroup.main`, `aws_glue_catalog_database.curated`, `aws_s3_bucket.curated`, `aws_lambda_function.rag_query`, `aws_lambda_function.rag_agent` (all existing).
+- Consumes: `data.aws_caller_identity.current`, `var.aws_region`, `aws_athena_workgroup.main`, `aws_glue_catalog_database.curated`, `aws_s3_bucket.curated`, `aws_lambda_function.rag_agent` (all existing).
 - Produces: `web_app_access_key_id`, `web_app_secret_access_key` (sensitive) Terraform outputs — used to configure Vercel env vars.
 
 - [ ] **Step 1: Write `infra/web_access.tf`**
@@ -1682,10 +1579,10 @@ resource "aws_iam_user_policy" "web_app" {
         Resource = "*"
       },
       {
-        Sid      = "InvokeRagLambdas"
+        Sid      = "InvokeRagAgent"
         Effect   = "Allow"
         Action   = ["lambda:InvokeFunction"]
-        Resource = [aws_lambda_function.rag_query.arn, aws_lambda_function.rag_agent.arn]
+        Resource = [aws_lambda_function.rag_agent.arn]
       },
     ]
   })
@@ -1732,11 +1629,10 @@ terraform output -raw web_app_access_key_id
 terraform output -raw web_app_secret_access_key
 terraform output -raw glue_database_name
 terraform output -raw athena_workgroup_name
-terraform output -raw rag_query_function_name
 terraform output -raw rag_agent_function_name
 ```
 
-In the Vercel project (root directory `web/`, connected to this GitHub repo), set these environment variables: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION=us-east-1`, `ATHENA_WORKGROUP`, `ATHENA_DATABASE`, `ALARM_NAME_PREFIX=realtime-data-pipeline-dev`, `RAG_QUERY_FUNCTION_NAME`, `RAG_AGENT_FUNCTION_NAME`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` (from a new free Upstash Redis database created for this project).
+In the Vercel project (root directory `web/`, connected to this GitHub repo), set these environment variables: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION=us-east-1`, `ATHENA_WORKGROUP`, `ATHENA_DATABASE`, `ALARM_NAME_PREFIX=realtime-data-pipeline-dev`, `RAG_AGENT_FUNCTION_NAME`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` (from a new free Upstash Redis database created for this project).
 
 - [ ] **Step 6: Deploy and run the full manual verification checklist**
 

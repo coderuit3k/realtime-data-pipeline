@@ -12,9 +12,8 @@ export const DATA_SOURCE_COUNT = DATA_SOURCES.length;
 // Terraform, verified 2026-09-27 via:
 //   grep -n '^resource "aws_lambda_function"' infra/*.tf
 // 7 in infra/lambda.tf (hackernews/news/weather/crypto/github/gmail
-// ingestion + transform) + 2 in infra/rag.tf (rag_build_index, rag_agent
-// -- CRAG's rag_query was retired, see docs/superpowers/specs/2026-09-23-
-// single-agentic-rag-design.md) + 1 in infra/trends.tf (trend_scan, see
+// ingestion + transform) + 2 in infra/rag.tf (rag_build_index, rag_agent)
+// + 1 in infra/trends.tf (trend_scan, see
 // docs/superpowers/specs/2026-09-27-trend-events-design.md) = 10. This
 // count is infra-level (real Lambda functions) and intentionally
 // independent of DATA_SOURCE_COUNT above (a UI-facing "N nguồn dữ liệu"

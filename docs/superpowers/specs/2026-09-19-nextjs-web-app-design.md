@@ -13,9 +13,8 @@ Next.js web app that gives the portfolio a real, live, clickable product:
 - **Dashboard** (`/`) — KPIs and per-source volume pulled from Athena, plus
   CloudWatch alarm state.
 - **RAG Assistant** (`/assistant`) — a chat UI that lets a visitor ask a
-  question and choose which of the two deployed RAG Lambdas answers it
-  (`rag_query` = fixed CRAG pipeline, `rag_agent` = tool-calling agent),
-  showing the real answer, sources, and per-mode trace.
+  question that the deployed `rag_agent` Lambda (a tool-calling agent)
+  answers, showing the real answer, sources, and tool trace.
 
 Both screens hit real AWS resources through Next.js API routes — no mock
 data, no changes to existing Lambda code. Visual design reuses the palette
@@ -109,7 +108,7 @@ resource "aws_iam_user_policy" "web_app" {
       {
         Effect   = "Allow"
         Action   = ["lambda:InvokeFunction"]
-        Resource = [aws_lambda_function.rag_query.arn, aws_lambda_function.rag_agent.arn]
+        Resource = [aws_lambda_function.rag_agent.arn]
       }
     ]
   })
@@ -156,28 +155,20 @@ anyway.
 ### 4.3 Assistant data (`app/api/assistant/route.ts`)
 
 ```
-POST { question: string, mode: "crag" | "agent" }
+POST { question: string }
 → LambdaClient.invoke({
-    FunctionName: mode === "crag" ? RAG_QUERY_FN : RAG_AGENT_FN,
+    FunctionName: RAG_AGENT_FN,
     Payload: JSON.stringify({ question }),
   })
 ```
 
-The two Lambdas' `lambda_handler` return shapes differ slightly (verified
-by reading `rag/query.py` and `rag/agent.py`):
+`rag_agent`'s `lambda_handler` returns (verified by reading `rag/agent.py`):
+`answer` (string), `grounded` (bool), `sources[]` (`{title,url,source}`), and
+`tool_calls[]`.
 
-| field | `rag_query` (CRAG) | `rag_agent` |
-|---|---|---|
-| `answer` | string | string |
-| `grounded` | bool | bool |
-| `sources[]` | `{title,url,source,score,grade}` | `{title,url,source}` |
-| mode-specific | `answer_source`, `discarded_low_relevance[]` | `tool_calls[]` |
-
-The API route passes the raw Lambda payload straight through (typed as a
-discriminated union on `mode`); the UI renders the shared fields the same
-way for both and renders the "Tool trace" panel from whichever
-mode-specific field is present, matching the two states already mocked in
-the Design canvas.
+The API route passes the Lambda payload straight through; the UI renders
+the answer and sources, and renders the "Tool trace" panel from
+`tool_calls`, matching the state already mocked in the Design canvas.
 
 ## 5. Abuse protection
 
@@ -201,10 +192,9 @@ a blank page).
 
 ### 6.2 RAG Assistant (`/assistant`)
 
-Mode toggle (CRAG / Agent) exactly as mocked, a single-question chat (not a
-running conversation — each submit is a fresh Lambda invoke, matching how
-these Lambdas actually work today with no session state), sources shown as
-chips, mode-specific trace panel. Submit is disabled while a request is in
+A single-question chat (not a running conversation — each submit is a fresh
+Lambda invoke, matching how the Lambda actually works today with no session
+state), sources shown as chips, a tool-trace panel. Submit is disabled while a request is in
 flight; a 429 from the rate limiter is shown as a dismissible inline
 notice, not a crash.
 
@@ -228,8 +218,8 @@ git integration, independent of the existing `.github/workflows` Terraform
 pipeline. Env vars set once in the Vercel dashboard: `AWS_ACCESS_KEY_ID`,
 `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `ATHENA_WORKGROUP`,
 `ATHENA_DATABASE` (= `aws_glue_catalog_database.curated.name` output),
-`RAG_QUERY_FUNCTION_NAME`, `RAG_AGENT_FUNCTION_NAME` (both already
-Terraform outputs), `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`.
+`RAG_AGENT_FUNCTION_NAME` (already a
+Terraform output), `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`.
 
 ## 9. Open assumptions
 

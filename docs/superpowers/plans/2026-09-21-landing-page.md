@@ -25,7 +25,7 @@ current Dashboard moves to a new `/dashboard` route unchanged.
   mockup's own layout choice and real landing-page convention.
 - Real, verified numbers (not the mockup's stale ones): `DATA_SOURCE_COUNT`
   = 5 (from `settingsMeta.ts`'s `DATA_SOURCES.length`), `LAMBDA_COUNT` =
-  9 (6 pipeline + 3 RAG, verified via `grep -n "^resource
+  8 (6 pipeline + 2 RAG, verified via `grep -n "^resource
   \"aws_lambda_function\"" infra/*.tf`), `TEST_COUNT` = 233 (73 real
   pytest + 160 real vitest -- the vitest count includes this feature's
   own `landingMeta.test.ts`, since that file is part of the same
@@ -136,9 +136,9 @@ export const DATA_SOURCE_COUNT = DATA_SOURCES.length;
 // Terraform, verified 2026-09-21 via:
 //   grep -n '^resource "aws_lambda_function"' infra/*.tf
 // 6 in infra/lambda.tf (hackernews/news/weather/crypto/github ingestion
-// + transform) + 3 in infra/rag.tf (rag_build_index, rag_query,
-// rag_agent) = 9.
-export const LAMBDA_COUNT = 9;
+// + transform) + 2 in infra/rag.tf (rag_build_index, rag_agent)
+// = 8.
+export const LAMBDA_COUNT = 8;
 
 // Real combined automated test count, verified 2026-09-21 AFTER this
 // file's own test file (landingMeta.test.ts) was added -- that file is
@@ -431,8 +431,8 @@ export default function LandingPage() {
           Pipeline dữ liệu real-time, serverless, chạy thật trên AWS
         </h1>
         <p className="max-w-xl text-[15px] leading-relaxed text-textSecondary">
-          5 nguồn dị chủng đổ về S3 → Glue/Athena, cộng 2 kiến trúc RAG song song trên Bedrock — một pipeline cố
-          định (CRAG) và một agent tự quyết định gọi tool. Toàn bộ hạ tầng bằng Terraform, deploy qua GitHub
+          5 nguồn dị chủng đổ về S3 → Glue/Athena, cộng một agent RAG tự quyết định gọi tool trên Bedrock. Toàn bộ hạ
+          tầng bằng Terraform, deploy qua GitHub
           Actions với gate phê duyệt production.
         </p>
         <div className="flex gap-3 mt-1.5">
@@ -488,7 +488,7 @@ export default function LandingPage() {
           </div>
           <ArrowIcon />
           <div className="rounded-2xl border border-accent bg-surface px-[18px] py-3.5 text-center w-[170px]">
-            <span className="font-mono text-[11.5px] text-accent">RAG: CRAG + Agent</span>
+            <span className="font-mono text-[11.5px] text-accent">RAG: Agent</span>
           </div>
         </div>
       </section>
@@ -521,8 +521,8 @@ export default function LandingPage() {
               <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
             </svg>
           }
-          title="RAG kép: CRAG + Agentic"
-          description="So sánh trực tiếp pipeline CRAG cố định với một agent thật tự gọi tool qua Bedrock Converse API."
+          title="Agentic RAG thật"
+          description="Một agent thật tự quyết định gọi tool qua Bedrock Converse API."
         />
         <FeatureCard
           icon={

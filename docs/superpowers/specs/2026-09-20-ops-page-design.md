@@ -22,7 +22,7 @@ Reference mockup: Design canvas
   number, just not a live API call).
 - No write actions (no restart/invoke-now buttons) — read-only
   observability, matching every other real screen so far.
-- No RAG Lambda (`rag_build_index`/`rag_query`/`rag_agent`) monitoring —
+- No RAG Lambda (`rag_build_index`/`rag_agent`) monitoring —
   the mockup's 6-function scope is the ingestion pipeline + transform
   only, matching `infra/lambda.tf`'s 6 `aws_lambda_function` resources
   outside `infra/rag.tf`.

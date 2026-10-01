@@ -23,10 +23,10 @@ stack list, below):
 
 - **5 data sources** — `DATA_SOURCES.length` from `web/lib/settingsMeta.ts`
   (built for the Settings sub-project), reused rather than re-declared.
-- **9 Lambda functions** — real count via `grep -n "^resource
+- **8 Lambda functions** — real count via `grep -n "^resource
   \"aws_lambda_function\"" infra/*.tf`: 6 in `infra/lambda.tf`
-  (hackernews/news/weather/crypto/github ingestion + transform) + 3 in
-  `infra/rag.tf` (rag_build_index, rag_query, rag_agent). The mockup's
+  (hackernews/news/weather/crypto/github ingestion + transform) + 2 in
+  `infra/rag.tf` (rag_build_index, rag_agent). The mockup's
   "6" predates the RAG sub-project and undercounts.
 - **233 automated tests** — real combined total: `.venv/bin/python -m
   pytest tests/ --collect-only -q` → 73 (exactly matches the mockup's
@@ -107,7 +107,7 @@ web/components/NavBar.tsx   (modified)
      4-stat row using `landingMeta.ts`'s real numbers (data sources,
      Lambdas, tests, monthly cost).
   3. "Kiến trúc trong một dòng" -- the mockup's architecture-in-one-line
-     diagram, static (S3 raw→curated, Glue/Athena, RAG CRAG+Agent --
+     diagram, static (S3 raw→curated, Glue/Athena, Agentic RAG --
      already accurate, no numbers to correct), `id="architecture"` for
      the header's anchor link.
   4. 4 feature cards -- mockup's existing structure, with corrected copy:

@@ -8,9 +8,7 @@ motion pass (hand-drawn inline SVG icons, hover-lift, pulsing status dots), both
 real Stitch "Phương án 1" mockups and both shipped/live-verified.
 
 Five more real, live pages in this app never got either pass and still use the pre-fidelity
-`bg-surface` flat panels with zero icons: `/assistant` (RAG Assistant — sidebar labels it "RAG
-Comparison Studio", a stale label from before this project retired its CRAG pipeline; leaving that
-label alone, it's a separate decision, not part of this plan), `/catalog` (Data Catalog — sidebar
+`bg-surface` flat panels with zero icons: `/assistant` (RAG Assistant), `/catalog` (Data Catalog — sidebar
 labels it "Architecture & Lakehouse", but the live page is a much smaller Glue-table/schema
 browser than that name implies; also not this plan's problem to fix), `/cicd` (CI/CD Pipeline),
 `/explorer` (Data Explorer), `/insights` (Trending Insights).
@@ -20,9 +18,9 @@ glass panels, glow/border accents, hand-drawn icons, hover motion, `tabular-nums
 span — not just a lighter icons-only bolt-on.
 
 Two of these five pages (`/assistant`, `/catalog`) loosely correspond to real Stitch mockups
-("Dual-RAG Comparison Studio" and "System Architecture & Lakehouse"), but both mockups describe
-much bigger pages than what's actually live (the mockups model dual-CRAG-vs-Agent benchmarking and
-a full infra/CI-CD/cost dashboard neither of which exist as real data sources for these routes).
+(one for the assistant, and "System Architecture & Lakehouse"), but both mockups describe
+much bigger pages than what's actually live (the mockups model a full infra/CI-CD/cost
+dashboard that doesn't exist as a real data source for these routes).
 Per this project's standing "everything must be real" rule, this plan does NOT invent new
 sections or fabricate data to chase those mockups' scope — it only applies the same glass/icon/
 motion treatment to each page's existing real content, the same as was done for the two pages that

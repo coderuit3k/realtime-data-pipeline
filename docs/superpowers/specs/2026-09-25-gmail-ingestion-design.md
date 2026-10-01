@@ -7,11 +7,9 @@ the latest messages from a real Gmail inbox via the Gmail API, archives
 each message's full raw content (headers, body, attachments) to the
 Cloudflare R2 `mail` bucket the user already created, and writes
 structured fields into the same AWS S3 raw → curated → Glue → Athena
-pipeline the other 5 sources already use. This is Sub-project A of two
-independent sub-projects using the user's `mail`/`excel` R2 buckets
-(Sub-project A: `excel` export, already shipped). Sub-project B (RAG
-semantic index inclusion, and updating every "5 nguồn dữ liệu" reference
-across the web app to say 6) is separate, later, and out of scope here.
+pipeline the other 5 sources already use. A separate, later sub-project
+(RAG semantic index inclusion, and updating every "5 nguồn dữ liệu"
+reference across the web app to say 6) is out of scope here.
 
 ## Goals
 
@@ -89,21 +87,16 @@ one-secret-per-integration pattern in `infra/secrets.tf`):
   (as themselves, for their own account) to obtain a real refresh token
   scoped to `https://www.googleapis.com/auth/gmail.readonly`. This
   assistant never performs this flow or sees these values — exact
-  step-by-step instructions are given to the user separately (same
-  pattern as the R2 setup guide already given for the Excel export), not
+  step-by-step instructions are given to the user separately, not
   embedded in code or this repo.
 - **R2 credentials** (`r2_account_id`, `r2_access_key_id`,
   `r2_secret_access_key`): the same real Cloudflare R2 API token the user
-  already created for the `excel`/`mail` buckets (confirmed scoped to
-  both) — these values get pasted into this NEW AWS secret via the AWS
+  already created for the `mail` bucket — these values get pasted into this NEW AWS secret via the AWS
   CLI (same "set once via `aws secretsmanager put-secret-value`" pattern
-  `infra/secrets.tf`'s header comment already documents for `news_api`),
-  separate from the Vercel env vars used by the Excel export feature
-  (different runtime, same real underlying token).
-- The bucket name itself (`rdp-excel`'s sibling `mail`-bucket real name)
-  is not secret — it travels as a plain Lambda environment variable
-  (`GMAIL_R2_BUCKET_NAME`), mirroring how `R2_EXCEL_BUCKET_NAME` was a
-  plain Vercel env var, not a Secrets Manager value.
+  `infra/secrets.tf`'s header comment already documents for `news_api`).
+- The bucket name itself is not secret — it travels as a plain Lambda
+  environment variable (`GMAIL_R2_BUCKET_NAME`), not a Secrets Manager
+  value.
 
 ## Architecture / data flow
 

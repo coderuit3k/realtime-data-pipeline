@@ -28,7 +28,7 @@ Reference mockup: Design canvas
 - 2 real Secrets Manager secrets exist (`infra/secrets.tf`):
   `aws_secretsmanager_secret.news_api` (output `news_secret_name`) and
   `aws_secretsmanager_secret.tavily_api` (output `tavily_secret_name`,
-  used by the RAG assistant's CRAG web-search fallback, unrelated to
+  used by the RAG agent's web-search tool, unrelated to
   ingestion). A real `DescribeSecretCommand` call's `VersionIdsToStages`
   field (verified via `@aws-sdk/client-secrets-manager`'s real
   `.d.ts` types) shows whether any version currently carries the

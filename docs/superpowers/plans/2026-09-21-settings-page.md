@@ -563,7 +563,7 @@ closing `}` now that another statement follows it.)
 
 Add 2 new lines to the "Web app environment variables" list further down
 `infra/README.md` (same section that already lists
-`RAG_QUERY_FUNCTION_NAME` etc.):
+`RAG_AGENT_FUNCTION_NAME` etc.):
 
 ```markdown
 - `NEWS_SECRET_NAME` -- name of the News API secret (Settings page's real, metadata-only "configured" check)
