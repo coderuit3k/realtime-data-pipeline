@@ -20,7 +20,14 @@ class FakeAthena:
         status = {"State": state}
         if state in ("FAILED", "CANCELLED"):
             status["StateChangeReason"] = "table not found"
-        return {"QueryExecution": {"Status": status}}
+        return {
+            "QueryExecution": {
+                "Status": status,
+                "ResultConfiguration": {
+                    "OutputLocation": "s3://athena-bucket/athena-results/qe1.csv"
+                },
+            }
+        }
 
     def get_query_results(self, **kwargs):
         max_results = kwargs.get("MaxResults")
@@ -34,6 +41,14 @@ class FakeAthena:
                 "Rows": limited_rows,
             }
         }
+
+
+class FakeS3:
+    def __init__(self):
+        self.delete_object_calls = []
+
+    def delete_object(self, **kwargs):
+        self.delete_object_calls.append(kwargs)
 
 
 def _athena_results(columns: list[str], rows: list[list[str]]) -> dict:
@@ -51,7 +66,9 @@ def test_run_query_polls_until_succeeded_and_returns_rows(monkeypatch):
         execution_states=["RUNNING", "SUCCEEDED"],
         results=_athena_results(["coin_id", "avg_price"], [["bitcoin", "88420.5"]]),
     )
+    fake_s3 = FakeS3()
     monkeypatch.setattr(athena, "_athena", lambda: fake)
+    monkeypatch.setattr(athena, "_s3", lambda: fake_s3)
     monkeypatch.setattr(athena.time, "sleep", lambda seconds: None)
 
     rows, truncated = athena.run_query(
@@ -61,6 +78,20 @@ def test_run_query_polls_until_succeeded_and_returns_rows(monkeypatch):
     assert rows == [{"coin_id": "bitcoin", "avg_price": "88420.5"}]
     assert truncated is False
     assert fake.start_query_execution_calls[0]["QueryString"].startswith("SELECT")
+
+
+def test_run_query_deletes_the_csv_metadata_file_left_by_athena(monkeypatch):
+    fake = FakeAthena(execution_states=["SUCCEEDED"], results=_athena_results(["n"], [["1"]]))
+    fake_s3 = FakeS3()
+    monkeypatch.setattr(athena, "_athena", lambda: fake)
+    monkeypatch.setattr(athena, "_s3", lambda: fake_s3)
+    monkeypatch.setattr(athena.time, "sleep", lambda seconds: None)
+
+    athena.run_query("SELECT n FROM t")
+
+    assert fake_s3.delete_object_calls == [
+        {"Bucket": "athena-bucket", "Key": "athena-results/qe1.csv.metadata"}
+    ]
 
 
 def test_run_query_raises_on_failed_query_state(monkeypatch):
@@ -78,6 +109,7 @@ def test_run_query_marks_truncated_when_more_rows_than_max(monkeypatch):
         results=_athena_results(["n"], [["1"], ["2"], ["3"]]),
     )
     monkeypatch.setattr(athena, "_athena", lambda: fake)
+    monkeypatch.setattr(athena, "_s3", lambda: FakeS3())
     monkeypatch.setattr(athena.time, "sleep", lambda seconds: None)
 
     rows, truncated = athena.run_query("SELECT n FROM t", max_rows=2)

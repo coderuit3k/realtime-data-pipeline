@@ -60,6 +60,15 @@ data "aws_iam_policy_document" "trend_scan_permissions" {
     actions   = ["s3:GetBucketLocation"]
     resources = [aws_s3_bucket.curated.arn]
   }
+
+  # common/athena.py deletes each query's <id>.csv.metadata file right after
+  # the query succeeds -- Athena always writes it alongside the CSV and
+  # nothing ever reads it back, so it's pure storage cost otherwise.
+  statement {
+    sid       = "DeleteAthenaResultMetadata"
+    actions   = ["s3:DeleteObject"]
+    resources = ["${aws_s3_bucket.curated.arn}/athena-results/*"]
+  }
 }
 
 resource "aws_iam_role_policy" "trend_scan_permissions" {

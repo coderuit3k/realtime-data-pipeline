@@ -1,10 +1,12 @@
 import time
+from urllib.parse import urlparse
 
 import boto3
 
 from common import config
 
 _athena_client = None
+_s3_client = None
 
 ATHENA_POLL_INTERVAL_SECONDS = 0.5
 ATHENA_MAX_POLL_ATTEMPTS = 40  # ~20s cap per query
@@ -15,6 +17,23 @@ def _athena():
     if _athena_client is None:
         _athena_client = boto3.client("athena", region_name=config.AWS_REGION)
     return _athena_client
+
+
+def _s3():
+    global _s3_client
+    if _s3_client is None:
+        _s3_client = boto3.client("s3", region_name=config.AWS_REGION)
+    return _s3_client
+
+
+def _delete_result_metadata(output_location: str) -> None:
+    """Athena writes a `<query-id>.csv.metadata` file alongside every CSV
+    result it has no option to suppress. Nothing ever reads it back (results
+    come from get_query_results, not from the CSV itself), so it's pure
+    storage cost -- delete it right after the query succeeds."""
+    bucket = urlparse(output_location).netloc
+    key = urlparse(output_location).path.lstrip("/") + ".metadata"
+    _s3().delete_object(Bucket=bucket, Key=key)
 
 
 def run_query(sql: str, max_rows: int = 25) -> tuple[list[dict], bool]:
@@ -43,6 +62,8 @@ def run_query(sql: str, max_rows: int = 25) -> tuple[list[dict], bool]:
         time.sleep(ATHENA_POLL_INTERVAL_SECONDS)
     else:
         raise RuntimeError("Athena query timed out waiting for SUCCEEDED state")
+
+    _delete_result_metadata(execution["ResultConfiguration"]["OutputLocation"])
 
     # MaxResults counts the header row, so ask for max_rows+2 (header + up to
     # max_rows+1 data rows) -- seeing that extra (max_rows+1)-th data row is
