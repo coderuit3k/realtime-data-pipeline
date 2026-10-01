@@ -139,10 +139,26 @@ The weather readings were identical (same order, same observation
 timestamps); the Hacker News `newstories` feed moves between calls, so the
 two runs shared 46-48 of 50 story ids rather than all 50.
 
-Read the second table as a ratio, not as Lambda timings: the machine it ran
-on needed ~1.2-2 s per request, far slower than a Lambda in AWS, so the
-absolute seconds are inflated. Lambda durations after this change have not
-been measured yet; they will be added here once it is deployed.
+**After -- real Lambda** (deployed 2026-10-01 ~13:34 UTC; 5 manual
+invocations of each function right after the deploy, 1 cold start + 4 warm;
+the handler `Duration`, same figure as the "before" table above):
+
+| Lambda | Runs (ms) | min / median / max | p50 before -> median after |
+|---|---|---|---|
+| `hackernews_ingestion` | 2234 (cold), 923, 4261, 1310, 1782 | 0.9 / 1.8 / 4.3 s | 5.1 s -> 1.8 s (~3x) |
+| `weather_ingestion` | 1970 (cold), 703, 712, 702, 707 | 0.70 / 0.71 / 2.0 s | 6.2 s -> 0.71 s (~9x) |
+
+No errors; Hacker News returned 47-50 stories per run (deleted and
+non-story items are still skipped) and weather returned all 12 locations.
+
+Trust this table, not the local one. The local comparison overstates the
+Hacker News gain (~20x there, ~3x here): that machine needed ~1.2-2 s per
+request, so the sequential loop dominated, whereas on Lambda each request is
+far faster and the fixed costs (the feed request, the S3 write, waiting for
+the slowest story request) are a larger share. This is also only 5 samples
+per function, not a p95, and the scheduled runs behind the "before" numbers
+were all cold starts; p50/p95 from the scheduled runs will be added once
+enough have accumulated.
 
 ## Sample analytics
 
