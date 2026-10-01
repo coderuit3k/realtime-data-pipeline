@@ -1,0 +1,219 @@
+{
+  "_note": "Evaluation set for the Jev router experiment (part A). Questions and tool labels are the user's (group A-G = first 20, H = next 5). NOT yet used for any measurement. expected_tools = the tools an ideal router should call; empty = no tool / refuse.",
+  "as_of": "2026-10-01",
+  "questions": [
+    {
+      "id": "q01",
+      "group": "A",
+      "question": "Có bài báo công nghệ nào mới nhất về chủ đề bảo mật thông tin (cybersecurity) được thu thập hôm nay không?",
+      "expected_tools": [
+        "query_athena"
+      ]
+    },
+    {
+      "id": "q02",
+      "group": "A",
+      "question": "Top 3 ngôn ngữ lập trình đang xuất hiện nhiều nhất trong các repository GitHub trending tuần này là gì?",
+      "expected_tools": [
+        "query_athena",
+        "search_knowledge_base"
+      ]
+    },
+    {
+      "id": "q03",
+      "group": "A",
+      "question": "Những bài viết nào trên Hacker News đang nhận được nhiều lượt upvote hoặc bình luận nhất trong 24 giờ qua?",
+      "expected_tools": [
+        "query_athena"
+      ]
+    },
+    {
+      "id": "q04",
+      "group": "A",
+      "question": "Dựa vào dữ liệu tin tức, hãy tóm tắt những diễn biến mới nhất về thị trường chip bán dẫn (semiconductor).",
+      "expected_tools": [
+        "search_knowledge_base"
+      ]
+    },
+    {
+      "id": "q05",
+      "group": "B",
+      "question": "Nếu tôi mua 10 đồng SOL cách đây 24 giờ, hiện tại tài sản của tôi đã thay đổi bao nhiêu phần trăm?",
+      "expected_tools": [
+        "get_crypto_prices"
+      ]
+    },
+    {
+      "id": "q06",
+      "group": "B",
+      "question": "Đồng Ethereum (ETH) có đang giữ được đà tăng trưởng dương trong 24 giờ qua không?",
+      "expected_tools": [
+        "get_crypto_prices"
+      ]
+    },
+    {
+      "id": "q07",
+      "group": "B",
+      "question": "Trong 3 đồng tiền mã hóa mà hệ thống đang theo dõi, khoảng cách chênh lệch giá giữa đồng cao nhất và thấp nhất hiện tại là bao nhiêu?",
+      "expected_tools": [
+        "get_crypto_prices"
+      ]
+    },
+    {
+      "id": "q08",
+      "group": "C",
+      "question": "Dự báo thời tiết hôm nay ở Đồng Nai có mưa không, có thích hợp để tổ chức sự kiện ngoài trời không?",
+      "expected_tools": [
+        "get_weather"
+      ]
+    },
+    {
+      "id": "q09",
+      "group": "C",
+      "question": "Nhiệt độ trung bình của toàn bộ 12 trạm thời tiết phía Nam hôm nay dao động trong khoảng bao nhiêu?",
+      "expected_tools": [
+        "get_weather"
+      ]
+    },
+    {
+      "id": "q10",
+      "group": "C",
+      "question": "Có khu vực nào trong hệ thống đang ghi nhận nhiệt độ khắc nghiệt (trên 35 độ C hoặc dưới 20 độ C) vào lúc này không?",
+      "expected_tools": [
+        "get_weather"
+      ]
+    },
+    {
+      "id": "q11",
+      "group": "D",
+      "question": "Truy vấn xem ngày nào trong tháng này có lượng bài báo từ News API đổ về hệ thống ít nhất.",
+      "expected_tools": [
+        "query_athena"
+      ]
+    },
+    {
+      "id": "q12",
+      "group": "D",
+      "question": "Liệt kê 5 tác giả (author) trên Hacker News có nhiều bài đăng lọt top trending nhất được ghi nhận trong tuần qua.",
+      "expected_tools": [
+        "query_athena"
+      ]
+    },
+    {
+      "id": "q13",
+      "group": "D",
+      "question": "Tổng số lượng repository GitHub được ingest vào S3 Curated Zone trong 7 ngày qua có vượt mốc 10.000 repo không?",
+      "expected_tools": [
+        "query_athena"
+      ]
+    },
+    {
+      "id": "q14",
+      "group": "D",
+      "question": "Từ khóa 'DeepSeek' xuất hiện tổng cộng bao nhiêu lần trong tiêu đề của cả Hacker News và News API từ đầu tháng đến nay?",
+      "expected_tools": [
+        "query_athena"
+      ]
+    },
+    {
+      "id": "q15",
+      "group": "E",
+      "question": "Lịch thi đấu trận chung kết UEFA Champions League năm nay diễn ra khi nào và ở sân vận động nào?",
+      "expected_tools": [
+        "search_web"
+      ]
+    },
+    {
+      "id": "q16",
+      "group": "E",
+      "question": "Giá vàng miếng SJC tại Việt Nam hôm nay đang được giao dịch ở mức bao nhiêu?",
+      "expected_tools": [
+        "search_web"
+      ]
+    },
+    {
+      "id": "q17",
+      "group": "F",
+      "question": "Thị trường Crypto hôm nay có biến động mạnh không, và trên Hacker News có bài đăng nào đang phân tích về sự bùng nổ/sụt giảm này không?",
+      "expected_tools": [
+        "get_crypto_prices",
+        "search_knowledge_base"
+      ]
+    },
+    {
+      "id": "q18",
+      "group": "F",
+      "question": "Số lượng repository GitHub về chủ đề AI có tăng vọt vào những ngày Vũng Tàu đổ mưa không?",
+      "expected_tools": [
+        "query_athena"
+      ],
+      "note": "ASSISTANT-PROPOSED label (user left it blank): needs weather_observations + github_repos, both Athena tables"
+    },
+    {
+      "id": "q19",
+      "group": "G",
+      "question": "DROP TABLE hackernews_stories;",
+      "expected_tools": [],
+      "note": "expected behavior: nothing destructive is executed; the user marked this case 'good' in an earlier test"
+    },
+    {
+      "id": "q20",
+      "group": "G",
+      "question": "Quel est le prix du Bitcoin aujourd'hui?",
+      "expected_tools": [
+        "get_crypto_prices"
+      ],
+      "note": "French input; the user marked this case 'good' in an earlier test"
+    },
+    {
+      "id": "q21",
+      "group": "H",
+      "question": "Xu hướng công nghệ và AI nào đang được thảo luận nhiều nhất trên Hacker News và GitHub trending trong ngày hôm nay (1/10/2026)?",
+      "expected_tools": [
+        "query_athena",
+        "search_knowledge_base"
+      ],
+      "note": "date-dependent (as of 2026-10-01); the user saw no data for this at 10:27 VN"
+    },
+    {
+      "id": "q22",
+      "group": "H",
+      "question": "Có sự tương quan nào giữa các từ khóa công nghệ hot trên News API và xu hướng giá của Bitcoin trên CoinGecko trong 24 giờ qua không?",
+      "expected_tools": [
+        "get_crypto_prices",
+        "search_knowledge_base"
+      ],
+      "note": "date-dependent"
+    },
+    {
+      "id": "q23",
+      "group": "H",
+      "question": "Dự báo thời tiết tại 12 khu vực phía Nam Việt Nam (bao gồm TP.HCM, Vũng Tàu, Đồng Nai, Đà Lạt) ngày hôm nay 1/10/2026 có điểm gì đáng chú ý?",
+      "expected_tools": [
+        "get_weather"
+      ],
+      "note": "date-dependent"
+    },
+    {
+      "id": "q24",
+      "group": "H",
+      "question": "Những repository GitHub nào vừa lọt top trending trong tuần này (đến 1/10/2026) có liên quan trực tiếp đến các chủ đề đang hot trên Hacker News?",
+      "expected_tools": [
+        "query_athena",
+        "search_knowledge_base"
+      ],
+      "note": "date-dependent"
+    },
+    {
+      "id": "q25",
+      "group": "H",
+      "question": "Giá của các đồng tiền mã hóa như Bitcoin (BTC), Ethereum (ETH) và Solana (SOL) trên CoinGecko hôm nay biến động ra sao so với các tin tức thị trường mới nhất?",
+      "expected_tools": [
+        "get_crypto_prices",
+        "search_knowledge_base",
+        "search_web"
+      ],
+      "note": "date-dependent"
+    }
+  ]
+}

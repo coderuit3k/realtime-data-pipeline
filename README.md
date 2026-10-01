@@ -141,6 +141,54 @@ and at the end it writes to S3; one slow story also holds up the whole run.
 **Caveat.** The "after" numbers are only 5 runs per function, so there is no
 p95 yet. It will be added once enough scheduled runs have accumulated.
 
+## Jev router experiment (part A)
+
+**Goal.** Test whether Jev -- a model that returns typed decisions (choose /
+score / yes-no with a confidence), not free text -- can decide which tools
+`rag_agent` should call. Jev cannot write SQL or search queries; it can only
+choose among fixed options. This section records the **before** numbers
+(today's agent: a Claude Haiku 4.5 tool-calling loop). The **after** numbers
+will be added here once Jev is integrated.
+
+**How it was measured.** 25 questions with the expected tools labelled by
+the project owner (`eval/jev/routing_questions.json`), each run twice = 50
+runs of the real agent, one at a time, answer cache bypassed
+(`eval/jev/run_routing_eval.py`). Run on a laptop with a slow network, so
+times are higher than on Lambda; "after" will run on the same machine.
+
+| Metric | Before (no Jev) |
+|---|---|
+| Called every tool it should | 88% (44 of 50 runs) |
+| Called exactly the right tools | 82% (41 of 50 runs) |
+| Wrong tool calls per run | 0.12 |
+| Time per question, typical / slow (p50 / p95) | 12.4 s / 64.7 s (max 131 s) |
+| Tool calls per question, average / p95 | 1.9 / 6 |
+| Repeat calls to a tool already called, per run | 0.66 |
+| Tokens per question (in / out) | 8,696 / 765 |
+| Cost per 100 questions | $1.25 |
+| Tool errors | 4 (3 bad SQL, 1 Athena timeout) |
+
+Cost uses Claude Haiku 4.5 list price ($1 in / $5 out per million tokens).
+
+**Answer quality before** (RAGAS, the 6 mixed questions in `eval/questions.json`,
+one run): faithfulness **0.766**, answer relevancy **0.698**, context precision
+**0.300**. With Jev, none of these may drop by more than 0.05. The previous run
+(2026-09-23, when the agent had fewer tools) scored 0.727 / 0.887 / 0.551. Most of
+that gap is one out-of-scope question (a recipe) that scores 0 on all three because
+the agent declines it. With only 6 questions and an LLM as the judge these numbers
+are noisy, and the gap was not investigated further.
+
+**What this shows.**
+- Questions that need one tool are routed correctly every time (crypto,
+  weather, web search and single SQL lookups). A router has nothing to fix
+  there.
+- The misses are the 5 questions that combine sources, e.g. repos vs. rainy
+  days, or crypto prices vs. news. They call 3-7 tools (often the same SQL tool
+  again and again) and take 40-130 s.
+- Time is 56% tools and 44% LLM. The SQL tool alone is 47% of all time (43
+  calls, 12 s each on average). A router can only remove calls; it cannot make
+  Athena faster, and Jev cannot write the SQL itself.
+
 ## Sample analytics
 
 `infra/glue.tf` registers a Glue database (`<project>_curated`) with five
