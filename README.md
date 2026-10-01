@@ -106,6 +106,44 @@ credentials at all.)
    [`infra/`](infra/README.md) through GitHub Actions.
 4. Set the News API credentials in Secrets Manager (see `infra/README.md`).
 
+## Ingestion performance
+
+`hackernews_ingestion` and `weather_ingestion` were the slowest ingestion
+Lambdas because they made one HTTP request per story (1 + 50) and per
+location (12) one after another, each on a fresh connection. They now share
+one connection pool (`requests.Session`) and fetch concurrently
+(`common/http.py`; 10 workers by default, tunable with the
+`INGESTION_FETCH_WORKERS` environment variable). Results come back in the
+same order, and one failed request still fails the whole run, exactly as
+the sequential loop did.
+
+**Before -- real Lambda durations** (CloudWatch `AWS/Lambda` `Duration`,
+144 invocations each, the 3 days up to 2026-10-01):
+
+| Lambda | p50 | p95 | max |
+|---|---|---|---|
+| `hackernews_ingestion` | 5.1 s | 7.0 s | 11.0 s |
+| `weather_ingestion` | 6.2 s | 11.8 s | 30.7 s |
+
+(`weather_ingestion`'s worst case was already half of its 60 s timeout.)
+
+**Before vs. after -- same machine, same live APIs**, calling the fetch
+function from the old code and the new code back to back, two runs each:
+
+| Fetch | Before (sequential) | After (concurrent) | Speed-up |
+|---|---|---|---|
+| Hacker News, 50 stories | 77.1 s, 59.7 s | 3.9 s, 3.0 s | ~20x |
+| Open-Meteo, 12 locations | 20.4 s, 25.8 s | 2.1 s, 1.4 s | ~10-19x |
+
+The weather readings were identical (same order, same observation
+timestamps); the Hacker News `newstories` feed moves between calls, so the
+two runs shared 46-48 of 50 story ids rather than all 50.
+
+Read the second table as a ratio, not as Lambda timings: the machine it ran
+on needed ~1.2-2 s per request, far slower than a Lambda in AWS, so the
+absolute seconds are inflated. Lambda durations after this change have not
+been measured yet; they will be added here once it is deployed.
+
 ## Sample analytics
 
 `infra/glue.tf` registers a Glue database (`<project>_curated`) with five

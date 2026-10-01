@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import requests
 
 from common import config
+from common.http import make_session, map_concurrently
 from common.s3_writer import write_records
 
 logger = logging.getLogger()
@@ -28,25 +29,24 @@ def normalize_story(item: dict) -> dict:
     }
 
 
-def fetch_item(item_id: int) -> dict | None:
-    response = requests.get(f"{HN_BASE_URL}/item/{item_id}.json", timeout=10)
+def fetch_item(session: requests.Session, item_id: int) -> dict | None:
+    response = session.get(f"{HN_BASE_URL}/item/{item_id}.json", timeout=10)
     response.raise_for_status()
     return response.json()
 
 
 def fetch_new_stories(limit: int) -> list[dict]:
-    response = requests.get(f"{HN_BASE_URL}/{config.HN_FEED}.json", timeout=10)
+    session = make_session(config.INGESTION_FETCH_WORKERS)
+    response = session.get(f"{HN_BASE_URL}/{config.HN_FEED}.json", timeout=10)
     response.raise_for_status()
     story_ids = response.json()[:limit]
 
-    stories = []
-    for story_id in story_ids:
-        item = fetch_item(story_id)
-        # Deleted/dead items come back as None; "job"/"comment"/"poll" show up
-        # in some feeds too -- only "story" items match our schema.
-        if item and item.get("type") == "story":
-            stories.append(normalize_story(item))
-    return stories
+    items = map_concurrently(
+        lambda story_id: fetch_item(session, story_id), story_ids, config.INGESTION_FETCH_WORKERS
+    )
+    # Deleted/dead items come back as None; "job"/"comment"/"poll" show up
+    # in some feeds too -- only "story" items match our schema.
+    return [normalize_story(item) for item in items if item and item.get("type") == "story"]
 
 
 def lambda_handler(event, context):

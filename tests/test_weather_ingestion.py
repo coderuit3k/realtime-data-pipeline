@@ -1,5 +1,8 @@
+import threading
 from unittest.mock import patch
 
+from common import config
+from ingestion import weather_ingestion
 from ingestion.weather_ingestion import lambda_handler, normalize_current
 
 
@@ -49,3 +52,61 @@ def test_lambda_handler_writes_records_keyed_by_weather_id(mock_fetch_weather, m
     mock_write_records.assert_called_once_with(
         "weather", [{"weather_id": "Da Lat-2026-09-19T18:00"}], "weather_id"
     )
+
+
+class _FakeResponse:
+    def __init__(self, data):
+        self._data = data
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return self._data
+
+
+class _FakeWeatherSession:
+    """Answers each location's request; waits on `barrier` (if given) so the
+    test only passes when the requests run concurrently."""
+
+    def __init__(self, barrier=None):
+        self._barrier = barrier
+
+    def get(self, url, params, timeout):
+        if self._barrier:
+            self._barrier.wait()
+        return _FakeResponse({"current": {"time": f"t-{params['latitude']}", "temperature_2m": 30}})
+
+
+def test_fetch_weather_requests_locations_concurrently_in_config_order(monkeypatch):
+    locations = [
+        {"name": "A", "latitude": 1, "longitude": 1},
+        {"name": "B", "latitude": 2, "longitude": 2},
+        {"name": "C", "latitude": 3, "longitude": 3},
+    ]
+    monkeypatch.setattr(config, "WEATHER_LOCATIONS", locations)
+    session = _FakeWeatherSession(barrier=threading.Barrier(3, timeout=2))
+    monkeypatch.setattr(weather_ingestion, "make_session", lambda pool_size: session)
+
+    records = weather_ingestion.fetch_weather()
+
+    assert [r["location"] for r in records] == ["A", "B", "C"]
+
+
+def test_fetch_weather_reuses_one_session_for_every_location(monkeypatch):
+    monkeypatch.setattr(
+        config,
+        "WEATHER_LOCATIONS",
+        [{"name": n, "latitude": i, "longitude": i} for i, n in enumerate("ABCD")],
+    )
+    created = []
+
+    def make_session(pool_size):
+        created.append(pool_size)
+        return _FakeWeatherSession()
+
+    monkeypatch.setattr(weather_ingestion, "make_session", make_session)
+
+    weather_ingestion.fetch_weather()
+
+    assert len(created) == 1

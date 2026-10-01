@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import requests
 
 from common import config
+from common.http import make_session, map_concurrently
 from common.s3_writer import write_records
 
 logger = logging.getLogger()
@@ -45,19 +46,25 @@ def normalize_current(location: dict, payload: dict) -> dict:
     }
 
 
+def fetch_location(session: requests.Session, location: dict) -> dict:
+    params = {
+        "latitude": location["latitude"],
+        "longitude": location["longitude"],
+        "current": CURRENT_FIELDS,
+        "timezone": "Asia/Bangkok",
+    }
+    response = session.get(WEATHER_API_URL, params=params, timeout=10)
+    response.raise_for_status()
+    return normalize_current(location, response.json())
+
+
 def fetch_weather() -> list[dict]:
-    records = []
-    for location in config.WEATHER_LOCATIONS:
-        params = {
-            "latitude": location["latitude"],
-            "longitude": location["longitude"],
-            "current": CURRENT_FIELDS,
-            "timezone": "Asia/Bangkok",
-        }
-        response = requests.get(WEATHER_API_URL, params=params, timeout=10)
-        response.raise_for_status()
-        records.append(normalize_current(location, response.json()))
-    return records
+    session = make_session(config.INGESTION_FETCH_WORKERS)
+    return map_concurrently(
+        lambda location: fetch_location(session, location),
+        config.WEATHER_LOCATIONS,
+        config.INGESTION_FETCH_WORKERS,
+    )
 
 
 def lambda_handler(event, context):

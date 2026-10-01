@@ -10,6 +10,10 @@ NEWS_SECRET_NAME = os.environ.get("NEWS_SECRET_NAME", "realtime-data-pipeline-de
 HN_FEED = os.environ.get("HN_FEED", "newstories")  # or "topstories", "beststories"
 HN_STORY_LIMIT = int(os.environ.get("HN_STORY_LIMIT", "50"))
 
+# Parallel HTTP requests per ingestion run (one request per HN story / weather
+# location) -- a sequential loop was ~5-6s per run.
+INGESTION_FETCH_WORKERS = int(os.environ.get("INGESTION_FETCH_WORKERS", "10"))
+
 NEWS_QUERY = os.environ.get("NEWS_QUERY", "cryptocurrency OR technology")
 NEWS_PAGE_SIZE = int(os.environ.get("NEWS_PAGE_SIZE", "50"))
 NEWS_LANGUAGE = os.environ.get("NEWS_LANGUAGE", "en")
