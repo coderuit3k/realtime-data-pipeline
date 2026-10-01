@@ -6,9 +6,10 @@ from common import athena
 class FakeAthena:
     """Scripts a sequence of canned Athena API responses, keyed by call type."""
 
-    def __init__(self, execution_states, results):
+    def __init__(self, execution_states, results, events=None):
         self._execution_states = list(execution_states)
         self._results = results
+        self._events = events if events is not None else []
         self.start_query_execution_calls = []
 
     def start_query_execution(self, **kwargs):
@@ -30,6 +31,7 @@ class FakeAthena:
         }
 
     def get_query_results(self, **kwargs):
+        self._events.append("get_query_results")
         max_results = kwargs.get("MaxResults")
         if max_results is None:
             return self._results
@@ -44,10 +46,15 @@ class FakeAthena:
 
 
 class FakeS3:
-    def __init__(self):
+    def __init__(self, events=None, fail_delete=False):
         self.delete_object_calls = []
+        self._events = events if events is not None else []
+        self._fail_delete = fail_delete
 
     def delete_object(self, **kwargs):
+        self._events.append("delete_object")
+        if self._fail_delete:
+            raise RuntimeError("AccessDenied")
         self.delete_object_calls.append(kwargs)
 
 
@@ -116,3 +123,30 @@ def test_run_query_marks_truncated_when_more_rows_than_max(monkeypatch):
 
     assert rows == [{"n": "1"}, {"n": "2"}]
     assert truncated is True
+
+
+def test_run_query_fetches_results_before_deleting_the_metadata_file(monkeypatch):
+    # GetQueryResults reads the .metadata file (column info) -- deleting it
+    # first makes Athena answer "Could not find results".
+    events = []
+    fake = FakeAthena(
+        execution_states=["SUCCEEDED"], results=_athena_results(["n"], [["1"]]), events=events
+    )
+    monkeypatch.setattr(athena, "_athena", lambda: fake)
+    monkeypatch.setattr(athena, "_s3", lambda: FakeS3(events=events))
+    monkeypatch.setattr(athena.time, "sleep", lambda seconds: None)
+
+    athena.run_query("SELECT n FROM t")
+
+    assert events == ["get_query_results", "delete_object"]
+
+
+def test_run_query_still_returns_rows_when_metadata_cleanup_fails(monkeypatch):
+    fake = FakeAthena(execution_states=["SUCCEEDED"], results=_athena_results(["n"], [["1"]]))
+    monkeypatch.setattr(athena, "_athena", lambda: fake)
+    monkeypatch.setattr(athena, "_s3", lambda: FakeS3(fail_delete=True))
+    monkeypatch.setattr(athena.time, "sleep", lambda seconds: None)
+
+    rows, _truncated = athena.run_query("SELECT n FROM t")
+
+    assert rows == [{"n": "1"}]

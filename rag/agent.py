@@ -544,13 +544,16 @@ def run_agent(question: str, documents: list[dict]) -> dict:
         messages.append({"role": "user", "content": tool_result_blocks})
 
     # Exhausted MAX_ITERATIONS without a final text turn (e.g. the model kept
-    # calling tools) -- ask once more with tools withdrawn so it must answer
-    # from whatever it already gathered, instead of erroring the invocation.
+    # calling tools) -- ask once more, told to answer from whatever it already
+    # gathered, instead of erroring the invocation. toolConfig must still be
+    # sent: Converse raises ValidationException for a history that contains
+    # toolUse/toolResult blocks without it (Converse has no "no tools" choice).
     force_answer_system = system_prompt + "\n\nYou must give your final answer now, no more tools."
     response = _bedrock().converse(
         modelId=config.BEDROCK_TEXT_MODEL_ID,
         system=[{"text": force_answer_system}],
         messages=messages,
+        toolConfig={"tools": TOOLS},
         inferenceConfig={"maxTokens": 800},
     )
     return {

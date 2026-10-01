@@ -431,8 +431,11 @@ def test_run_agent_forces_final_answer_after_max_iterations(monkeypatch):
 
     assert result["answer"] == "Best effort answer."
     assert len(result["trace"]) == 2
-    # The forcing call carries no toolConfig -- the model can't keep looping.
-    assert "toolConfig" not in fake.calls[-1]
+    # Converse rejects any history containing toolUse/toolResult blocks unless
+    # toolConfig is also sent (ValidationException), even when we don't want
+    # more tool calls -- so the forcing call must carry it.
+    assert fake.calls[-1]["toolConfig"] == {"tools": agent.TOOLS}
+    assert "no more tools" in fake.calls[-1]["system"][0]["text"]
 
 
 def test_lambda_handler_rejects_missing_question():

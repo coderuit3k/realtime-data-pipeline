@@ -1,9 +1,12 @@
+import logging
 import time
 from urllib.parse import urlparse
 
 import boto3
 
 from common import config
+
+logger = logging.getLogger(__name__)
 
 _athena_client = None
 _s3_client = None
@@ -28,12 +31,15 @@ def _s3():
 
 def _delete_result_metadata(output_location: str) -> None:
     """Athena writes a `<query-id>.csv.metadata` file alongside every CSV
-    result it has no option to suppress. Nothing ever reads it back (results
-    come from get_query_results, not from the CSV itself), so it's pure
-    storage cost -- delete it right after the query succeeds."""
-    bucket = urlparse(output_location).netloc
-    key = urlparse(output_location).path.lstrip("/") + ".metadata"
-    _s3().delete_object(Bucket=bucket, Key=key)
+    result and has no option to suppress it. GetQueryResults itself reads
+    that file (column info), so this must only run AFTER get_query_results
+    -- deleting earlier makes Athena answer "Could not find results". Best
+    effort: failing to tidy storage must never fail the query's answer."""
+    parsed = urlparse(output_location)
+    try:
+        _s3().delete_object(Bucket=parsed.netloc, Key=parsed.path.lstrip("/") + ".metadata")
+    except Exception:
+        logger.warning("Could not delete Athena result metadata for %s", output_location, exc_info=True)
 
 
 def run_query(sql: str, max_rows: int = 25) -> tuple[list[dict], bool]:
@@ -63,12 +69,11 @@ def run_query(sql: str, max_rows: int = 25) -> tuple[list[dict], bool]:
     else:
         raise RuntimeError("Athena query timed out waiting for SUCCEEDED state")
 
-    _delete_result_metadata(execution["ResultConfiguration"]["OutputLocation"])
-
     # MaxResults counts the header row, so ask for max_rows+2 (header + up to
     # max_rows+1 data rows) -- seeing that extra (max_rows+1)-th data row is
     # what proves more data existed than max_rows allows through.
     results = client.get_query_results(QueryExecutionId=execution_id, MaxResults=max_rows + 2)
+    _delete_result_metadata(execution["ResultConfiguration"]["OutputLocation"])
     result_set = results["ResultSet"]
     columns = [c["Name"] for c in result_set["ResultSetMetadata"]["ColumnInfo"]]
     data_rows = result_set["Rows"][1:]  # first row is the header
