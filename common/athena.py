@@ -39,7 +39,9 @@ def _delete_result_metadata(output_location: str) -> None:
     try:
         _s3().delete_object(Bucket=parsed.netloc, Key=parsed.path.lstrip("/") + ".metadata")
     except Exception:
-        logger.warning("Could not delete Athena result metadata for %s", output_location, exc_info=True)
+        logger.warning(
+            "Could not delete Athena result metadata for %s", output_location, exc_info=True
+        )
 
 
 def run_query(sql: str, max_rows: int = 25) -> tuple[list[dict], bool]:
