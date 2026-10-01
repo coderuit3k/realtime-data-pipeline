@@ -582,6 +582,7 @@ def test_lambda_handler_runs_agent_and_caches_on_miss(monkeypatch):
             "answer": "Fresh answer.",
             "trace": fresh_trace,
             "sources": [{"title": "T", "url": "https://y", "source": "news"}],
+            "truncated": False,
         },
     )
 
@@ -596,3 +597,87 @@ def test_lambda_handler_runs_agent_and_caches_on_miss(monkeypatch):
     # The trace from this fresh run must be persisted too, so the next cache
     # hit on this same question can show real grounding, not an empty list.
     assert json.loads(cached_item["tool_calls"]) == fresh_trace
+
+
+def _truncated_response(text: str) -> dict:
+    return {
+        "stopReason": "max_tokens",
+        "output": {"message": {"role": "assistant", "content": [{"text": text}] if text else []}},
+    }
+
+
+def test_run_agent_flags_and_labels_an_answer_cut_off_by_max_tokens(monkeypatch):
+    fake = FakeBedrock([_truncated_response("Một câu trả lời dài bị cắt giữa chừng, tác động t")])
+    monkeypatch.setattr(agent, "_bedrock", lambda: fake)
+
+    result = agent.run_agent("Q", documents=[])
+
+    assert result["truncated"] is True
+    assert result["answer"].startswith("Một câu trả lời dài bị cắt giữa chừng, tác động t")
+    assert result["answer"].endswith(agent.TRUNCATED_NOTICE)
+
+
+def test_run_agent_never_returns_a_blank_answer_when_cut_off_with_no_text(monkeypatch):
+    # Hitting max_tokens while emitting a tool call yields no text at all.
+    fake = FakeBedrock([_truncated_response("")])
+    monkeypatch.setattr(agent, "_bedrock", lambda: fake)
+
+    result = agent.run_agent("Q", documents=[])
+
+    assert result["truncated"] is True
+    assert result["answer"].strip() == agent.TRUNCATED_NOTICE.strip()
+
+
+def test_run_agent_flags_truncation_of_the_forced_final_answer(monkeypatch):
+    monkeypatch.setattr(agent, "MAX_ITERATIONS", 1)
+    monkeypatch.setattr(agent, "search_web", lambda query: [])
+    fake = FakeBedrock([_tool_use_response("tu1", "search_web", "a"), _truncated_response("Cụt")])
+    monkeypatch.setattr(agent, "_bedrock", lambda: fake)
+
+    result = agent.run_agent("Q", documents=[])
+
+    assert result["truncated"] is True
+    assert result["answer"].endswith(agent.TRUNCATED_NOTICE)
+
+
+def test_run_agent_does_not_flag_a_complete_answer(monkeypatch):
+    fake = FakeBedrock([_final_response("Đầy đủ.")])
+    monkeypatch.setattr(agent, "_bedrock", lambda: fake)
+
+    result = agent.run_agent("Q", documents=[])
+
+    assert result["truncated"] is False
+    assert result["answer"] == "Đầy đủ."
+
+
+def test_run_agent_gives_every_converse_call_the_answer_token_cap(monkeypatch):
+    monkeypatch.setattr(agent, "MAX_ITERATIONS", 1)
+    monkeypatch.setattr(agent, "search_web", lambda query: [])
+    fake = FakeBedrock([_tool_use_response("tu1", "search_web", "a"), _final_response("ok")])
+    monkeypatch.setattr(agent, "_bedrock", lambda: fake)
+
+    agent.run_agent("Q", documents=[])
+
+    assert [c["inferenceConfig"]["maxTokens"] for c in fake.calls] == [agent.MAX_ANSWER_TOKENS] * 2
+
+
+def test_lambda_handler_does_not_cache_a_truncated_answer(monkeypatch):
+    table = FakeTable()
+    monkeypatch.setattr(agent, "RAG_MEMORY_TABLE", "rag-memory")
+    monkeypatch.setattr(agent, "_dynamodb", lambda: FakeDynamoDB(table))
+    monkeypatch.setattr(agent, "load_index", lambda: [])
+    monkeypatch.setattr(
+        agent,
+        "run_agent",
+        lambda question, documents: {
+            "answer": "Cụt" + agent.TRUNCATED_NOTICE,
+            "trace": [],
+            "sources": [],
+            "truncated": True,
+        },
+    )
+
+    result = agent.lambda_handler({"question": "Another question?"}, None)
+
+    assert result["answer"].endswith(agent.TRUNCATED_NOTICE)
+    assert agent.question_hash("Another question?") not in table.items

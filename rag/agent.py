@@ -24,6 +24,14 @@ _dynamodb_resource = None
 
 MAX_ITERATIONS = 6
 
+# Vietnamese answers tokenize heavily -- 800 cut ~1 in 6 cached answers
+# mid-sentence. Output tokens are only billed as generated, so a higher cap
+# costs nothing unless an answer genuinely needs the room.
+MAX_ANSWER_TOKENS = 2000
+TRUNCATED_NOTICE = (
+    "\n\n_(Câu trả lời bị cắt do giới hạn độ dài -- hãy hỏi lại hoặc chia nhỏ câu hỏi.)_"
+)
+
 # Question/answer memory (DynamoDB) -- lets a repeated question skip the
 # Bedrock tool-calling loop entirely instead of re-answering it from scratch.
 # Empty string disables caching (get/store become no-ops), matching the
@@ -497,6 +505,19 @@ def extract_text(message: dict) -> str:
     return "".join(block["text"] for block in message["content"] if "text" in block)
 
 
+def _final_result(response: dict, trace: list, sources_by_url: dict) -> dict:
+    text = extract_text(response["output"]["message"])
+    truncated = response["stopReason"] == "max_tokens"
+    if truncated:
+        text += TRUNCATED_NOTICE
+    return {
+        "answer": text,
+        "trace": trace,
+        "sources": list(sources_by_url.values()),
+        "truncated": truncated,
+    }
+
+
 def run_agent(question: str, documents: list[dict]) -> dict:
     messages = [{"role": "user", "content": [{"text": question}]}]
     trace = []
@@ -509,17 +530,13 @@ def run_agent(question: str, documents: list[dict]) -> dict:
             system=[{"text": system_prompt}],
             messages=messages,
             toolConfig={"tools": TOOLS},
-            inferenceConfig={"maxTokens": 800},
+            inferenceConfig={"maxTokens": MAX_ANSWER_TOKENS},
         )
         output_message = response["output"]["message"]
         messages.append(output_message)
 
         if response["stopReason"] != "tool_use":
-            return {
-                "answer": extract_text(output_message),
-                "trace": trace,
-                "sources": list(sources_by_url.values()),
-            }
+            return _final_result(response, trace, sources_by_url)
 
         tool_result_blocks = []
         for block in output_message["content"]:
@@ -554,13 +571,9 @@ def run_agent(question: str, documents: list[dict]) -> dict:
         system=[{"text": force_answer_system}],
         messages=messages,
         toolConfig={"tools": TOOLS},
-        inferenceConfig={"maxTokens": 800},
+        inferenceConfig={"maxTokens": MAX_ANSWER_TOKENS},
     )
-    return {
-        "answer": extract_text(response["output"]["message"]),
-        "trace": trace,
-        "sources": list(sources_by_url.values()),
-    }
+    return _final_result(response, trace, sources_by_url)
 
 
 def lambda_handler(event, context):
@@ -601,7 +614,10 @@ def lambda_handler(event, context):
         {"title": s.get("title", ""), "url": s.get("url", ""), "source": s.get("source", "")}
         for s in result["sources"]
     ]
-    store_cached_answer(question, result["answer"], sources, result["trace"], hit_count=1)
+    # A cut-off answer must not be cached: a recurring question is promoted to
+    # a permanent entry, which would serve the truncated text forever.
+    if not result["truncated"]:
+        store_cached_answer(question, result["answer"], sources, result["trace"], hit_count=1)
 
     return {
         "statusCode": 200,
