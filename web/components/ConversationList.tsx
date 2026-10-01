@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ConversationJSON } from "@/lib/conversations";
+import { PanelToggleButton } from "./PanelToggleButton";
 
 export function ConversationList({
   conversations,
@@ -10,6 +11,9 @@ export function ConversationList({
   onCreate,
   onRename,
   onDelete,
+  collapsed,
+  onToggleCollapsed,
+  hasError = false,
 }: {
   conversations: ConversationJSON[];
   selectedId: string | null;
@@ -17,6 +21,9 @@ export function ConversationList({
   onCreate: () => void;
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+  hasError?: boolean;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
@@ -35,14 +42,45 @@ export function ConversationList({
     setEditingId(null);
   }
 
+  if (collapsed) {
+    return (
+      <div className="w-full rounded-lg border border-border bg-surface/75 backdrop-blur-md py-3 flex flex-col items-center gap-3">
+        <PanelToggleButton
+          collapsed
+          edge="left"
+          label="Hiện danh sách cuộc trò chuyện"
+          onClick={onToggleCollapsed}
+          alert={hasError}
+        />
+        <button
+          type="button"
+          onClick={onCreate}
+          aria-label="Cuộc trò chuyện mới"
+          title="Cuộc trò chuyện mới"
+          className="w-8 h-8 rounded-lg bg-accent text-base font-semibold leading-none text-bg transition-shadow hover:shadow-glowCyan"
+        >
+          +
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="w-[260px] shrink-0 rounded-lg border border-border bg-surface/75 backdrop-blur-md p-3 flex flex-col gap-2 overflow-auto">
-      <button
-        onClick={onCreate}
-        className="rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-bg transition-shadow hover:shadow-glowCyan"
-      >
-        + Cuộc trò chuyện mới
-      </button>
+    <div className="w-full min-w-0 rounded-lg border border-border bg-surface/75 backdrop-blur-md p-3 flex flex-col gap-2 overflow-auto">
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onCreate}
+          className="flex-grow rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-bg transition-shadow hover:shadow-glowCyan"
+        >
+          + Cuộc trò chuyện mới
+        </button>
+        <PanelToggleButton
+          collapsed={false}
+          edge="left"
+          label="Ẩn danh sách cuộc trò chuyện"
+          onClick={onToggleCollapsed}
+        />
+      </div>
       <div className="flex flex-col gap-1 mt-1">
         {conversations.map((c) => (
           <div

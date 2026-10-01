@@ -1,8 +1,12 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { readPanelCollapsed, writePanelCollapsed } from "@/lib/panelState";
+import { PanelToggleButton } from "./PanelToggleButton";
+
+const SIDEBAR_COLLAPSED_KEY = "sidebar_collapsed";
 
 type NavLink = { href: string; label: string; icon: ReactNode };
 
@@ -100,29 +104,53 @@ const LEGACY_LINKS: NavLink[] = [
   },
 ];
 
-function SidebarLink({ link, active }: { link: NavLink; active: boolean }) {
+function SidebarLink({ link, active, collapsed }: { link: NavLink; active: boolean; collapsed: boolean }) {
   return (
     <Link
       href={link.href}
       aria-current={active ? "page" : undefined}
-      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] border ${
+      aria-label={collapsed ? link.label : undefined}
+      title={collapsed ? link.label : undefined}
+      className={`flex items-center gap-3 py-2 rounded-lg text-[13px] border whitespace-nowrap ${
+        collapsed ? "justify-center px-0" : "px-3"
+      } ${
         active
           ? "bg-accent/[0.12] text-accent font-semibold border-accent/30 shadow-glowCyan"
           : "text-textSecondary font-medium border-transparent"
       }`}
     >
-      {link.icon}
-      <span>{link.label}</span>
+      <span className="flex-shrink-0">{link.icon}</span>
+      {!collapsed && <span>{link.label}</span>}
     </Link>
   );
 }
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+  // Animate only after the remembered state is applied, so a returning
+  // visitor with a collapsed sidebar doesn't watch it slide shut on load.
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    setCollapsed(readPanelCollapsed(window.localStorage, SIDEBAR_COLLAPSED_KEY));
+    const frame = requestAnimationFrame(() => setReady(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  function toggle() {
+    const next = !collapsed;
+    setCollapsed(next);
+    writePanelCollapsed(window.localStorage, SIDEBAR_COLLAPSED_KEY, next);
+  }
 
   return (
-    <aside className="w-[240px] flex-shrink-0 sticky top-0 h-screen bg-sidebarBg border-r border-border flex flex-col px-[18px] py-5 gap-4 overflow-y-auto">
-      <div className="flex items-center gap-2.5 px-1.5">
+    <aside
+      className={`${collapsed ? "w-[64px] px-2" : "w-[240px] px-[18px]"} ${
+        ready ? "transition-[width] duration-200 ease-out motion-reduce:transition-none" : ""
+      } flex-shrink-0 sticky top-0 h-screen bg-sidebarBg border-r border-border flex flex-col py-5 gap-4 overflow-x-hidden overflow-y-auto`}
+    >
+      <div className={`flex ${collapsed ? "flex-col items-center" : "items-center"} gap-2.5 ${collapsed ? "" : "px-1.5"}`}>
         <svg
           width="26"
           height="26"
@@ -136,19 +164,31 @@ export default function Sidebar() {
         >
           <path d="M13 2 3 14h8l-1 8 10-12h-8l1-8z" />
         </svg>
-        <div className="flex flex-col">
-          <span className="font-heading text-base font-bold text-textPrimary">DataPulse</span>
-          <span className="font-mono text-[10px] text-textMuted">realtime-pipeline</span>
-        </div>
+        {!collapsed && (
+          <div className="flex flex-col flex-grow whitespace-nowrap">
+            <span className="font-heading text-base font-bold text-textPrimary">DataPulse</span>
+            <span className="font-mono text-[10px] text-textMuted">realtime-pipeline</span>
+          </div>
+        )}
+        <PanelToggleButton
+          collapsed={collapsed}
+          edge="left"
+          label={collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
+          onClick={toggle}
+        />
       </div>
 
       <nav className="flex flex-col gap-1">
         {NAV_LINKS.map((link) => (
-          <SidebarLink key={link.href} link={link} active={pathname === link.href} />
+          <SidebarLink key={link.href} link={link} active={pathname === link.href} collapsed={collapsed} />
         ))}
-        <span className="font-mono text-[10px] text-textFaint tracking-wide px-3 pt-3 pb-0.5">TRANG KHÁC</span>
+        {collapsed ? (
+          <hr className="border-border my-2" />
+        ) : (
+          <span className="font-mono text-[10px] text-textFaint tracking-wide px-3 pt-3 pb-0.5">TRANG KHÁC</span>
+        )}
         {LEGACY_LINKS.map((link) => (
-          <SidebarLink key={link.href} link={link} active={pathname === link.href} />
+          <SidebarLink key={link.href} link={link} active={pathname === link.href} collapsed={collapsed} />
         ))}
       </nav>
     </aside>

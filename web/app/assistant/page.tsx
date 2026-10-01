@@ -5,8 +5,15 @@ import { ChatThread } from "@/components/ChatThread";
 import { ToolTraceHistory } from "@/components/ToolTraceHistory";
 import { ConversationList } from "@/components/ConversationList";
 import { getOrCreateSessionId } from "@/lib/sessionId";
+import { readPanelCollapsed, writePanelCollapsed } from "@/lib/panelState";
 import type { AssistantResult, ChatMessage } from "@/lib/assistant";
 import type { ConversationJSON } from "@/lib/conversations";
+
+const LIST_COLLAPSED_KEY = "assistant_list_collapsed";
+const TRACE_COLLAPSED_KEY = "assistant_trace_collapsed";
+const LIST_WIDTH = "260px";
+const TRACE_WIDTH = "320px";
+const RAIL_WIDTH = "48px";
 
 export default function AssistantPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -20,6 +27,11 @@ export default function AssistantPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [conversationsError, setConversationsError] = useState<string | null>(null);
   const [messagesError, setMessagesError] = useState<string | null>(null);
+  const [listCollapsed, setListCollapsed] = useState(false);
+  const [traceCollapsed, setTraceCollapsed] = useState(false);
+  // Panels animate only after the remembered state has been applied, so a
+  // returning visitor with a collapsed panel doesn't watch it slide shut on load.
+  const [panelsReady, setPanelsReady] = useState(false);
   const selectedIdRef = useRef<string | null>(null);
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -28,6 +40,26 @@ export default function AssistantPage() {
   useEffect(() => {
     setSessionId(getOrCreateSessionId());
   }, []);
+
+  useEffect(() => {
+    setListCollapsed(readPanelCollapsed(window.localStorage, LIST_COLLAPSED_KEY));
+    setTraceCollapsed(readPanelCollapsed(window.localStorage, TRACE_COLLAPSED_KEY));
+    // Wait a frame so the restored widths paint before transitions switch on.
+    const frame = requestAnimationFrame(() => setPanelsReady(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  function toggleList() {
+    const next = !listCollapsed;
+    setListCollapsed(next);
+    writePanelCollapsed(window.localStorage, LIST_COLLAPSED_KEY, next);
+  }
+
+  function toggleTrace() {
+    const next = !traceCollapsed;
+    setTraceCollapsed(next);
+    writePanelCollapsed(window.localStorage, TRACE_COLLAPSED_KEY, next);
+  }
 
   const loadConversations = useCallback(async (sid: string) => {
     try {
@@ -169,9 +201,18 @@ export default function AssistantPage() {
       <div>
         <h1 className="font-heading text-2xl font-semibold text-textPrimary">RAG Assistant</h1>
       </div>
-      <div className="grid grid-cols-[260px_1.5fr_1fr] gap-5 flex-grow min-h-0">
-        <div className="flex flex-col gap-2 min-h-0">
-          {conversationsError && (
+      <div
+        className={`grid gap-5 flex-grow min-h-0 ${
+          panelsReady ? "transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none" : ""
+        }`}
+        style={{
+          gridTemplateColumns: `${listCollapsed ? RAIL_WIDTH : LIST_WIDTH} minmax(0, 1fr) ${
+            traceCollapsed ? RAIL_WIDTH : TRACE_WIDTH
+          }`,
+        }}
+      >
+        <div className="flex flex-col gap-2 min-h-0 min-w-0">
+          {conversationsError && !listCollapsed && (
             <div className="rounded-lg border border-error/40 bg-error/10 px-3 py-2 flex items-center justify-between gap-2">
               <span className="text-[11px] text-error">{conversationsError}</span>
               <button
@@ -189,9 +230,12 @@ export default function AssistantPage() {
             onCreate={handleCreate}
             onRename={handleRename}
             onDelete={handleDelete}
+            collapsed={listCollapsed}
+            onToggleCollapsed={toggleList}
+            hasError={conversationsError !== null}
           />
         </div>
-        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md p-6 flex flex-col gap-4 min-h-0 overflow-auto">
+        <div className="min-w-0 rounded-lg border border-border bg-surface/75 backdrop-blur-md p-6 flex flex-col gap-4 min-h-0 overflow-auto">
           {messagesError && (
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs text-error">{messagesError}</span>
@@ -229,7 +273,7 @@ export default function AssistantPage() {
             </button>
           </div>
         </div>
-        <ToolTraceHistory messages={messages} />
+        <ToolTraceHistory messages={messages} collapsed={traceCollapsed} onToggleCollapsed={toggleTrace} />
       </div>
     </div>
   );
