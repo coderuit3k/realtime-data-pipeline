@@ -15,14 +15,21 @@ export type MessageRow = {
 
 export const MAX_TITLE_LENGTH = 100;
 
+const CONVERSATION_TITLE_TIME_ZONE = "Asia/Ho_Chi_Minh";
+
 export function formatDateTitle(date: Date): string {
-  const dd = String(date.getUTCDate()).padStart(2, "0");
-  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const yy = String(date.getUTCFullYear()).slice(-2);
-  const h = String(date.getUTCHours()).padStart(2, "0");
-  const m = String(date.getUTCMinutes()).padStart(2, "0");
-  const s = String(date.getUTCSeconds()).padStart(2, "0");
-  return `${dd}/${mm}/${yy} ${h}:${m}:${s}`;
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: CONVERSATION_TITLE_TIME_ZONE,
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("day")}/${get("month")}/${get("year")} ${get("hour")}:${get("minute")}:${get("second")}`;
 }
 
 export function nextConversationTitle(base: string, existingTitles: string[]): string {

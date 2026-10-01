@@ -18,9 +18,14 @@ import {
 } from "./conversations";
 
 describe("formatDateTitle", () => {
-  it("formats as dd/mm/yy h:m:s using UTC, zero-padded", () => {
+  it("formats as dd/mm/yy h:m:s in Vietnam time (UTC+7), zero-padded", () => {
     const date = new Date(Date.UTC(2026, 8, 5, 9, 5, 3)); // month is 0-indexed: 8 = September
-    expect(formatDateTitle(date)).toBe("05/09/26 09:05:03");
+    expect(formatDateTitle(date)).toBe("05/09/26 16:05:03");
+  });
+
+  it("rolls over to the next day across the UTC+7 midnight boundary", () => {
+    const date = new Date(Date.UTC(2026, 8, 5, 17, 5, 3));
+    expect(formatDateTitle(date)).toBe("06/09/26 00:05:03");
   });
 });
 
