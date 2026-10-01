@@ -108,57 +108,38 @@ credentials at all.)
 
 ## Ingestion performance
 
-`hackernews_ingestion` and `weather_ingestion` were the slowest ingestion
-Lambdas because they made one HTTP request per story (1 + 50) and per
-location (12) one after another, each on a fresh connection. They now share
-one connection pool (`requests.Session`) and fetch concurrently
-(`common/http.py`; 10 workers by default, tunable with the
-`INGESTION_FETCH_WORKERS` environment variable). Results come back in the
-same order, and one failed request still fails the whole run, exactly as
-the sequential loop did.
+**What changed.** Two ingestion Lambdas fetched many URLs one after another
+-- Hacker News 50 stories, weather 12 cities. They now fetch up to 10 at the
+same time (`common/http.py`). Same data, same order; one failed request still
+fails the run.
 
-**Before -- real Lambda durations** (CloudWatch `AWS/Lambda` `Duration`,
-144 invocations each, the 3 days up to 2026-10-01):
+**Result** (time of one run on the real Lambda):
 
-| Lambda | p50 | p95 | max |
+| Lambda | Sequential (before) | Concurrent (after) | Faster |
 |---|---|---|---|
-| `hackernews_ingestion` | 5.1 s | 7.0 s | 11.0 s |
-| `weather_ingestion` | 6.2 s | 11.8 s | 30.7 s |
+| `hackernews_ingestion` (50 requests) | 5.1 s typical, 7.0 s slow runs | 1.8 s typical | ~3x |
+| `weather_ingestion` (12 requests) | 6.2 s typical, 11.8 s slow runs | 0.7 s typical | ~9x |
 
-(`weather_ingestion`'s worst case was already half of its 60 s timeout.)
+"Typical" is the median (p50); "slow runs" is p95. Before = CloudWatch, the
+144 scheduled runs of the 3 days up to 2026-10-01. After = 5 manual runs of
+each function right after the deploy. A back-to-back test on one machine
+against the live APIs points the same way (Hacker News 60-77 s -> 3-4 s,
+weather 20-26 s -> 1.4-2.1 s), with bigger ratios only because that machine
+had a slow network.
 
-**Before vs. after -- same machine, same live APIs**, calling the fetch
-function from the old code and the new code back to back, two runs each:
+**Conclusion.** Fetching at the same time makes weather about 9x faster and
+Hacker News about 3x faster, with identical results and no extra cost
+(Lambda bills by run time, so shorter is cheaper). Weather's worst run
+before was 30.7 s against a 60 s timeout; after, 2.0 s.
 
-| Fetch | Before (sequential) | After (concurrent) | Speed-up |
-|---|---|---|---|
-| Hacker News, 50 stories | 77.1 s, 59.7 s | 3.9 s, 3.0 s | ~20x |
-| Open-Meteo, 12 locations | 20.4 s, 25.8 s | 2.1 s, 1.4 s | ~10-19x |
+**Why.** One after another, the total is the *sum* of every request (for
+weather: 12 requests x ~0.5 s = ~6 s). At the same time, the total is about
+the *slowest single* request (~0.7 s). Hacker News gains less because it has
+work that cannot be parallelised: it must first fetch the list of story ids,
+and at the end it writes to S3; one slow story also holds up the whole run.
 
-The weather readings were identical (same order, same observation
-timestamps); the Hacker News `newstories` feed moves between calls, so the
-two runs shared 46-48 of 50 story ids rather than all 50.
-
-**After -- real Lambda** (deployed 2026-10-01 ~13:34 UTC; 5 manual
-invocations of each function right after the deploy, 1 cold start + 4 warm;
-the handler `Duration`, same figure as the "before" table above):
-
-| Lambda | Runs (ms) | min / median / max | p50 before -> median after |
-|---|---|---|---|
-| `hackernews_ingestion` | 2234 (cold), 923, 4261, 1310, 1782 | 0.9 / 1.8 / 4.3 s | 5.1 s -> 1.8 s (~3x) |
-| `weather_ingestion` | 1970 (cold), 703, 712, 702, 707 | 0.70 / 0.71 / 2.0 s | 6.2 s -> 0.71 s (~9x) |
-
-No errors; Hacker News returned 47-50 stories per run (deleted and
-non-story items are still skipped) and weather returned all 12 locations.
-
-Trust this table, not the local one. The local comparison overstates the
-Hacker News gain (~20x there, ~3x here): that machine needed ~1.2-2 s per
-request, so the sequential loop dominated, whereas on Lambda each request is
-far faster and the fixed costs (the feed request, the S3 write, waiting for
-the slowest story request) are a larger share. This is also only 5 samples
-per function, not a p95, and the scheduled runs behind the "before" numbers
-were all cold starts; p50/p95 from the scheduled runs will be added once
-enough have accumulated.
+**Caveat.** The "after" numbers are only 5 runs per function, so there is no
+p95 yet. It will be added once enough scheduled runs have accumulated.
 
 ## Sample analytics
 
