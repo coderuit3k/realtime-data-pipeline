@@ -1,83 +1,63 @@
 # Infra (Terraform)
 
-Provisions: S3 raw + curated buckets, Secrets Manager secrets (NewsAPI key,
-Tavily key), IAM roles, the 3 pipeline Lambda functions + 2 on-demand RAG
-Lambdas (`rag_build_index`, `rag_agent` -- see root README's "Agentic RAG"
-section), two EventBridge schedules for ingestion (news_ingestion runs on
-its own slower schedule -- NewsAPI's free tier caps at 100 requests/day),
-an S3 -> Lambda trigger for
-transform, a Glue Catalog database/tables + Athena workgroup over the
-curated zone, and CloudWatch log retention + error alarms.
+Provisions the S3 raw and curated buckets, Secrets Manager secrets (NewsAPI,
+Tavily), IAM roles, the pipeline Lambdas plus the two on-demand RAG Lambdas
+(see the root README's "Agentic RAG"), EventBridge schedules (news runs on a
+slower one because NewsAPI's free tier allows 100 requests/day), the S3 ->
+transform trigger, the Glue database/tables and Athena workgroup, and
+CloudWatch log retention and error alarms.
 
 ## Deploy
 
 ```bash
-# 1. Package the Lambdas (from repo root)
-./scripts/build_lambdas.sh
+./scripts/build_lambdas.sh          # 1. package the Lambdas (from repo root)
 
-# 2. Configure variables
 cd infra
-cp terraform.tfvars.example terraform.tfvars
-# edit terraform.tfvars: aws_region, alarm_email, pandas_layer_arn for your region
+cp terraform.tfvars.example terraform.tfvars   # 2. set aws_region, alarm_email, pandas_layer_arn
 
-# 3. Provision
-terraform init
-terraform plan
-terraform apply
+terraform init && terraform plan && terraform apply   # 3. provision
 ```
+
+To update Lambda code, re-run `./scripts/build_lambdas.sh` then `terraform apply`;
+only functions whose zip hash changed are redeployed.
 
 ## Set API credentials (after the first apply)
 
-Secret values are not managed by Terraform (see `secrets.tf` for why). Set
-them once via the AWS CLI, using the secret names from `terraform output`
-(Hacker News needs no credentials at all):
+Terraform does not manage secret values (see `secrets.tf`). Set them once
+(Hacker News, Open-Meteo, CoinGecko and GitHub Search need no key):
 
 ```bash
 aws secretsmanager put-secret-value \
   --secret-id "$(terraform output -raw news_secret_name)" \
   --secret-string '{"api_key":"..."}'
 
-# Only needed for the agent's search_web fallback tool (Tavily, tavily.com, free tier)
+# Tavily (free tier) powers the agent's search_web tool
 aws secretsmanager put-secret-value \
   --secret-id "$(terraform output -raw tavily_secret_name)" \
   --secret-string '{"api_key":"..."}'
 ```
 
-## Web app IAM user (manual -- not managed by Terraform)
+## Web app IAM user (manual, not in Terraform)
 
-The `web/` Next.js app (dashboard, RAG assistant, data catalog, data
-explorer, insights, ops, CI/CD, weather, settings) needs its own AWS
-credentials, scoped read-only
-to Athena/Glue/S3/CloudWatch/EventBridge/CloudWatch Logs plus
-`lambda:InvokeFunction` on just the `rag_agent` Lambda. This user is created
-**manually via the AWS CLI**, not by `terraform apply` -- the GitHub Actions
-deploy role is deliberately scoped to manage IAM *roles* only (see
-`infra-bootstrap/oidc.tf`), not IAM *users* or access keys, so a compromised
-CI run can never mint its own long-lived credentials. Run this once, with
-your own AWS credentials, after `infra`'s first apply:
+The `web/` app needs its own read-only AWS credentials (Athena, Glue, S3,
+CloudWatch, EventBridge, Logs, Cost Explorer, plus `lambda:InvokeFunction` on
+`rag_agent` only). The user is created by hand because the GitHub Actions
+deploy role may manage IAM *roles* only (see `infra-bootstrap/oidc.tf`); a
+compromised CI run can therefore never mint long-lived credentials.
 
-> **New: Cost Explorer must be enabled first.** AWS Cost Explorer needs to
-> be turned on for the account once, via the AWS Billing console
-> (Billing and Cost Management → Cost Explorer → Enable Cost Explorer),
-> before `ce:GetCostAndUsage` returns real data — if it has never been
-> enabled, the first real API call may fail or return an empty result.
-> This is a one-time, manual, real AWS Console step; it cannot be
-> scripted or done by Terraform.
+Before running the script:
 
-> **Prerequisite for the Live Metrics & Ops dashboard:** the web app reads real S3 bucket storage size via CloudWatch (`AWS/S3` `BucketSizeBytes`/`NumberOfObjects` metrics), which requires two plain (non-secret) environment variables on Vercel: `RAW_BUCKET` and `CURATED_BUCKET`. Get their real values with:
-> ```bash
-> cd infra
-> terraform output raw_bucket_name
-> terraform output curated_bucket_name
-> ```
-> Paste each into Vercel's environment variables UI. No new IAM permission is required — `cloudwatch:GetMetricData` is already granted with `Resource: "*"` in the policy below, and CloudWatch metric reads are not ARN-scoped.
-
-> **Already created the user?** Re-run only from the variable
-> assignments through `aws iam put-user-policy` (that command is a full
-> policy replace, safe to re-run any time a new grant is added below) —
-> skip `aws iam create-user` (harmless if re-run, but noise) and `aws
-> iam create-access-key` (re-running this mints an extra, unrotated
-> long-lived credential every time).
+- **Cost Explorer** must be enabled once in the Billing console (Billing and
+  Cost Management -> Cost Explorer -> Enable). It cannot be done by Terraform,
+  and until then `ce:GetCostAndUsage` may fail or return nothing.
+- **Vercel env vars `RAW_BUCKET` and `CURATED_BUCKET`** are needed for the Ops
+  page's S3 size metrics. Get the values with
+  `terraform output raw_bucket_name` / `curated_bucket_name`. No extra IAM
+  permission is needed (`cloudwatch:GetMetricData` is already allowed).
+- **User already exists?** Re-run from the variable assignments through
+  `aws iam put-user-policy` (a full replace, safe to repeat when a grant is
+  added). Skip `create-user` and `create-access-key`; the latter mints an
+  extra long-lived key every time.
 
 ```bash
 cd infra
@@ -201,74 +181,53 @@ aws iam create-access-key --user-name "$USER_NAME"
 rm /tmp/web-app-policy.json
 ```
 
-Rotate by running `aws iam create-access-key` again (an IAM user may hold up
-to 2 keys) then `aws iam delete-access-key --access-key-id <old-id>` once
-Vercel's env var is updated; delete the user entirely with
-`aws iam delete-user-policy` + `aws iam delete-access-key` (for each key) +
-`aws iam delete-user` if the web app is retired.
+Rotate keys: run `aws iam create-access-key` again (max 2 per user), update
+Vercel, then `aws iam delete-access-key --access-key-id <old-id>`. To retire
+the user: `delete-user-policy`, `delete-access-key` for each key, `delete-user`.
 
 ### Web app environment variables
 
-These get set as Vercel project environment variables (see `web/.env.example`
-for placeholder values and one-line comments):
+Set these in Vercel (placeholders and comments in `web/.env.example`):
 
-- `AWS_ACCESS_KEY_ID` -- access key for the web-app IAM user above
-- `AWS_SECRET_ACCESS_KEY` -- secret key for the web-app IAM user above
-- `AWS_REGION` -- region the pipeline's resources live in
-- `ATHENA_WORKGROUP` -- Athena workgroup the dashboard queries against
-- `ATHENA_DATABASE` -- Glue/Athena database the dashboard queries against
-- `ALARM_NAME_PREFIX` -- CloudWatch alarm name prefix (dashboard) AND the exact pipeline name prefix (`local.name_prefix`) used to build Lambda/log-group/EventBridge-rule names for the Ops page -- must be exactly `local.name_prefix`, not just any valid alarm-matching prefix
-- `RAG_AGENT_FUNCTION_NAME` -- name of the `rag_agent` Lambda
-- `UPSTASH_REDIS_REST_URL` -- Upstash Redis REST URL for assistant rate limiting
-- `UPSTASH_REDIS_REST_TOKEN` -- Upstash Redis REST token for assistant rate limiting
-- `NEWS_SECRET_NAME` -- name of the News API secret (Settings page's real, metadata-only "configured" check)
-- `TAVILY_SECRET_NAME` -- name of the Tavily secret (same check)
-- `DEPLOY_ENVIRONMENT` -- real deployment environment name (matches Terraform's `environment` variable, e.g. `dev`); backs the sidebar's status footer
-
-## Updating Lambda code
-
-Re-run `./scripts/build_lambdas.sh` then `terraform apply` -- the zip hash
-changes trigger a redeploy of just the affected function(s).
+| Variable | Value |
+|---|---|
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Keys of the web-app IAM user above |
+| `AWS_REGION` | Region of the pipeline |
+| `ATHENA_WORKGROUP`, `ATHENA_DATABASE` | Athena workgroup and Glue database the dashboard queries |
+| `ALARM_NAME_PREFIX` | Must be exactly `local.name_prefix`: used for CloudWatch alarms and to build Lambda, log-group and EventBridge rule names |
+| `RAG_AGENT_FUNCTION_NAME` | Name of the `rag_agent` Lambda |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis, for assistant rate limiting |
+| `NEWS_SECRET_NAME`, `TAVILY_SECRET_NAME` | Secret names, for the Settings page's metadata-only "configured" check |
+| `DEPLOY_ENVIRONMENT` | Terraform `environment` (e.g. `dev`), shown in the sidebar footer |
+| `RAW_BUCKET`, `CURATED_BUCKET` | Bucket names, for the Ops page |
 
 ## Cost & teardown
 
-What's actually running, at this project's low volume:
-
 | Resource | Ongoing cost |
 | --- | --- |
-| Lambda (6 functions, ~every 30 min) | ~$0 (well within free tier) |
-| S3 (raw + curated) | Pennies/month |
-| Secrets Manager (2 secrets: NewsAPI, Tavily -- Open-Meteo, CoinGecko, GitHub Search need no key) | ~$0.80/month |
+| Lambda (6 functions, ~every 30 min) | ~$0 (free tier) |
+| S3 (raw + curated), CloudWatch Logs (14-day retention), Athena (per query) | Pennies/month |
+| Secrets Manager (NewsAPI, Tavily) | ~$0.80/month |
 | CloudWatch alarms (6) | ~$0.60/month |
-| Cost Explorer API (~1 real `GetCostAndUsage` call/day per edge region via the 24h cache -- typically 1-2 for a low-traffic deployment, $0.01/call) | ~$0.30/month |
-| CloudWatch GetMetricData + Logs Insights (Live Metrics & Ops page: ~23 metrics + 1 log query per cache miss via the 60s edge cache; $0.01/1,000 metrics, ~$0.005/GB scanned) | Pennies/month at this project's traffic |
-| CloudWatch Logs (14-day retention) | Pennies/month |
-| Glue Data Catalog (5 tables) | Free (first 1M objects/month free) |
-| Athena (pay per query, tiny dataset) | Pennies per query |
-| RAG Lambdas + Bedrock (on-demand only, no schedule) | $0 when not invoked; pennies per build/query when it is |
-| Tavily web search (agent's search_web fallback tool, free tier) | $0 up to 1,000 searches/month |
+| Cost Explorer API (~1-2 calls/day via a 24h cache, $0.01/call) | ~$0.30/month |
+| CloudWatch GetMetricData + Logs Insights (Ops page, 60s edge cache) | Pennies/month |
+| Glue Data Catalog (5 tables) | Free |
+| RAG Lambdas + Bedrock (no schedule) | $0 idle; pennies per build/query |
+| Tavily (free tier) | $0 up to 1,000 searches/month |
 
-So leaving it running costs roughly **$1/month**, not zero. Two ways to cut
-that further:
+Leaving it running costs roughly **$1/month**.
 
-**Pause ingestion** (keeps all data + Glue/Athena queryable, stops new writes
-and most of the Lambda/CloudWatch activity):
+**Pause ingestion** (keeps data and Athena queryable, stops new writes):
 
 ```bash
-terraform apply -var="enable_ingestion_schedule=false"
+terraform apply -var="enable_ingestion_schedule=false"   # re-enable with =true (the default)
 ```
 
-Re-enable with `-var="enable_ingestion_schedule=true"` (or just omit the
-flag, since `true` is the default).
-
-**Full teardown** (removes everything, including the S3 data -- buckets have
-`force_destroy = true` specifically so this works without emptying them
-first):
+**Full teardown** (also deletes S3 data; buckets use `force_destroy = true`):
 
 ```bash
 terraform destroy
 ```
 
-Redeploying later is just `./scripts/build_lambdas.sh && terraform apply`
-again -- the NewsAPI secret value will need to be set again since destroying
-the secret destroys its value too.
+To redeploy later: `./scripts/build_lambdas.sh && terraform apply`, then set the
+NewsAPI secret again (destroying the secret destroys its value).

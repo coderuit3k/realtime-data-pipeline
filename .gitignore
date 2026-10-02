@@ -26,3 +26,6 @@ eval/results.csv
 
 # Playwright MCP browser session artifacts, not project-relevant
 .playwright-mcp/
+
+# Local design specs/plans, not published
+docs/superpowers/

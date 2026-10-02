@@ -1,14 +1,11 @@
 # RAGAS evaluation
 
-Offline evaluation of the `rag_agent` pipeline (Bedrock Converse
-tool-calling agent: `search_knowledge_base`, `get_crypto_prices`,
-`get_weather`, and `search_web`) using
-[RAGAS](https://github.com/explodinggraphs/ragas) metrics, judged by
-Bedrock (Claude Haiku + Titan Embed) instead of OpenAI.
+Offline evaluation of the `rag_agent` pipeline (the Bedrock Converse
+tool-calling agent) with [RAGAS](https://github.com/explodinggraphs/ragas)
+metrics, judged by Bedrock (Claude Haiku + Titan Embed) instead of OpenAI.
 
-**Dev-only, never deployed to Lambda.** `ragas` pulls in `langchain` +
-several provider integrations -- fine for a one-off local/CI script, too
-heavy to ship in a Lambda zip for no runtime benefit.
+**Dev-only, never deployed to Lambda.** `ragas` pulls in `langchain` and
+several provider packages, which are far too heavy for a Lambda zip.
 
 ## Setup
 
@@ -16,12 +13,11 @@ heavy to ship in a Lambda zip for no runtime benefit.
 pip install -r requirements-eval.txt
 ```
 
-The pins in `requirements-eval.txt` matter: `ragas==0.4.3` hard-imports
-`langchain_community`/`langchain_openai` internals that were removed in
-their latest releases (a real packaging bug in ragas as of this writing --
-it still assumes an older `langchain-core` generation). This exact
-combination is the one actually verified end-to-end; installing `ragas` and
-`langchain-aws` at their own latest versions will fail with import errors.
+Keep the pins in `requirements-eval.txt`. `ragas==0.4.3` imports
+`langchain_community` / `langchain_openai` internals that were removed in
+later releases, so installing `ragas` and `langchain-aws` at their latest
+versions fails with import errors. This exact combination is the one verified
+end to end.
 
 ## Run
 
@@ -29,54 +25,38 @@ combination is the one actually verified end-to-end; installing `ragas` and
 python eval/run_ragas.py
 ```
 
-For each question in `questions.json`, it runs the *real* `rag_agent`
-logic (imported directly from `rag/agent.py` -- the same tool-calling loop
-the deployed Lambda uses, not a mock), then scores the
-question/answer/retrieved-context triples with:
+For each question in `questions.json` it runs the real agent (imported from
+`rag/agent.py`, not a mock) and scores the question / answer / retrieved
+context with:
 
-- **Faithfulness** -- does the answer avoid claims unsupported by the
-  retrieved context?
-- **Response relevancy** -- does the answer actually address the question?
-- **Context precision** -- how much of what was retrieved was relevant?
+- **Faithfulness**: does the answer avoid claims the retrieved context doesn't support?
+- **Response relevancy**: does the answer address the question?
+- **Context precision**: how much of what was retrieved was relevant?
 
-Results print to the terminal and get written per-question to
-`eval/results.csv` (gitignored -- it's a run artifact, not code).
+Scores print to the terminal and are written per question to
+`eval/results.csv` (gitignored, it is a run artifact).
 
 ## Reading the results
 
-`questions.json` deliberately mixes in-domain questions (should retrieve
-relevant context from the knowledge base) with out-of-domain ones like a
-recipe, the weather in a city this pipeline doesn't track, or a sports
-result -- Paris weather stays out-of-domain even for `get_weather`, which
-only covers the 12 Vietnamese locations this pipeline actually ingests.
-The agent has no separate grading step -- it decides per question, via the
-tool descriptions alone, which tool (if any) is a fit, and falls back to
-`search_web` (Tavily) when nothing else is or comes back empty. A healthy
-run looks like:
+`questions.json` mixes in-domain questions with out-of-domain ones (a recipe,
+a sports result, the weather in Paris, since `get_weather` only covers the
+Vietnamese locations the pipeline ingests). The agent picks a tool, or none,
+from the tool descriptions alone and falls back to `search_web` (Tavily). A
+healthy run has high faithfulness and relevancy on both kinds, and
+`grounded: true` on almost every question, because the web fallback means
+there is nearly always something to cite.
 
-- High faithfulness and relevancy across both in- and out-of-domain
-  questions (the agent should ground itself in whichever tool actually had
-  something relevant).
-- `grounded: true` on nearly all questions, including out-of-domain ones --
-  unlike a pipeline with only a knowledge-base retrieval step and no web
-  fallback, the agent almost always has *something* to cite.
+**Latest run (2026-09-23):** faithfulness 0.7271, answer relevancy 0.8870,
+context precision 0.5511. Expect the same ballpark, not identical values: the
+judge LLM and the agent's tool choices both vary.
 
-**Real run (2026-09-23):** `faithfulness: 0.7271`,
-`answer_relevancy: 0.8870`,
-`llm_context_precision_without_reference: 0.5511`. Expect a similar ballpark run to run, not necessarily identical values,
-since the judge LLM and the agent's own tool-use decisions both have real
-variance.
-
-**Cost/time note:** each metric makes multiple Bedrock calls per question
-(faithfulness in particular decomposes the answer into statements and
-checks each one) -- budget ~10 minutes and a few cents for the default
-6-question set with `RunConfig(max_workers=2)` (see below for why it's
-capped that low). Keep `questions.json` small; this isn't meant to run on
-every commit.
+**Cost and time:** each metric makes several Bedrock calls per question
+(faithfulness splits the answer into statements and checks each). Budget about
+10 minutes and a few cents for the default 6 questions. Keep the set small and
+don't run it on every commit.
 
 ## Why `RunConfig(max_workers=2)`
 
-The first run (ragas's default `max_workers=16`) threw `TimeoutError` on
-11/18 jobs -- Bedrock on-demand throttles concurrent calls, and ragas's
-retries under throttling ran past its own timeout. Dropping concurrency to
-2 (and raising the timeout to 300s) fixed it with the same 6-question set.
+With ragas's default of 16 workers, 11 of 18 jobs hit `TimeoutError`: Bedrock
+on-demand throttles concurrent calls, and ragas's retries ran past its own
+timeout. 2 workers and a 300 s timeout fixed it on the same 6 questions.
