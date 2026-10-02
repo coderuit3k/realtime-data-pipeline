@@ -46,6 +46,7 @@ flowchart TD
 | `infra-bootstrap/` | One-time Terraform for the GitHub OIDC role CI/CD uses (no static keys). See [`infra-bootstrap/README.md`](infra-bootstrap/README.md). |
 | `.github/workflows/` | `ci.yml`: lint, tests, `terraform validate`. `deploy.yml`: `terraform plan`, then a manually approved `apply` on push to `main`. |
 | `web/` | Next.js app (dashboard, RAG assistant, explorer, ops, trends, ...). |
+| `scripts/` | `build_lambdas.sh` packages the Lambdas; `telegram_*.sh` are the OpenClaw push automations (see [OpenClaw](#openclaw-ops-agent)). |
 
 ## Local development
 
@@ -175,3 +176,39 @@ Titan does not need it.
 and context precision, judged by Bedrock. It is dev-only (heavy `ragas` /
 `langchain` dependencies, never deployed). Setup, dependency pins and the
 latest numbers are in [`eval/README.md`](eval/README.md).
+
+## OpenClaw ops agent
+
+[OpenClaw](https://github.com/openclaw/openclaw) is a self-hosted personal AI
+agent that runs on the dev machine and doubles as the ops agent for this repo
+(its working directory is the repo root). It is not deployed to AWS and the
+pipeline does not depend on it.
+
+**What it does**
+- **Scheduled Telegram pushes.** Five cron jobs run the `scripts/telegram_*.sh`
+  scripts, which read the curated zone (or call a Lambda) and send the result to
+  one Telegram chat. Cron times are UTC.
+
+  | Job | When | Sends |
+  |---|---|---|
+  | Trend digest | 23:30 | Today's trending keywords (`trend_events`); silent if none |
+  | Daily brief | 00:00 (07:00 ICT) | Weather for 12 locations, BTC/ETH/SOL, top 3 GitHub trending |
+  | FinOps alert | 01:00 | Yesterday's AWS cost, only if above 1.5x the previous 7-day average |
+  | Data observability | 01:30 | Null rates per table, missing weather locations |
+  | RAG briefing | 16:00 (23:00 ICT) | A `rag_agent` answer with its sources; one Bedrock call per day |
+- **Ops tasks on request:** run local tests with `DRY_RUN=true`, query Athena,
+  read logs when a CloudWatch alarm fires, summarise a `terraform plan`, and
+  answer news questions through the `rag_agent` Lambda.
+
+**Guardrails.** The agent's rules live in its own `AGENTS.md`, outside this
+repo. The main ones: it never runs `terraform apply`, never disables or deletes
+AWS resources without asking first (pausing is done with
+`aws events disable-rule`, never by editing Terraform), and never prints
+secrets. Terraform changes follow *apply locally, then commit and push*. These
+are instructions to a model, not enforced permissions. In one test the agent
+edited a `.tf` file instead of asking; nothing was applied, and the rule was
+tightened afterwards.
+
+**Setup.** Install OpenClaw, pair a Telegram bot, then register each script as
+a cron job with `TELEGRAM_TARGET=<chat id>` set. Secrets (bot token, gateway
+token) are stored by OpenClaw, never in this repo.
