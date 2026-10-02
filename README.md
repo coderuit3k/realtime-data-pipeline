@@ -2,8 +2,7 @@
 
 Serverless ELT pipeline on AWS. It ingests Hacker News stories, news articles,
 weather, crypto prices and trending GitHub repos, lands them in an S3 data lake
-queryable with Athena, and adds an agentic RAG assistant on top. Built as a
-portfolio project for the Cloud Kinetics Data Engineer Intern role.
+queryable with Athena, and adds an agentic RAG assistant on top.
 
 ## Architecture
 
