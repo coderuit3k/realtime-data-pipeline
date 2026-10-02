@@ -210,7 +210,13 @@ SYSTEM_PROMPT = (
     "tables, or statistics in that case -- say plainly that the query kept "
     "failing (briefly note why, e.g. a SQL error) and offer to try a "
     "different approach, rather than presenting any number as if it came "
-    "from this pipeline's data."
+    "from this pipeline's data.\n"
+    "7. Write the final answer as a finished, standalone reply for the reader. "
+    "Start directly with the substance: no opening filler or reactions ('Great!', "
+    "'Now I have enough data', 'Tuyệt vời!', 'Không sao, ...'), and no narration "
+    "of your own process or tool use (what you searched, what failed, what you "
+    "are about to do). Mention a failed or empty lookup only when it changes what "
+    "the reader can rely on. Reply in the language of the question."
 )
 
 
