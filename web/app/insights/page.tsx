@@ -5,6 +5,7 @@ import type { InsightsResponse } from "@/lib/types";
 import { weatherIconGroup, WEATHER_ICON_PATHS } from "@/lib/weatherIcons";
 import { cryptoTicker } from "@/lib/cryptoIcons";
 
+/** Maps a WMO weather code to one of a few icon groups. */
 function WeatherIcon({ code }: { code: number }) {
   return (
     <svg
@@ -30,6 +31,7 @@ function CryptoTickerBadge({ coinId }: { coinId: string }) {
 
 type Range = "today" | "7d";
 
+/** Compact USD ($1.2B, $3.40T) for market caps and volumes that span many magnitudes. */
 function formatUsdCompact(value: number): string {
   const abs = Math.abs(value);
   if (abs >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
@@ -39,10 +41,12 @@ function formatUsdCompact(value: number): string {
   return `$${value.toFixed(2)}`;
 }
 
+/** Cross-source trend cards (HN, News, GitHub, crypto, weather) for today or the last 7 days. */
 export default function InsightsPage() {
   const [range, setRange] = useState<Range>("today");
   const [data, setData] = useState<InsightsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Guards against out-of-order responses when the range is toggled quickly.
   const latestRangeRef = useRef<Range>("today");
 
   async function load(r: Range) {
@@ -51,7 +55,7 @@ export default function InsightsPage() {
     try {
       const res = await fetch(`/api/insights?range=${r}`);
       const body = await res.json();
-      if (latestRangeRef.current !== r) return; // a newer request superseded this one
+      if (latestRangeRef.current !== r) return; // superseded by a newer range
       if (!res.ok) throw new Error(body.error ?? "Không tải được Insights.");
       setData(body);
     } catch (err) {

@@ -7,12 +7,11 @@ import type { SettingsResponse } from "@/lib/types";
 
 export const maxDuration = 60;
 
+/** Read-only view of the ingestion schedules and whether each API-key secret is set (never its value). */
 export async function GET() {
   try {
     const prefix = requiredEnv("ALARM_NAME_PREFIX");
-    // Rule names derived by string construction, matching
-    // infra/eventbridge.tf's real resource names -- exact same pattern
-    // already shipped in web/app/api/ops/route.ts, no new env var needed.
+    // Must match the rule names in infra/eventbridge.tf.
     const sharedRuleName = `${prefix}-ingestion-schedule`;
     const newsRuleName = `${prefix}-news-ingestion-schedule`;
     const newsSecretId = requiredEnv("NEWS_SECRET_NAME");
@@ -28,9 +27,7 @@ export async function GET() {
       getSecretStatus(secretsManager, tavilySecretId),
     ]);
 
-    // SECRET_LABELS[0]/[1] pair positionally with news/tavily above --
-    // both defined once, together, in settingsMeta.ts (single source of
-    // truth for the 2 real secrets' display names).
+    // SECRET_LABELS is positional: [0] = news, [1] = tavily.
     const response: SettingsResponse = {
       sharedSchedule,
       newsSchedule,

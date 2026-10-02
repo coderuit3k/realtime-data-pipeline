@@ -1,3 +1,5 @@
+"""Lambda: ingests recently created, most-starred GitHub repos (see config for why)."""
+
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -15,6 +17,7 @@ HEADERS = {"User-Agent": "realtime-data-pipeline", "Accept": "application/vnd.gi
 
 
 def normalize_repo(item: dict) -> dict:
+    """Map a Search API item to the raw github record; nullable text fields become ""."""
     return {
         "repo_id": str(item.get("id")),
         "source": "github",
@@ -32,6 +35,7 @@ def normalize_repo(item: dict) -> dict:
 
 
 def fetch_trending() -> list[dict]:
+    """Top repos created in the last GITHUB_TRENDING_DAYS days, by stars."""
     since = datetime.now(timezone.utc) - timedelta(days=config.GITHUB_TRENDING_DAYS)
     cutoff = since.strftime("%Y-%m-%d")
     params = {
@@ -46,6 +50,7 @@ def fetch_trending() -> list[dict]:
 
 
 def lambda_handler(event, context):
+    """Scheduled entry point: fetch trending repos and write them to the raw zone."""
     repos = fetch_trending()
     key = write_records("github", repos, "repo_id")
     logger.info("Wrote %d records to %s", len(repos), key)

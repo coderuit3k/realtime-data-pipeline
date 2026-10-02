@@ -1,5 +1,6 @@
 import type { StorageStats } from "@/lib/types";
 
+/** Binary (1024) units; `null` means the size is unknown, not zero. */
 function formatBytes(bytes: number | null): string {
   if (bytes === null) return "—";
   if (bytes < 1024) return `${bytes} B`;
@@ -18,6 +19,10 @@ const ZONES = [
   { key: "curated", label: "S3 curated", swatch: "bg-secondary" },
 ] as const;
 
+/**
+ * Raw vs. curated S3 bucket sizes as one split bar. With no data yet the bar
+ * falls back to a dimmed 50/50 split so the layout stays stable.
+ */
 export function LakehouseStorageChart({
   rawStorage,
   curatedStorage,

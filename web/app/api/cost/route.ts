@@ -7,6 +7,7 @@ import type { CostResponse } from "@/lib/types";
 
 export const maxDuration = 60;
 
+/** Month-to-date AWS spend. Rate-limited and cached hard because every Cost Explorer call is billed. */
 export async function GET(request: NextRequest) {
   const rateLimit = await checkRateLimit(clientIp(request), getCostLimiter());
   if (!rateLimit.allowed) {
@@ -18,9 +19,8 @@ export async function GET(request: NextRequest) {
 
     const response: CostResponse = { monthToDateCostUsd };
 
-    // 24h cache, decoupled from Dashboard/Ops's own ~60s-fresh data --
-    // Cost Explorer's underlying data only refreshes ~every 8h anyway,
-    // and each real query costs $0.01.
+    // 24h CDN cache: Cost Explorer data only refreshes roughly every 8h, and
+    // each query costs $0.01.
     return NextResponse.json(response, {
       headers: { "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=172800" },
     });

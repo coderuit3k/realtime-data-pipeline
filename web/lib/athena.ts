@@ -6,8 +6,10 @@ import {
   type GetQueryExecutionCommandOutput,
 } from "@aws-sdk/client-athena";
 
+/** Zero-padded year/month/day strings matching the curated tables' Hive partition values. */
 export type TodayParts = { year: string; month: string; day: string };
 
+/** Partition values for `now`'s UTC date (partitions are written in UTC, not Vietnam time). */
 export function todayUtcParts(now: Date = new Date()): TodayParts {
   return {
     year: String(now.getUTCFullYear()),
@@ -16,13 +18,19 @@ export function todayUtcParts(now: Date = new Date()): TodayParts {
   };
 }
 
+/**
+ * Full `WHERE` clause pinning a query to one day's partition, so Athena prunes
+ * instead of scanning (and billing for) the whole table.
+ */
 export function partitionWhere({ year, month, day }: TodayParts): string {
   return `WHERE year='${year}' AND month='${month}' AND day='${day}'`;
 }
 
-// Returns bare `(...) OR (...) OR ...` with no enclosing parens and no
-// leading WHERE — callers combining this with AND in the same clause
-// must wrap it in parens themselves, e.g. `WHERE (${partitionPredicateAny(...)}) AND other_condition`.
+/**
+ * Bare `(...) OR (...)` predicate covering several day partitions, with no
+ * `WHERE` and no outer parens: wrap it yourself before combining with AND,
+ * e.g. `WHERE (${partitionPredicateAny(...)}) AND other_condition`.
+ */
 export function partitionPredicateAny(partsList: TodayParts[], alias?: string): string {
   const prefix = alias ? `${alias}.` : "";
   return partsList
@@ -33,6 +41,7 @@ export function partitionPredicateAny(partsList: TodayParts[], alias?: string): 
     .join(" OR ");
 }
 
+/** Row count per ingestion source for one day; one UNION ALL branch per curated table. */
 export function buildSourceVolumeQuery(parts: TodayParts): string {
   const where = partitionWhere(parts);
   return [
@@ -44,11 +53,11 @@ export function buildSourceVolumeQuery(parts: TodayParts): string {
   ].join("\nUNION ALL\n");
 }
 
+/** The 5 most recently ingested records across all sources for one day. */
 export function buildRecentActivityQuery(parts: TodayParts): string {
   const where = partitionWhere(parts);
-  // image_url is a real thumbnail column for news/github, and an explicit
-  // CAST(NULL AS varchar) for the other three -- UNION ALL branches must
-  // all return the same column count/types.
+  // Only news/github have an image column; the others select a typed NULL
+  // because every UNION ALL branch must have the same column types.
   const union = [
     `SELECT 'hackernews' AS source, title AS label, ingested_at, CAST(NULL AS varchar) AS image_url FROM hackernews_stories ${where}`,
     `SELECT 'news' AS source, title AS label, ingested_at, image_url FROM news_articles ${where}`,
@@ -61,6 +70,10 @@ export function buildRecentActivityQuery(parts: TodayParts): string {
 
 export type AthenaResultRow = { Data?: Array<{ VarCharValue?: string }> };
 
+/**
+ * Drops Athena's header row (the first row of the first results page holds the
+ * column names) and maps each data row's cells, with missing values as null.
+ */
 export function parseAthenaRows<T>(
   rows: AthenaResultRow[],
   mapRow: (cols: (string | null)[]) => T
@@ -77,6 +90,10 @@ type PollOutcome = {
   statistics: { dataScannedInBytes: number; engineExecutionTimeMs: number };
 };
 
+/**
+ * Starts a query and polls every 500ms for up to ~25s, which keeps it inside
+ * the routes' 60s maxDuration. Throws on FAILED/CANCELLED or on timeout.
+ */
 async function startAndPollQuery(client: AthenaClient, sql: string): Promise<PollOutcome> {
   const workgroup = process.env.ATHENA_WORKGROUP;
   const database = process.env.ATHENA_DATABASE;
@@ -122,6 +139,7 @@ async function startAndPollQuery(client: AthenaClient, sql: string): Promise<Pol
   };
 }
 
+/** Runs `sql` and returns only the first results page (header row included); later pages are ignored. */
 export async function runAthenaQuery(client: AthenaClient, sql: string): Promise<AthenaResultRow[]> {
   const { queryExecutionId } = await startAndPollQuery(client, sql);
   const results = await client.send(new GetQueryResultsCommand({ QueryExecutionId: queryExecutionId }));
@@ -130,6 +148,10 @@ export async function runAthenaQuery(client: AthenaClient, sql: string): Promise
 
 export type QueryStats = { dataScannedInBytes: number; engineExecutionTimeMs: number };
 
+/**
+ * Like runAthenaQuery but also returns column names, scan/engine stats and
+ * whether rows were cut off. `maxResults` counts the header row too.
+ */
 export async function runAthenaQueryWithStats(
   client: AthenaClient,
   sql: string,

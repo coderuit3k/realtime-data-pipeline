@@ -8,6 +8,10 @@ import type { ExplorerQueryResult } from "@/lib/types";
 
 export const maxDuration = 60;
 
+/**
+ * Runs user-supplied read-only SQL on Athena. The SQL guard runs before the
+ * rate limiter so rejected input doesn't use up the caller's quota.
+ */
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const sql = typeof body?.sql === "string" ? body.sql : "";
@@ -23,6 +27,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // 101 = header row + 100 data rows.
     const { columns, rows, stats, hasMoreRows } = await runAthenaQueryWithStats(getAthenaClient(), sql, 101);
     const dataRows = parseAthenaRows(rows, (cols) => cols);
 
@@ -36,6 +41,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     console.error("Explorer query failed", error);
+    // Athena's own errors (syntax, unknown column) help the user, but
+    // permission errors leak ARNs/account ids, so replace those with a generic message.
     const raw = error instanceof Error ? error.message : "";
     const looksLikeAwsInternals = /arn:aws|not authorized|AccessDenied|\bUser: /i.test(raw);
     const message =

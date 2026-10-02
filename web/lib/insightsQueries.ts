@@ -1,5 +1,11 @@
 import { partitionPredicateAny, type TodayParts } from "./athena";
 
+// Insights SQL builders. Each takes the day partitions to cover (today or the
+// last 7 days) so Athena prunes partitions instead of scanning whole tables.
+// Tables are append-only snapshots, so "latest" queries dedupe with
+// ROW_NUMBER() per entity rather than reading every snapshot.
+
+/** Top 6 keywords across HN and news combined. */
 export function buildTopKeywordsQuery(partsList: TodayParts[]): string {
   const hnWhere = partitionPredicateAny(partsList);
   const newsWhere = partitionPredicateAny(partsList);
@@ -16,6 +22,7 @@ ORDER BY mentions DESC
 LIMIT 6`;
 }
 
+/** Latest price per coin plus how many HN/news keyword lists mention it (substring match). */
 export function buildCryptoMentionsQuery(partsList: TodayParts[]): string {
   const cryptoWhere = partitionPredicateAny(partsList, "c");
   const hnWhere = partitionPredicateAny(partsList);
@@ -37,6 +44,7 @@ WHERE rn = 1
 ORDER BY coin_id`;
 }
 
+/** Top 6 GitHub repo keywords that also appear in HN stories, by number of distinct repos. */
 export function buildGithubHnOverlapQuery(partsList: TodayParts[]): string {
   const githubWhere = partitionPredicateAny(partsList, "g");
   const hnWhere = partitionPredicateAny(partsList, "h");
@@ -52,6 +60,7 @@ ORDER BY overlap_count DESC
 LIMIT 6`;
 }
 
+/** Top 6 languages by repo snapshot count (repos with no language excluded). */
 export function buildGithubLanguagesQuery(partsList: TodayParts[]): string {
   const where = partitionPredicateAny(partsList);
   return `SELECT language, COUNT(*) AS repo_count
@@ -62,6 +71,7 @@ ORDER BY repo_count DESC
 LIMIT 6`;
 }
 
+/** Highest-scoring HN story; falls back to the HN permalink for text posts with no URL. */
 export function buildHnSpotlightQuery(partsList: TodayParts[]): string {
   const where = partitionPredicateAny(partsList);
   return `SELECT title, score, num_comments, author, COALESCE(NULLIF(url, ''), permalink) AS link
@@ -71,6 +81,7 @@ ORDER BY score DESC
 LIMIT 1`;
 }
 
+/** Top 6 repos by stars, using each repo's latest snapshot. */
 export function buildGithubStarsQuery(partsList: TodayParts[]): string {
   const where = partitionPredicateAny(partsList);
   return `SELECT full_name, stars, forks, language, avatar_url
@@ -85,6 +96,7 @@ ORDER BY stars DESC
 LIMIT 6`;
 }
 
+/** Coins by market cap, using each coin's latest observation. */
 export function buildCryptoRankingQuery(partsList: TodayParts[]): string {
   const where = partitionPredicateAny(partsList);
   return `SELECT coin_id, market_cap_usd, volume_24h_usd
@@ -98,9 +110,10 @@ WHERE rn = 1
 ORDER BY market_cap_usd DESC`;
 }
 
-// score >= 10 keeps a near-zero-score story's first comment from producing a
-// meaningless huge ratio (e.g. score=1, comments=3 -> 3.0) that would outrank
-// a genuinely high-engagement, high-comment story on a real signal.
+/**
+ * HN story with the highest comments-to-score ratio. The score >= 10 floor stops
+ * tiny stories (score 1, 3 comments -> 3.0) from outranking real discussions.
+ */
 export function buildHnControversialQuery(partsList: TodayParts[]): string {
   const where = partitionPredicateAny(partsList);
   return `SELECT title, score, num_comments, author, COALESCE(NULLIF(url, ''), permalink) AS link
@@ -110,6 +123,7 @@ ORDER BY CAST(num_comments AS DOUBLE) / score DESC
 LIMIT 1`;
 }
 
+/** Latest reading per location; takes a single day because it is always "now", whatever the range. */
 export function buildWeatherSnapshotQuery(parts: TodayParts): string {
   const where = partitionPredicateAny([parts]);
   return `SELECT location, temperature_c, humidity_pct, weather_code
@@ -123,6 +137,7 @@ WHERE rn = 1
 ORDER BY location`;
 }
 
+/** Newest article that has an image, for the visual spotlight card. */
 export function buildNewsSpotlightQuery(partsList: TodayParts[]): string {
   const where = partitionPredicateAny(partsList);
   return `SELECT title, provider, url, image_url, published_at

@@ -1,10 +1,12 @@
+"""Read-only SQL guard for the RAG agent's query_athena tool.
+
+A port of web/lib/sqlGuard.ts: same regexes and forbidden keywords, keep the
+two in sync. Messages are English rather than the TS version's Vietnamese on
+purpose -- only the LLM and the logs ever see them, never the Data Explorer UI.
+"""
+
 import re
 
-# A Python port of web/lib/sqlGuard.ts's rules (same regexes, same forbidden
-# keywords), used by the RAG agent's query_athena tool. Messages are in
-# English, not Vietnamese like the TS version's -- these are only ever seen
-# by the LLM and in logs, never rendered in the (Vietnamese) Data Explorer
-# UI, so this is an intentional divergence, not an incomplete port.
 FORBIDDEN_KEYWORDS = re.compile(
     r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|GRANT|REVOKE|TRUNCATE|MERGE|UNLOAD|VACUUM|CALL)\b",
     re.IGNORECASE,
@@ -12,6 +14,11 @@ FORBIDDEN_KEYWORDS = re.compile(
 
 
 def validate_read_only_select(sql: str) -> tuple[bool, str | None]:
+    """Return (ok, reason): accept a single SELECT/WITH statement with no write keywords.
+
+    Keyword matching ignores context, so a forbidden word inside a string
+    literal is rejected too -- it errs on the side of refusing.
+    """
     trimmed = sql.strip()
 
     if not trimmed:

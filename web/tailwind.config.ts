@@ -31,14 +31,14 @@ const config: Config = {
         glassPanel: "0 8px 32px rgba(0, 0, 0, 0.5)",
       },
       fontFamily: {
-        // One typeface across the whole app -- font-mono kept as an alias
-        // (rather than stripping it from every usage) so existing
-        // font-mono classes on data/labels still resolve, just to Inter.
+        // Inter everywhere. `mono` is kept as an alias so existing font-mono
+        // classes still resolve (to Inter) without touching every usage.
         heading: ["var(--font-inter)"],
         body: ["var(--font-inter)"],
         mono: ["var(--font-inter)"],
       },
       keyframes: {
+        // Dot travelling along ArchitectureFlow's arrows; 22px matches the arrow shaft.
         flowDot: {
           "0%, 10%": { transform: "translateX(0)", opacity: "0" },
           "25%": { opacity: "1" },

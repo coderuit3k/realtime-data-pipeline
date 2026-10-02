@@ -1,7 +1,10 @@
 "use client";
 
-// Chevron points where the panel will move: toward its own edge to collapse,
-// away from it to expand.
+/**
+ * Collapse/expand button for a side panel. The chevron points where the panel
+ * will move: toward its own `edge` to collapse, away from it to expand.
+ * `alert` adds a red dot so errors stay visible while the panel is collapsed.
+ */
 export function PanelToggleButton({
   collapsed,
   edge,

@@ -3,6 +3,10 @@
 import type { ChatMessage } from "@/lib/assistant";
 import { PanelToggleButton } from "./PanelToggleButton";
 
+/**
+ * Per-turn list of the tools the RAG agent chose to call, shown raw as JSON
+ * so the agent's routing decisions are inspectable.
+ */
 export function ToolTraceHistory({
   messages,
   collapsed,

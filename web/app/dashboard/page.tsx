@@ -9,11 +9,10 @@ import { LiveBadge } from "@/components/LiveBadge";
 import { LakehouseStorageChart } from "@/components/LakehouseStorageChart";
 import type { DashboardResponse, CostResponse } from "@/lib/types";
 
-// sourceId matches lib/settingsMeta.ts's DATA_SOURCES ids and
-// lib/athena.ts's buildSourceVolumeQuery source values. lambdaLabel
-// matches lib/opsMeta.ts's PIPELINE_LAMBDAS labels -- NOT a
-// `${sourceId}_ingestion` string pattern, since github's real label is
-// "github_trending_ingestion", not "github_ingestion".
+// sourceId must match the source values returned by the Athena volume query;
+// lambdaLabel must match PIPELINE_LAMBDAS in lib/opsMeta.ts. lambdaLabel is
+// spelled out rather than derived as `${sourceId}_ingestion` because GitHub's
+// Lambda is "github_trending_ingestion".
 const SOURCES: { sourceId: string; label: string; lambdaLabel: string; icon: ReactNode }[] = [
   {
     sourceId: "hackernews",
@@ -74,6 +73,7 @@ const SOURCES: { sourceId: string; label: string; lambdaLabel: string; icon: Rea
   },
 ];
 
+/** Hours are the largest unit: Lambda health only covers the last 24h. */
 function relativeTime(iso: string | null, now: Date = new Date()): string {
   if (!iso) return "chưa có dữ liệu";
   const diffMs = now.getTime() - new Date(iso).getTime();
@@ -84,6 +84,7 @@ function relativeTime(iso: string | null, now: Date = new Date()): string {
   return `${hours} giờ trước`;
 }
 
+/** CloudWatch lines carry no structured level, so infer it from the text; WARNING folds into WARN. */
 function detectLogLevel(message: string): "ERROR" | "WARN" | "INFO" {
   const match = message.match(/\b(ERROR|WARN(?:ING)?|INFO)\b/);
   if (!match) return "INFO";
@@ -96,6 +97,10 @@ function logLevelColor(level: "ERROR" | "WARN" | "INFO"): string {
   return "text-accent";
 }
 
+/**
+ * Live metrics from /api/dashboard. Month-to-date cost comes from a separate
+ * /api/cost call so a slow or failing Cost Explorer never blocks the page.
+ */
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -124,7 +129,7 @@ export default function DashboardPage() {
         if (ok && typeof body?.monthToDateCostUsd === "number") setCost(body);
       })
       .catch(() => {
-        /* cost is secondary -- never block the page over it */
+        /* secondary: the KPI card just shows "—" */
       });
   }, []);
 
@@ -149,6 +154,7 @@ export default function DashboardPage() {
     );
   }
 
+  // Average only over Lambdas that actually ran; idle ones have no duration.
   const avgLatencyMs = (() => {
     const withDuration = data.lambdaHealth.filter((r) => r.avgDurationMs !== null);
     if (withDuration.length === 0) return null;

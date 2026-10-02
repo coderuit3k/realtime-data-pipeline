@@ -1,3 +1,9 @@
+"""RAG agent Lambda: a Bedrock Converse tool-calling loop over the pipeline's own data.
+
+The model picks among knowledge-base search, live crypto/weather snapshots, read-only Athena SQL
+and web search; answers are cached in DynamoDB so a repeated question skips the loop.
+"""
+
 import hashlib
 import json
 import logging
@@ -22,27 +28,26 @@ _s3_client = None
 _bedrock_client = None
 _dynamodb_resource = None
 
+# Tool-calling turns before the agent is forced to answer with what it has.
 MAX_ITERATIONS = 6
 
-# Vietnamese answers tokenize heavily -- 800 cut ~1 in 6 cached answers
-# mid-sentence. Output tokens are only billed as generated, so a higher cap
-# costs nothing unless an answer genuinely needs the room.
+# Vietnamese answers tokenize heavily: a cap of 800 cut ~1 in 6 answers mid-sentence.
+# Output tokens are billed only as generated, so the higher cap costs nothing unless used.
 MAX_ANSWER_TOKENS = 2000
 TRUNCATED_NOTICE = (
     "\n\n_(Câu trả lời bị cắt do giới hạn độ dài -- hãy hỏi lại hoặc chia nhỏ câu hỏi.)_"
 )
 
-# Question/answer memory (DynamoDB) -- lets a repeated question skip the
-# Bedrock tool-calling loop entirely instead of re-answering it from scratch.
-# Empty string disables caching (get/store become no-ops), matching the
-# common/config.py pattern of "unset env var = feature off" used elsewhere.
+# DynamoDB answer cache: a repeated question skips the tool-calling loop entirely.
+# An empty table name disables it (get/store become no-ops).
 RAG_MEMORY_TABLE = config.RAG_MEMORY_TABLE
 RAG_MEMORY_TTL_SECONDS = config.RAG_MEMORY_TTL_SECONDS
-# A question asked at least this many times has proven to recur -- the cache
-# entry is promoted to permanent (no TTL) instead of expiring like a one-off
-# question's short-term entry would.
+# Once a question has been asked this many times its entry is stored without a TTL
+# (permanent) instead of expiring like a one-off question's.
 RAG_MEMORY_PROMOTE_AFTER_HITS = config.RAG_MEMORY_PROMOTE_AFTER_HITS
 
+# Tool descriptions are model-facing: they steer which tool the model picks, so the
+# Athena timestamp-format warning in query_athena's description is load-bearing.
 TOOLS = [
     {
         "toolSpec": {
@@ -210,14 +215,11 @@ SYSTEM_PROMPT = (
 
 
 def build_system_prompt(now: datetime | None = None) -> str:
-    """Prepends today's actual date to SYSTEM_PROMPT. Nothing else in this
-    Lambda's Bedrock call carries the current date, so without this the model
-    has no ground truth for a relative expression ("this month", "since
-    yesterday") and has been observed guessing an arbitrary, wrong one (e.g.
-    querying year/month='2026'/'03' for "from the start of the month" when
-    the actual current month was '10') -- that wrong guess then silently
-    drives which partitions get queried, well before rule 4 above's "verify
-    with a tool call" check would ever catch it."""
+    """Prepend today's UTC date to SYSTEM_PROMPT.
+
+    Without it the model has no ground truth for "this month" or "since yesterday" and was
+    seen guessing a wrong month, which then silently picked the wrong Athena partitions.
+    """
     now = now or datetime.now(timezone.utc)
     date_line = (
         f"Today's date is {now:%Y-%m-%d} (UTC). Resolve any relative time "
@@ -229,6 +231,7 @@ def build_system_prompt(now: datetime | None = None) -> str:
 
 
 def _s3():
+    """Lazily create the S3 client so importing this module needs no AWS."""
     global _s3_client
     if _s3_client is None:
         _s3_client = boto3.client("s3", region_name=config.AWS_REGION)
@@ -236,6 +239,7 @@ def _s3():
 
 
 def _bedrock():
+    """Lazily create the Bedrock runtime client."""
     global _bedrock_client
     if _bedrock_client is None:
         _bedrock_client = boto3.client("bedrock-runtime", region_name=config.AWS_REGION)
@@ -243,6 +247,7 @@ def _bedrock():
 
 
 def _dynamodb():
+    """Lazily create the DynamoDB resource used by the answer cache."""
     global _dynamodb_resource
     if _dynamodb_resource is None:
         _dynamodb_resource = boto3.resource("dynamodb", region_name=config.AWS_REGION)
@@ -250,19 +255,17 @@ def _dynamodb():
 
 
 def normalize_question(question: str) -> str:
-    """Collapses whitespace/case differences so "What is trending?" and
-    "what   is trending?" hit the same cache entry."""
+    """Fold case and whitespace so trivially different phrasings share a cache entry."""
     return " ".join(question.strip().lower().split())
 
 
 def question_hash(question: str) -> str:
+    """Cache key: SHA-256 of the normalised question."""
     return hashlib.sha256(normalize_question(question).encode("utf-8")).hexdigest()
 
 
 def get_cached_answer(question: str) -> dict | None:
-    """Returns the cached item (answer/sources/hit_count) if this question
-    has been asked before and the entry hasn't expired, else None. A no-op
-    (returns None) when RAG_MEMORY_TABLE is unset."""
+    """Return the cached item (answer, sources, tool_calls, hit_count) or None on a miss."""
     if not RAG_MEMORY_TABLE:
         return None
     table = _dynamodb().Table(RAG_MEMORY_TABLE)
@@ -273,15 +276,12 @@ def get_cached_answer(question: str) -> dict | None:
 def store_cached_answer(
     question: str, answer: str, sources: list[dict], tool_calls: list[dict], hit_count: int
 ) -> None:
-    """No-op when RAG_MEMORY_TABLE is unset. Below RAG_MEMORY_PROMOTE_AFTER_HITS,
-    the item carries a `ttl` (short-term -- DynamoDB expires it automatically).
-    At/above that hit count the question has proven to recur, so it's written
-    without `ttl` (long-term / permanent) instead.
+    """Write the answer with a DynamoDB TTL, or without one once hit_count reaches the promote
+    threshold.
 
-    tool_calls is stored (not just sources) so a later cache hit can show what
-    actually grounded this answer -- returning "tool_calls: []" on every hit
-    would misrepresent a real, tool-grounded answer as one the model made up,
-    just because this particular invocation didn't re-run those tools."""
+    tool_calls is stored so a cache hit can still show what grounded the answer, rather than
+    an empty trace that would make it look ungrounded.
+    """
     if not RAG_MEMORY_TABLE:
         return
     table = _dynamodb().Table(RAG_MEMORY_TABLE)
@@ -300,6 +300,7 @@ def store_cached_answer(
 
 
 def embed_text(text: str) -> list[float]:
+    """Embed text; must use the same model and truncation as rag/build_index.py."""
     response = _bedrock().invoke_model(
         modelId=config.BEDROCK_EMBED_MODEL_ID,
         body=json.dumps({"inputText": text[:8000]}),
@@ -308,11 +309,13 @@ def embed_text(text: str) -> list[float]:
 
 
 def load_index() -> list[dict]:
+    """Load the embedded documents written by rag/build_index.py."""
     response = _s3().get_object(Bucket=config.CURATED_BUCKET, Key=config.RAG_INDEX_KEY)
     return json.loads(response["Body"].read())["documents"]
 
 
 def list_parquet_keys(bucket: str, prefix: str) -> list[str]:
+    """List every .parquet key under prefix, following S3 pagination."""
     keys = []
     paginator = _s3().get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
@@ -323,12 +326,11 @@ def list_parquet_keys(bucket: str, prefix: str) -> list[str]:
 
 
 def _sanitize_nan(records: list[dict]) -> list[dict]:
-    """Pandas turns a missing value in a numeric column into NaN, which
-    isn't valid JSON -- json.dumps(float('nan')) emits the literal `NaN`
-    token, and Bedrock's Converse API rejects that in a tool-result
-    payload. Convert every NaN to None so one missing reading (e.g. a
-    single location's precipitation sensor down that run) can't crash the
-    whole tool call."""
+    """Replace NaN with None.
+
+    Pandas reads a missing numeric value as NaN, which json.dumps emits as a bare `NaN` token
+    that Converse rejects in a tool result, so one missing reading would fail the whole call.
+    """
     return [
         {k: (None if isinstance(v, float) and math.isnan(v) else v) for k, v in record.items()}
         for record in records
@@ -336,19 +338,19 @@ def _sanitize_nan(records: list[dict]) -> list[dict]:
 
 
 def read_parquet_records(bucket: str, key: str) -> list[dict]:
+    """Load one Parquet object from S3 as JSON-safe row dicts."""
     response = _s3().get_object(Bucket=bucket, Key=key)
     df = pd.read_parquet(BytesIO(response["Body"].read()))
     return _sanitize_nan(df.to_dict(orient="records"))
 
 
 def read_latest_curated_snapshot(source: str, now: datetime | None = None) -> list[dict]:
-    """Returns the records from the single most recent curated Parquet file
-    for `source` (crypto/weather ingest every ~10 min and each run's file is
-    a full snapshot of every tracked coin/location, so the newest file IS
-    the latest reading -- no historical scan needed, unlike build_index.py's
-    full-corpus RAG build). Checks today's UTC partition, falling back to
-    yesterday's if today's is still empty (e.g. just after midnight, before
-    the first run of the day)."""
+    """Return the records of the newest curated Parquet file for source.
+
+    Each crypto/weather run writes a full snapshot of every coin/location, so the newest file
+    is the current reading. Falls back to yesterday's partition just after UTC midnight,
+    before the day's first run.
+    """
     now = now or datetime.now(timezone.utc)
     for day_offset in (0, 1):
         ts = now - timedelta(days=day_offset)
@@ -360,12 +362,14 @@ def read_latest_curated_snapshot(source: str, now: datetime | None = None) -> li
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
+    """Cosine similarity, defined as 0.0 for a zero vector."""
     a_arr, b_arr = np.array(a, dtype=float), np.array(b, dtype=float)
     denom = np.linalg.norm(a_arr) * np.linalg.norm(b_arr)
     return float(np.dot(a_arr, b_arr) / denom) if denom else 0.0
 
 
 def search_knowledge_base(query: str, documents: list[dict], top_k: int) -> list[dict]:
+    """Brute-force cosine ranking over the in-memory index; fine at this corpus size."""
     embedding = embed_text(query)
     scored = [{**doc, "score": cosine_similarity(embedding, doc["embedding"])} for doc in documents]
     scored.sort(key=lambda d: d["score"], reverse=True)
@@ -373,10 +377,10 @@ def search_knowledge_base(query: str, documents: list[dict], top_k: int) -> list
 
 
 def query_athena(sql: str, max_rows: int = 25) -> tuple[list[dict], bool]:
-    """Runs a read-only SELECT against the curated Athena tables via
-    common/athena.py's shared run_query. Raises ValueError for SQL the
-    guard rejects, RuntimeError if the Athena query itself fails or
-    times out (propagated from common/athena.py)."""
+    """Run model-written SQL after the read-only guard; returns (rows, truncated).
+
+    Raises ValueError if the guard rejects the SQL, RuntimeError if Athena fails or times out.
+    """
     ok, reason = validate_read_only_select(sql)
     if not ok:
         raise ValueError(reason)
@@ -384,14 +388,17 @@ def query_athena(sql: str, max_rows: int = 25) -> tuple[list[dict], bool]:
 
 
 def get_crypto_prices() -> list[dict]:
+    """Latest ingested price snapshot for the tracked coins."""
     return read_latest_curated_snapshot("crypto")
 
 
 def get_weather() -> list[dict]:
+    """Latest ingested weather snapshot for the tracked locations."""
     return read_latest_curated_snapshot("weather")
 
 
 def search_web(query: str, max_results: int = 5) -> list[dict]:
+    """Tavily web search, normalised to the same {title, url, text} shape as index documents."""
     api_key = get_secret(config.TAVILY_SECRET_NAME)["api_key"]
     response = requests.post(
         "https://api.tavily.com/search",
@@ -411,9 +418,11 @@ def search_web(query: str, max_results: int = 5) -> list[dict]:
 
 
 def run_tool(name: str, tool_input: dict, documents: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Runs one agent-requested tool call. Returns (summary for the model,
-    raw results for source tracking) -- the model only sees the summary
-    (title/url/snippet/score), never the full embedding vectors."""
+    """Run one tool call and return (summary for the model, records for source tracking).
+
+    The summary is kept small (no embeddings, truncated text) to limit input tokens. Athena
+    and web-search failures come back as error results so the model can retry or move on.
+    """
     query = (tool_input or {}).get("query", "")
 
     if name == "search_knowledge_base":
@@ -464,9 +473,7 @@ def run_tool(name: str, tool_input: dict, documents: list[dict]) -> tuple[list[d
             }
             for r in records
         ]
-        # One representative source for the whole batch, not one per
-        # location -- Open-Meteo has no public per-location page to cite,
-        # unlike CoinGecko's real per-coin URLs above.
+        # One source for the whole batch: Open-Meteo has no per-location page to cite.
         weather_source = {
             "title": "Open-Meteo (dữ liệu thời tiết đã ingest)",
             "url": "https://open-meteo.com/",
@@ -502,10 +509,12 @@ def run_tool(name: str, tool_input: dict, documents: list[dict]) -> tuple[list[d
 
 
 def extract_text(message: dict) -> str:
+    """Concatenate the text blocks of a Converse message, ignoring toolUse blocks."""
     return "".join(block["text"] for block in message["content"] if "text" in block)
 
 
 def _final_result(response: dict, trace: list, sources_by_url: dict) -> dict:
+    """Package the final answer, flagging and annotating it if it hit the token cap."""
     text = extract_text(response["output"]["message"])
     truncated = response["stopReason"] == "max_tokens"
     if truncated:
@@ -519,6 +528,7 @@ def _final_result(response: dict, trace: list, sources_by_url: dict) -> dict:
 
 
 def run_agent(question: str, documents: list[dict]) -> dict:
+    """Run the Converse tool loop until the model answers in text or MAX_ITERATIONS is hit."""
     messages = [{"role": "user", "content": [{"text": question}]}]
     trace = []
     sources_by_url: dict[str, dict] = {}
@@ -560,11 +570,9 @@ def run_agent(question: str, documents: list[dict]) -> dict:
             )
         messages.append({"role": "user", "content": tool_result_blocks})
 
-    # Exhausted MAX_ITERATIONS without a final text turn (e.g. the model kept
-    # calling tools) -- ask once more, told to answer from whatever it already
-    # gathered, instead of erroring the invocation. toolConfig must still be
-    # sent: Converse raises ValidationException for a history that contains
-    # toolUse/toolResult blocks without it (Converse has no "no tools" choice).
+    # Out of iterations: ask once more for an answer from what was gathered. toolConfig
+    # must still be sent -- Converse raises ValidationException for a history containing
+    # toolUse/toolResult blocks without it, and has no "no tools" tool choice.
     force_answer_system = system_prompt + "\n\nYou must give your final answer now, no more tools."
     response = _bedrock().converse(
         modelId=config.BEDROCK_TEXT_MODEL_ID,
@@ -577,6 +585,7 @@ def run_agent(question: str, documents: list[dict]) -> dict:
 
 
 def lambda_handler(event, context):
+    """Answer event["question"], serving from the DynamoDB cache when possible."""
     question = (event.get("question") or "").strip()
     if not question:
         return {"statusCode": 400, "error": "Missing 'question' in event"}
@@ -584,14 +593,10 @@ def lambda_handler(event, context):
     cached = get_cached_answer(question)
     if cached is not None:
         sources = json.loads(cached["sources"])
-        # Pre-existing cache entries written before tool_calls was persisted
-        # (see store_cached_answer) won't have this field -- fall back to []
-        # rather than a KeyError; they'll carry a real trace once re-stored.
+        # Entries written before tool_calls was persisted lack the field.
         tool_calls = json.loads(cached.get("tool_calls") or "[]")
-        # Re-store to bump hit_count and, once RAG_MEMORY_PROMOTE_AFTER_HITS is
-        # reached, promote the entry from short-term (TTL) to long-term
-        # (permanent) -- a question that keeps recurring earns a permanent
-        # cache entry instead of expiring like a one-off would.
+        # Re-store to bump hit_count, which promotes the entry to permanent once it
+        # reaches RAG_MEMORY_PROMOTE_AFTER_HITS.
         hit_count = int(cached.get("hit_count", 1)) + 1
         store_cached_answer(question, cached["answer"], sources, tool_calls, hit_count)
         return {
@@ -599,9 +604,8 @@ def lambda_handler(event, context):
             "question": question,
             "answer": cached["answer"],
             "grounded": bool(sources),
-            # The real trace from when this answer was first computed, not
-            # tools run just now -- callers can tell the two apart via
-            # "cached" below and label a cached reply accordingly.
+            # The trace from when the answer was first computed; "cached" lets callers
+            # label it as such.
             "tool_calls": tool_calls,
             "sources": sources,
             "cached": True,
@@ -614,8 +618,8 @@ def lambda_handler(event, context):
         {"title": s.get("title", ""), "url": s.get("url", ""), "source": s.get("source", "")}
         for s in result["sources"]
     ]
-    # A cut-off answer must not be cached: a recurring question is promoted to
-    # a permanent entry, which would serve the truncated text forever.
+    # Never cache a truncated answer: if the question recurs it is promoted to a
+    # permanent entry and would serve the cut-off text forever.
     if not result["truncated"]:
         store_cached_answer(question, result["answer"], sources, result["trace"], hit_count=1)
 

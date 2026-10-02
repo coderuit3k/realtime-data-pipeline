@@ -1,3 +1,10 @@
+"""Build-index Lambda (nightly): embeds curated HN/news/GitHub records for rag/agent.py.
+
+The index is a single JSON object in S3 rather than a vector database: at this size, in-memory
+cosine similarity is enough and avoids a service that bills 24/7. Weather and crypto are numeric
+and are read by the agent's own tools instead of being embedded.
+"""
+
 import json
 import logging
 from io import BytesIO
@@ -15,6 +22,7 @@ _bedrock_client = None
 
 
 def _s3():
+    """Lazily create the S3 client so importing this module needs no AWS."""
     global _s3_client
     if _s3_client is None:
         _s3_client = boto3.client("s3", region_name=config.AWS_REGION)
@@ -22,6 +30,7 @@ def _s3():
 
 
 def _bedrock():
+    """Lazily create the Bedrock runtime client."""
     global _bedrock_client
     if _bedrock_client is None:
         _bedrock_client = boto3.client("bedrock-runtime", region_name=config.AWS_REGION)
@@ -29,6 +38,7 @@ def _bedrock():
 
 
 def embed_text(text: str) -> list[float]:
+    """Embed text with the configured Bedrock model, truncated to stay under its input limit."""
     response = _bedrock().invoke_model(
         modelId=config.BEDROCK_EMBED_MODEL_ID,
         body=json.dumps({"inputText": text[:8000]}),
@@ -37,6 +47,7 @@ def embed_text(text: str) -> list[float]:
 
 
 def build_document(record: dict, source: str) -> dict:
+    """Map a curated record to the index's common {id, source, title, url, text} shape."""
     if source == "hackernews":
         text = f"{record.get('title') or ''} {record.get('text') or ''}".strip()
         return {
@@ -68,6 +79,7 @@ def build_document(record: dict, source: str) -> dict:
 
 
 def dedup_documents(documents: list[dict]) -> list[dict]:
+    """Keep the first document per id; the same item is re-ingested across many runs."""
     seen = set()
     deduped = []
     for doc in documents:
@@ -79,6 +91,7 @@ def dedup_documents(documents: list[dict]) -> list[dict]:
 
 
 def list_parquet_keys(bucket: str, prefix: str) -> list[str]:
+    """List every .parquet key under prefix, following S3 pagination."""
     keys = []
     paginator = _s3().get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
@@ -89,12 +102,14 @@ def list_parquet_keys(bucket: str, prefix: str) -> list[str]:
 
 
 def read_parquet_records(bucket: str, key: str) -> list[dict]:
+    """Load one Parquet object from S3 as a list of row dicts."""
     response = _s3().get_object(Bucket=bucket, Key=key)
     df = pd.read_parquet(BytesIO(response["Body"].read()))
     return df.to_dict(orient="records")
 
 
 def build_documents() -> list[dict]:
+    """Scan the full curated history of every text source and return deduped documents."""
     bucket = config.CURATED_BUCKET
     documents = []
     sources = (
@@ -110,14 +125,15 @@ def build_documents() -> list[dict]:
 
 
 def load_existing_index() -> dict[str, dict]:
+    """Return the previous index keyed by document id, or {} if it is missing or unusable."""
     try:
         response = _s3().get_object(Bucket=config.CURATED_BUCKET, Key=config.RAG_INDEX_KEY)
     except _s3().exceptions.NoSuchKey:
         return {}
 
     payload = json.loads(response["Body"].read())
-    # A changed embedding model invalidates every cached vector -- mixing
-    # embeddings from two different models in one similarity search is wrong.
+    # Vectors from different embedding models are not comparable, so a model change
+    # invalidates the whole cache.
     if payload.get("model_id") != config.BEDROCK_EMBED_MODEL_ID:
         return {}
     return {doc["id"]: doc for doc in payload["documents"]}
@@ -126,9 +142,10 @@ def load_existing_index() -> dict[str, dict]:
 def partition_by_cache(
     documents: list[dict], existing: dict[str, dict]
 ) -> tuple[list[dict], list[dict]]:
-    """Splits into (already-embedded, needs-embedding) using the previous index
-    as a cache -- a document only needs re-embedding if it's new or its text
-    changed, so re-runs don't re-embed everything (Bedrock is billed per token)."""
+    """Split into (cached, needs_embedding), reusing a vector when the id and text are unchanged.
+
+    Bedrock bills per embedded token, so re-runs only embed new or edited documents.
+    """
     cached, needs_embedding = [], []
     for doc in documents:
         entry = existing.get(doc["id"])
@@ -141,6 +158,7 @@ def partition_by_cache(
 
 
 def lambda_handler(event, context):
+    """Rebuild the full index and overwrite it in S3, embedding only uncached documents."""
     documents = [doc for doc in build_documents() if doc["text"]]
     existing = load_existing_index()
     cached_docs, needs_embedding = partition_by_cache(documents, existing)

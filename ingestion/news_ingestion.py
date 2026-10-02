@@ -1,3 +1,5 @@
+"""Lambda: ingests articles matching config.NEWS_QUERY from NewsAPI."""
+
 import logging
 from datetime import datetime, timezone
 
@@ -14,9 +16,10 @@ NEWS_API_URL = "https://newsapi.org/v2/everything"
 
 
 def normalize_article(article: dict) -> dict:
+    """Map a NewsAPI article to the raw news record."""
     source = article.get("source") or {}
     return {
-        # NewsAPI has no stable article id, so the URL is used as one.
+        # NewsAPI has no article id; the URL is the stable identifier.
         "article_id": article.get("url"),
         "source": "news",
         "provider": source.get("name"),
@@ -30,6 +33,7 @@ def normalize_article(article: dict) -> dict:
 
 
 def fetch_articles() -> list[dict]:
+    """Newest-first page of articles: one call per run (free tier allows 100/day)."""
     api_key = get_secret(config.NEWS_SECRET_NAME)["api_key"]
     params = {
         "q": config.NEWS_QUERY,
@@ -37,10 +41,8 @@ def fetch_articles() -> list[dict]:
         "pageSize": config.NEWS_PAGE_SIZE,
         "sortBy": "publishedAt",
     }
-    # The key travels in a header, never the query string -- a URL can end up
-    # in an exception message or an access/CloudWatch log line, a header value
-    # normally doesn't. NewsAPI supports this as a documented alternative to
-    # the apiKey query param.
+    # Send the key as a header, never in the query string: URLs end up in
+    # exception messages and CloudWatch logs, headers normally don't.
     response = requests.get(NEWS_API_URL, params=params, headers={"X-Api-Key": api_key}, timeout=10)
     response.raise_for_status()
     payload = response.json()
@@ -48,6 +50,7 @@ def fetch_articles() -> list[dict]:
 
 
 def lambda_handler(event, context):
+    """Scheduled entry point: fetch articles and write them to the raw zone."""
     articles = fetch_articles()
     key = write_records("news", articles, "article_id")
     logger.info("Wrote %d records to %s", len(articles), key)

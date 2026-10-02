@@ -8,13 +8,16 @@ import type { WeatherHistoryResponse } from "@/lib/types";
 
 export const maxDuration = 60;
 
+/** Hourly average temperature over the last 24h for one known location. */
 export async function GET(request: NextRequest) {
   const location = request.nextUrl.searchParams.get("location");
+  // Security: allow-list check before `location` is interpolated into SQL.
   if (!location || !isKnownWeatherLocation(location)) {
     return NextResponse.json({ error: "Không tìm thấy địa điểm." }, { status: 400 });
   }
 
   try {
+    // A 24h window can span two UTC day partitions; the cutoff does the exact filtering.
     const partsList = lastNDaysUtcParts(2);
     const cutoffLocalIso = hoursAgoAsObservedAtLocal(24);
     const rows = await runAthenaQuery(

@@ -4,6 +4,7 @@ import { listConversations, createConversation, toConversationJSON, getSessionId
 import { checkRateLimit, getConversationLimiter } from "@/lib/ratelimit";
 import { clientIp } from "@/lib/clientIp";
 
+/** Lists the caller's conversations, identified by the X-Session-Id header. */
 export async function GET(request: NextRequest) {
   const sessionId = getSessionIdHeader(request.headers);
   if (!sessionId) {
@@ -19,6 +20,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * Creates an empty conversation. Rate-limited per IP rather than per session,
+ * since a client can mint new session ids at will.
+ */
 export async function POST(request: NextRequest) {
   const sessionId = getSessionIdHeader(request.headers);
   if (!sessionId) {

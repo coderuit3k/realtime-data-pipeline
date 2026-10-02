@@ -7,6 +7,10 @@ import type { WeatherResponse } from "@/lib/types";
 
 export const maxDuration = 60;
 
+/**
+ * Latest reading per location. Covers two UTC days so the map isn't empty
+ * just after midnight UTC, before today's first ingestion lands.
+ */
 export async function GET() {
   try {
     const partsList = lastNDaysUtcParts(2);

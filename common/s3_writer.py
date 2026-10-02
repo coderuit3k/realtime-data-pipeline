@@ -1,3 +1,5 @@
+"""Writes ingested records to the raw S3 zone as Hive-partitioned NDJSON."""
+
 import json
 import logging
 import os
@@ -14,6 +16,7 @@ _s3_client = None
 
 
 def _client():
+    """Created on first use and reused across warm Lambda invocations."""
     global _s3_client
     if _s3_client is None:
         _s3_client = boto3.client("s3", region_name=config.AWS_REGION)
@@ -21,6 +24,7 @@ def _client():
 
 
 def build_key(source: str, ts: datetime) -> str:
+    """Hive-style partitions for Glue/Athena; the random suffix keeps same-second runs apart."""
     return (
         f"source={source}/year={ts:%Y}/month={ts:%m}/day={ts:%d}/hour={ts:%H}/"
         f"{ts:%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:8]}.json"
@@ -28,6 +32,7 @@ def build_key(source: str, ts: datetime) -> str:
 
 
 def _dedupe(records: list[dict], key_field: str) -> list[dict]:
+    """Drop records whose key_field value was already seen; the first occurrence wins."""
     seen = set()
     deduped = []
     for record in records:
@@ -44,13 +49,12 @@ def _dedupe(records: list[dict], key_field: str) -> list[dict]:
 
 
 def write_records(source: str, records: list[dict], key_field: str) -> str:
-    """Writes records as newline-delimited JSON to the raw zone and returns the key.
+    """Write records as NDJSON to the raw zone and return the key ("" if none).
 
-    Records sharing the same `key_field` value are deduplicated first (first
-    occurrence wins) so a single API response's duplicates never reach S3.
-
-    Falls back to a local file under ./local_output when DRY_RUN is set or no
-    bucket is configured, so ingestion handlers can be exercised without AWS.
+    Duplicates within this batch (same key_field) are dropped first so one API
+    response's repeats never reach S3; repeats across runs are not deduped
+    here. Writes under ./local_output instead when DRY_RUN is set or no bucket
+    is configured, so handlers run without AWS.
     """
     if not records:
         return ""
@@ -74,6 +78,7 @@ def write_records(source: str, records: list[dict], key_field: str) -> str:
 
 
 def _write_local(key: str, body: str) -> None:
+    """Mirror the S3 key layout under ./local_output for dry runs."""
     path = os.path.join("local_output", key)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:

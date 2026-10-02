@@ -8,6 +8,7 @@ type KpiCardProps = {
   icon?: ReactNode;
 };
 
+/** Single headline metric with an optional icon and a hint line underneath. */
 export function KpiCard({ label, value, hint, hintColor = "muted", icon }: KpiCardProps) {
   return (
     <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md p-5 flex flex-col gap-2">

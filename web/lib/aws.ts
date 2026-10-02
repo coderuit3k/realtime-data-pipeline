@@ -7,12 +7,16 @@ import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
 import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import { CostExplorerClient } from "@aws-sdk/client-cost-explorer";
 
+/** Reads an env var, throwing (rather than passing `undefined` on) when it is unset or empty. */
 export function requiredEnv(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`Missing required environment variable: ${name}`);
   return value;
 }
 
+// Lazy module-level singletons: reused across requests on a warm serverless
+// instance, and created on first call so a missing env var surfaces inside the
+// route's try/catch instead of at import time.
 let athenaClient: AthenaClient | undefined;
 export function getAthenaClient(): AthenaClient {
   if (!athenaClient) athenaClient = new AthenaClient({ region: requiredEnv("AWS_REGION") });
@@ -55,10 +59,8 @@ export function getSecretsManagerClient(): SecretsManagerClient {
   return secretsManagerClient;
 }
 
-// Cost Explorer's real API endpoint is fixed at us-east-1 regardless of
-// where the account's other resources live -- the one client getter in
-// this file that deliberately does NOT read AWS_REGION.
 let costExplorerClient: CostExplorerClient | undefined;
+/** Cost Explorer only has a us-east-1 endpoint, so this client deliberately ignores AWS_REGION. */
 export function getCostExplorerClient(): CostExplorerClient {
   if (!costExplorerClient) costExplorerClient = new CostExplorerClient({ region: "us-east-1" });
   return costExplorerClient;

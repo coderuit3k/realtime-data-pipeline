@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import type { TrendsResponse } from "@/lib/types";
 
+/** Picks the English noun form; the counts here are labelled in English. */
 function pluralize(count: number, singular: string, plural: string): string {
   return count === 1 ? singular : plural;
 }
 
+/** Keywords the daily trend scan found in GitHub, HN and News on the same day. */
 export default function TrendsPage() {
   const [data, setData] = useState<TrendsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);

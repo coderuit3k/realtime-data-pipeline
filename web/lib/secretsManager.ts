@@ -1,10 +1,10 @@
 import { DescribeSecretCommand, type SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 
-// DescribeSecretCommand never returns the secret's actual value -- only
-// metadata. VersionIdsToStages maps each version id to its staging
-// labels; a version staged AWSCURRENT is the real, safe, read-only
-// signal that a value has been set. GetSecretValue is never called
-// anywhere in this app.
+/**
+ * Whether a secret has a value, judged by a version staged AWSCURRENT.
+ * Security: uses DescribeSecret, which returns metadata only. Never switch
+ * this to GetSecretValue; the web app must not be able to read secret values.
+ */
 export async function getSecretStatus(
   client: SecretsManagerClient,
   secretId: string

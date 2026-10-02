@@ -9,6 +9,7 @@ import type { OpsResponse } from "@/lib/types";
 
 export const maxDuration = 60;
 
+/** Pipeline health for the Ops page: Lambda metrics, schedule, recent logs and alarms. */
 export async function GET() {
   try {
     const prefix = requiredEnv("ALARM_NAME_PREFIX");

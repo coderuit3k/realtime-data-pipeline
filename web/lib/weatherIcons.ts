@@ -40,13 +40,13 @@ const CODE_GROUPS: Record<number, WeatherIconGroup> = {
   99: "thunderstorm",
 };
 
+/** Maps a WMO code to its icon group; unknown codes fall back to "cloudy". */
 export function weatherIconGroup(code: number): WeatherIconGroup {
   return CODE_GROUPS[code] ?? "cloudy";
 }
 
-// Hairline-stroke path data, matching the existing card-header icon style
-// on this page (24x24 viewBox, stroke-based, no fill) -- not a photographic
-// icon set, so it doesn't clash with the sparse look already established.
+// SVG path data for a 24x24 viewBox, drawn stroke-only (no fill) to match the
+// card-header icons.
 export const WEATHER_ICON_PATHS: Record<WeatherIconGroup, string> = {
   clear: "M12 4.5V2M12 22v-2.5M19.5 12H22M2 12h2.5M17.5 6.5 19 5M5 19l1.5-1.5M17.5 17.5 19 19M5 5l1.5 1.5M12 7.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9Z",
   cloudy: "M17 18H7a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17.4 9.1 4 4 0 0 1 17 18Z",

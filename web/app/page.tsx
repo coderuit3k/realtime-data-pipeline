@@ -10,6 +10,7 @@ import { ArchitectureFlow } from "@/components/ArchitectureFlow";
 
 const GITHUB_URL = "https://github.com/coderuit3k/realtime-data-pipeline";
 
+/** Shared SVG frame so each tech-stack entry only supplies its paths. */
 function TechIcon({ children }: { children: ReactNode }) {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="text-accent flex-shrink-0">
@@ -133,6 +134,7 @@ function FeatureCard({ icon, title, accent = "cyan" }: { icon: ReactNode; title:
   );
 }
 
+/** Vietnamese "N minutes/hours/days ago"; future timestamps clamp to "just now". */
 function relativeTime(iso: string, now: Date = new Date()): string {
   const diffMs = now.getTime() - new Date(iso).getTime();
   const minutes = Math.max(0, Math.round(diffMs / 60000));
@@ -143,6 +145,7 @@ function relativeTime(iso: string, now: Date = new Date()): string {
   return `${Math.round(hours / 24)} ngày trước`;
 }
 
+/** CloudWatch lines carry no structured level, so infer it from the text; WARNING folds into WARN. */
 function detectLogLevel(message: string): "ERROR" | "WARN" | "INFO" {
   const match = message.match(/\b(ERROR|WARN(?:ING)?|INFO)\b/);
   if (!match) return "INFO";
@@ -155,6 +158,7 @@ function logLevelColor(level: "ERROR" | "WARN" | "INFO"): string {
   return "text-accent";
 }
 
+/** Renders nothing when empty, which doubles as the error state for /api/commits. */
 function CommitsPanel({ commits }: { commits: GithubCommit[] }) {
   if (commits.length === 0) return null;
   return (
@@ -180,6 +184,11 @@ function CommitsPanel({ commits }: { commits: GithubCommit[] }) {
   );
 }
 
+/**
+ * Public showcase page. Headline numbers are static constants; only the
+ * commits and log side panels are fetched live, and either may fail without
+ * affecting the rest of the page.
+ */
 export default function LandingPage() {
   const [commits, setCommits] = useState<GithubCommit[]>([]);
   const [logs, setLogs] = useState<LogEntry[] | null>(null);
@@ -192,7 +201,7 @@ export default function LandingPage() {
         if (ok) setCommits(body.commits);
       })
       .catch(() => {
-        /* commits panel is secondary -- CommitsPanel hides itself when empty */
+        /* secondary panel: CommitsPanel simply stays hidden */
       });
   }, []);
 

@@ -1,3 +1,4 @@
+/** Connector arrow; `delay` staggers the travelling dot so the flow reads left to right. */
 function ArrowIcon({ delay }: { delay: string }) {
   return (
     <div className="relative flex items-center">
@@ -12,6 +13,7 @@ function ArrowIcon({ delay }: { delay: string }) {
   );
 }
 
+/** Static one-line pipeline diagram (sources -> S3 -> Glue/Athena -> RAG), shared by the landing and catalog pages. */
 export function ArchitectureFlow() {
   return (
     <section id="architecture" className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-8 py-9 flex flex-col gap-6">

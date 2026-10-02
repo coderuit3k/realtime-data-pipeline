@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+// Supabase access here uses the service-role key, which bypasses RLS: every
+// query must filter by session_id itself, or one browser could read or modify
+// another's conversations.
+
+/** Supabase row shape (snake_case); ConversationJSON is what the API returns. */
 export type ConversationRow = { id: string; title: string; updated_at: string };
 export type ConversationJSON = { id: string; title: string; updatedAt: string };
 
@@ -17,6 +22,7 @@ export const MAX_TITLE_LENGTH = 100;
 
 const CONVERSATION_TITLE_TIME_ZONE = "Asia/Ho_Chi_Minh";
 
+/** Default title "dd/mm/yy HH:MM:SS" in Vietnam time, independent of the server's timezone. */
 export function formatDateTitle(date: Date): string {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: CONVERSATION_TITLE_TIME_ZONE,
@@ -32,6 +38,7 @@ export function formatDateTitle(date: Date): string {
   return `${get("day")}/${get("month")}/${get("year")} ${get("hour")}:${get("minute")}:${get("second")}`;
 }
 
+/** Disambiguates same-second titles as "base (2)", "base (3)", ... */
 export function nextConversationTitle(base: string, existingTitles: string[]): string {
   const matches = existingTitles.filter((t) => t === base || t.startsWith(`${base} (`));
   return matches.length === 0 ? base : `${base} (${matches.length + 1})`;
@@ -41,11 +48,16 @@ export function toConversationJSON(row: ConversationRow): ConversationJSON {
   return { id: row.id, title: row.title, updatedAt: row.updated_at };
 }
 
+/**
+ * The anonymous per-browser id (see lib/sessionId.ts) that scopes all
+ * conversation access; null when missing or blank.
+ */
 export function getSessionIdHeader(headers: Headers): string | null {
   const value = headers.get("x-session-id")?.trim();
   return value ? value : null;
 }
 
+/** The session's conversations, most recently updated first. */
 export async function listConversations(client: SupabaseClient, sessionId: string): Promise<ConversationRow[]> {
   const { data, error } = await client
     .from("conversations")
@@ -56,6 +68,7 @@ export async function listConversations(client: SupabaseClient, sessionId: strin
   return (data as ConversationRow[] | null) ?? [];
 }
 
+/** Creates a conversation titled with the current time, suffixed if that title is already taken. */
 export async function createConversation(client: SupabaseClient, sessionId: string): Promise<ConversationRow> {
   const { data: existing, error: selectError } = await client
     .from("conversations")
@@ -76,6 +89,7 @@ export async function createConversation(client: SupabaseClient, sessionId: stri
   return data as ConversationRow;
 }
 
+/** Renames and bumps updated_at; null if the id doesn't exist or belongs to another session. */
 export async function renameConversation(
   client: SupabaseClient,
   sessionId: string,
@@ -93,6 +107,7 @@ export async function renameConversation(
   return data as ConversationRow | null;
 }
 
+/** Returns false if nothing was deleted (unknown id or another session's conversation). */
 export async function deleteConversation(client: SupabaseClient, sessionId: string, id: string): Promise<boolean> {
   const { data, error } = await client
     .from("conversations")
@@ -105,6 +120,7 @@ export async function deleteConversation(client: SupabaseClient, sessionId: stri
   return data !== null;
 }
 
+/** Ownership check run before reading messages, which have no session_id of their own. */
 export async function conversationBelongsToSession(
   client: SupabaseClient,
   sessionId: string,
@@ -120,6 +136,10 @@ export async function conversationBelongsToSession(
   return data !== null;
 }
 
+/**
+ * Messages oldest first. Returns null (not []) when the conversation isn't the
+ * session's, so callers can answer 404 without revealing that it exists.
+ */
 export async function listMessagesForConversation(
   client: SupabaseClient,
   sessionId: string,
@@ -137,6 +157,7 @@ export async function listMessagesForConversation(
   return (data as MessageRow[] | null) ?? [];
 }
 
+/** Appends one Q&A turn. Does no ownership check: callers must verify the conversation first. */
 export async function insertMessage(
   client: SupabaseClient,
   conversationId: string,

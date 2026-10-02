@@ -7,12 +7,17 @@ import { clientIp } from "@/lib/clientIp";
 import { getSupabaseClient } from "@/lib/supabase";
 import { insertMessage, getSessionIdHeader, listMessagesForConversation } from "@/lib/conversations";
 
-// rag_agent's own Lambda timeout is 90s (see infra/rag.tf); 60 is Vercel's ceiling
-// on non-Pro plans, so this may still not be enough headroom on a Hobby plan.
+// rag_agent's Lambda timeout is 90s (infra/rag.tf) but 60s is Vercel's cap on
+// non-Pro plans, so a slow answer can still be cut off here.
 export const maxDuration = 60;
 
 const MAX_QUESTION_LENGTH = 500;
 
+/**
+ * Asks rag_agent a question, optionally inside a conversation: prior turns are
+ * sent as context and the new turn is saved. Validation and the per-IP rate
+ * limit run before anything billable (Lambda/Bedrock) is invoked.
+ */
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const question = typeof body?.question === "string" ? body.question.trim() : "";
@@ -36,6 +41,8 @@ export async function POST(request: NextRequest) {
 
   try {
     let priorMessages: { question: string; answer: string }[] = [];
+    // Loading history doubles as the ownership check, which also guards the
+    // insertMessage call below.
     if (conversationId) {
       const sessionId = getSessionIdHeader(request.headers);
       const history = sessionId
@@ -60,9 +67,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: payload.error ?? "Lambda trả lỗi." }, { status: 502 });
     }
     const result = normalizeAssistantResult(payload);
-    // rag_agent echoes back whatever question it was sent -- keep the
-    // user's original text (not the context-augmented one) for display and
-    // for what gets persisted to the conversation below.
+    // rag_agent echoes the context-augmented question; show and persist the
+    // user's original text instead.
     result.question = question;
 
     if (conversationId) {
@@ -75,8 +81,7 @@ export async function POST(request: NextRequest) {
           sources: result.sources,
         });
       } catch (persistError) {
-        // A persistence hiccup must never hide a real, already-obtained
-        // answer -- log it and still return the real result to the user.
+        // A failed save must not throw away an answer we already paid for.
         console.error("Persisting assistant turn failed", persistError);
       }
     }

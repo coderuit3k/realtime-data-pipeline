@@ -34,6 +34,11 @@ function latestTimestamp(timestamps: Date[]): string | null {
   return timestamps.reduce((latest, t) => (t > latest ? t : latest), timestamps[0]).toISOString();
 }
 
+/**
+ * 24h invocation/error/duration summary per Lambda, fetched in a single
+ * GetMetricData call. Status: "idle" with no invocations, "error" if any
+ * invocation errored, else "ok".
+ */
 export async function getLambdaHealth(
   client: CloudWatchClient,
   functionNames: { fullName: string; label: string }[]

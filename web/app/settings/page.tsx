@@ -4,6 +4,11 @@ import { useEffect, useState } from "react";
 import type { SettingsResponse } from "@/lib/types";
 import { DATA_SOURCES } from "@/lib/settingsMeta";
 
+/**
+ * Read-only view of source schedules and whether each secret is set; secret
+ * values never reach the browser. Not linked from the sidebar, but still
+ * reachable by URL.
+ */
 export default function SettingsPage() {
   const [data, setData] = useState<SettingsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);

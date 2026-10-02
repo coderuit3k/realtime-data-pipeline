@@ -15,6 +15,10 @@ const LIST_WIDTH = "260px";
 const TRACE_WIDTH = "320px";
 const RAIL_WIDTH = "48px";
 
+/**
+ * Three-column RAG chat: conversation list, thread, tool trace. Conversations
+ * are scoped to an anonymous per-browser session id sent as X-Session-Id.
+ */
 export default function AssistantPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<ConversationJSON[]>([]);
@@ -32,6 +36,8 @@ export default function AssistantPage() {
   // Panels animate only after the remembered state has been applied, so a
   // returning visitor with a collapsed panel doesn't watch it slide shut on load.
   const [panelsReady, setPanelsReady] = useState(false);
+  // Async responses compare against this ref, not the closed-over state, so a
+  // late reply for a conversation the user already left is not rendered.
   const selectedIdRef = useRef<string | null>(null);
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -77,6 +83,8 @@ export default function AssistantPage() {
     if (sessionId) loadConversations(sessionId);
   }, [sessionId, loadConversations]);
 
+  // Returns the fetched messages (null on failure) even when the user has
+  // switched away, so submit() can still check whether its turn was persisted.
   const loadMessages = useCallback(async (sid: string, conversationId: string): Promise<ChatMessage[] | null> => {
     try {
       const res = await fetch(`/api/conversations/${conversationId}/messages`, {
@@ -144,6 +152,9 @@ export default function AssistantPage() {
     loadConversations(sessionId);
   }
 
+  // Lazily creates a conversation on the first question. The pending turn stays
+  // on screen until the reloaded history contains it, so the answer never
+  // flickers away if persistence lags or fails.
   async function submit() {
     const trimmed = input.trim();
     if (!trimmed || loading || !sessionId) return;

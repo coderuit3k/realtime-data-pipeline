@@ -4,6 +4,7 @@ import type { CommitsResponse } from "@/lib/types";
 
 export const maxDuration = 60;
 
+/** Last 5 commits, CDN-cached for 60s to spare GitHub API quota. */
 export async function GET() {
   try {
     const commits = await getRecentCommits(5);

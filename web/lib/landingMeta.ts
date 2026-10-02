@@ -2,42 +2,24 @@ import { DATA_SOURCES } from "./settingsMeta";
 import { WEATHER_LOCATION_NAMES } from "./weatherMeta";
 import { COST_ESTIMATE_USD } from "./opsMeta";
 
-// Real count of the 5 real ingestion sources -- derived from
-// settingsMeta.ts's DATA_SOURCES (built for the Settings sub-project),
-// never re-declared as a second hardcoded number, so this can't drift
-// from the array it describes.
+// Landing-page stats. Derive from the source arrays wherever possible so the
+// numbers can't drift; the two hardcoded counts below must be re-measured,
+// never adjusted by hand.
+
 export const DATA_SOURCE_COUNT = DATA_SOURCES.length;
 
-// Real count of aws_lambda_function resources across this project's
-// Terraform, verified 2026-09-27 via:
+// Lambda functions in Terraform (last checked 2026-09-27):
 //   grep -n '^resource "aws_lambda_function"' infra/*.tf
-// 7 in infra/lambda.tf (hackernews/news/weather/crypto/github/gmail
-// ingestion + transform) + 2 in infra/rag.tf (rag_build_index, rag_agent)
-// + 1 in infra/trends.tf (trend_scan, see
-// docs/superpowers/specs/2026-09-27-trend-events-design.md) = 10. This
-// count is infra-level (real Lambda functions) and intentionally
-// independent of DATA_SOURCE_COUNT above (a UI-facing "N nguồn dữ liệu"
-// figure) -- gmail_ingestion is real infra, but its web-facing "6th
-// source" rollout is a separate, deferred sub-project; trend_scan derives
-// from existing sources rather than adding a new one, so it never counts
-// toward DATA_SOURCE_COUNT either.
+// 7 in lambda.tf + 2 in rag.tf + 1 in trends.tf. Deliberately larger than
+// DATA_SOURCE_COUNT: gmail_ingestion is not yet a UI-facing source, and
+// trend_scan derives from existing sources rather than adding one.
 export const LAMBDA_COUNT = 10;
 
-// Real combined automated test count, verified 2026-09-27 after removing
-// the Catalog Excel-export feature (web/lib/excelExport.ts, web/lib/r2.ts,
-// web/app/api/catalog/export/) -- recomputed from a fresh run, not carried
-// over or naively adjusted:
+// Python + web test totals (last checked 2026-09-27):
 //   .venv/bin/python -m pytest tests/ --collect-only -q   -> 145
-//   cd web && npx vitest run                              -> 263 (49 files)
-// 145 + 263 = 408 total. Both are real, currently-passing suites for this
-// same project (Python pipeline + TypeScript web app).
+//   cd web && npx vitest run                              -> 263
 export const TEST_COUNT = 408;
 
-// Reused directly from opsMeta.ts's existing, already-cited
-// COST_ESTIMATE_USD -- never re-derived separately.
 export const MONTHLY_COST_USD = COST_ESTIMATE_USD;
 
-// Real count of the 12 real Southern Vietnam weather locations --
-// derived from weatherMeta.ts's WEATHER_LOCATION_NAMES (built for the
-// Weather sub-project), never re-declared as a second hardcoded number.
 export const WEATHER_LOCATION_COUNT = WEATHER_LOCATION_NAMES.length;

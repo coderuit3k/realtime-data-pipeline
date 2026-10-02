@@ -1,5 +1,6 @@
 import { partitionPredicateAny, type TodayParts } from "./athena";
 
+/** Latest reading per location, hottest first. */
 export function buildCurrentReadingsQuery(partsList: TodayParts[]): string {
   const where = partitionPredicateAny(partsList);
   return `SELECT location, latitude, longitude, temperature_c, humidity_pct, precipitation_mm, wind_speed_kmh, observed_at
@@ -13,9 +14,11 @@ WHERE rn = 1
 ORDER BY temperature_c DESC`;
 }
 
-// `location` must already be validated against WEATHER_LOCATION_NAMES by
-// the caller (web/lib/weatherMeta.ts's isKnownWeatherLocation) before this
-// is called -- this function trusts its input and does not re-validate.
+/**
+ * Hourly average temperature for one location since `cutoffLocalIso` (naive
+ * local time, like observed_at). Security: `location` is interpolated into
+ * SQL unescaped; callers MUST check it with isKnownWeatherLocation first.
+ */
 export function buildHistoryQuery(location: string, partsList: TodayParts[], cutoffLocalIso: string): string {
   const where = partitionPredicateAny(partsList);
   return `SELECT date_trunc('hour', from_iso8601_timestamp(observed_at)) AS hour_bucket,

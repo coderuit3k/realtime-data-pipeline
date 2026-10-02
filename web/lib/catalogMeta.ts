@@ -1,15 +1,14 @@
 import type { CatalogTableMeta } from "./types";
 
-// Every fact here is verified against real source, per
-// docs/superpowers/specs/2026-09-20-catalog-page-design.md's
-// "Real data sources" table. Never add a fact that isn't traceable
-// to code.
-// infra/eventbridge.tf: ingestion_schedule and news_ingestion_schedule are
-// two separate rules (news_ingestion_schedule exists so NewsAPI's 100
-// req/day free-tier cap can diverge again later), but both currently
-// default to the same rate(30 minutes) cadence.
+// Both EventBridge rules (shared ingestion and news) default to rate(30 minutes)
+// in infra/eventbridge.tf. News has its own rule so it can be slowed down to
+// respect NewsAPI's 100 req/day free tier without touching the others.
 const CADENCE = "mỗi 30 phút";
 
+/**
+ * Hand-maintained facts Glue can't provide, keyed by Glue table name.
+ * Every entry must be traceable to code (cited inline); don't add guesses.
+ */
 export const CATALOG_META: Record<string, CatalogTableMeta> = {
   hackernews_stories: {
     ragIndexed: true, // rag/build_index.py:101
@@ -41,9 +40,8 @@ export const CATALOG_META: Record<string, CatalogTableMeta> = {
     ingestionLambda: "crypto-ingestion",
     cadence: CADENCE,
     columnNotes: {
-      // ingestion/crypto_ingestion.py:32-39 -- CoinGecko returns
-      // whole-dollar prices as ints; explicit float() avoids Athena's
-      // HIVE_BAD_DATA on a column typed double.
+      // ingestion/crypto_ingestion.py: CoinGecko returns whole-dollar prices
+      // as ints, which Athena rejects (HIVE_BAD_DATA) on a double column.
       price_usd: "ép float khi ingest (tránh HIVE_BAD_DATA vì CoinGecko trả số nguyên)",
     },
   },

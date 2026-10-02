@@ -15,17 +15,17 @@ const BAND_COLOR: Record<"cool" | "moderate" | "hot", string> = {
   hot: "#FB7185",
 };
 
-// Decorative land-shape background, reused verbatim from the mockup --
-// not a geographically accurate coastline (no real Vietnam GeoJSON in
-// this project). Only pin positions (via projectLatLng) are real.
+// Decorative land shape from the mockup, not a real coastline (the project
+// has no Vietnam GeoJSON). Only the pin positions are geographically real.
 const LAND_PATH =
   "M -20,-20 L 620,-20 L 620,220 C 540,250 490,300 460,360 C 430,420 460,460 420,520 C 380,580 300,610 200,615 L -20,615 Z";
 
+/**
+ * `observedAt` is naive Vietnam local time (UTC+7, no offset). Parsing it as
+ * UTC lands 7h late, so the offset is subtracted before comparing with now
+ * (same convention as hoursAgoAsObservedAtLocal in lib/dateRange.ts).
+ */
 function formatMinutesAgo(observedAt: string): string {
-  // observedAt is naive Vietnam local time (UTC+7, no offset suffix) --
-  // parsing it with a "Z" suffix gives an instant 7h ahead of its real
-  // UTC instant, so shift that back out before diffing against the real
-  // current time. Same convention as dateRange.ts's hoursAgoAsObservedAtLocal.
   const observedUtcMs = new Date(`${observedAt}Z`).getTime() - VIETNAM_UTC_OFFSET_HOURS * 60 * 60 * 1000;
   const diffMs = Date.now() - observedUtcMs;
   if (Number.isNaN(diffMs)) return "Không rõ thời gian cập nhật";
@@ -33,11 +33,16 @@ function formatMinutesAgo(observedAt: string): string {
   return `Cập nhật ${minutes} phút trước`;
 }
 
+/**
+ * Map of current readings plus a 24h sparkline for the selected location.
+ * Not linked from the sidebar, but still reachable by URL.
+ */
 export default function WeatherPage() {
   const [data, setData] = useState<WeatherResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string>(DEFAULT_LOCATION);
   const [history, setHistory] = useState<WeatherHistoryResponse | null>(null);
+  // Guards against out-of-order history responses when clicking pins quickly.
   const latestSelectedRef = useRef<string>(DEFAULT_LOCATION);
 
   useEffect(() => {
@@ -56,11 +61,11 @@ export default function WeatherPage() {
       .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
       .then(({ ok, body }) => {
         if (latestSelectedRef.current !== selected) return; // superseded by a newer selection
-        if (!ok) return; // history is secondary -- don't blow up the whole page over it
+        if (!ok) return; // secondary: keep the last good sparkline
         setHistory(body);
       })
       .catch(() => {
-        /* history is secondary -- silently keep the last-good sparkline */
+        /* secondary: keep the last good sparkline */
       });
   }, [selected]);
 
@@ -92,6 +97,8 @@ export default function WeatherPage() {
   const minTemp = temps.length ? Math.min(...temps) : 0;
   const maxTemp = temps.length ? Math.max(...temps) : 1;
   const tempRange = maxTemp - minTemp || 1;
+  // Scale into the sparkline's 220x46 viewBox with a few px of inset
+  // (tempRange falls back to 1 so a flat series doesn't divide by zero).
   const sparkPolyline = sparkPoints
     .map((p, i) => {
       const x = sparkPoints.length > 1 ? (i / (sparkPoints.length - 1)) * 216 + 4 : 110;
@@ -122,6 +129,7 @@ export default function WeatherPage() {
             <svg viewBox={`0 0 ${VIEW_BOX.width} ${VIEW_BOX.height}`} className="w-full h-full block">
               <rect x="0" y="0" width={VIEW_BOX.width} height={VIEW_BOX.height} fill="#0A0E16" />
               <path d={LAND_PATH} fill="#111827" />
+              {/* SVG has no z-index: the selected pin is drawn last so its halo and label sit on top. */}
               {[...ranked.filter((loc) => loc.location !== selected), ...ranked.filter((loc) => loc.location === selected)].map((loc) => {
                 const p = projectLatLng(loc, WEATHER_BOUNDS, VIEW_BOX, PADDING);
                 const band = temperatureBand(loc.temperatureC);
@@ -139,7 +147,7 @@ export default function WeatherPage() {
                 );
               })}
             </svg>
-            {/* Decorative chrome only, matching the mockup -- no pan/zoom logic (see plan's Global Constraints) */}
+            {/* Decorative map chrome from the mockup; pan/zoom is intentionally not implemented. */}
             <div className="absolute top-3.5 right-3.5 w-[30px] h-[30px] rounded-lg bg-surface border border-border flex items-center justify-center">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#BCC9CD" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 19V5M5 12l7-7 7 7" />

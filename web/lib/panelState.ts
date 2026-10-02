@@ -6,6 +6,10 @@ export type PanelStorage = {
 const COLLAPSED = "1";
 const EXPANDED = "0";
 
+// Collapsed-panel state persisted in localStorage. Storage is injected (and
+// optional) so this works during SSR and in tests.
+
+/** Defaults to expanded when nothing is stored or storage access throws. */
 export function readPanelCollapsed(storage: PanelStorage | undefined, key: string): boolean {
   try {
     return storage?.getItem(key) === COLLAPSED;
@@ -14,6 +18,7 @@ export function readPanelCollapsed(storage: PanelStorage | undefined, key: strin
   }
 }
 
+/** Best-effort write; failures are swallowed. */
 export function writePanelCollapsed(storage: PanelStorage | undefined, key: string, collapsed: boolean): void {
   try {
     storage?.setItem(key, collapsed ? COLLAPSED : EXPANDED);

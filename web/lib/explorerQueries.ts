@@ -1,6 +1,11 @@
 import { buildSourceVolumeQuery, partitionWhere, type TodayParts } from "./athena";
 import type { SampleQueryGroup } from "./types";
 
+/**
+ * Ready-made Explorer queries, each pinned to the given day's partitions to
+ * keep scans (and Athena cost) small. Must stay read-only SELECTs, since they
+ * are sent back through the same sqlGuard as user-typed SQL.
+ */
 export function buildSampleQueryGroups(parts: TodayParts): SampleQueryGroup[] {
   const { year, month, day } = parts;
   const where = partitionWhere(parts);

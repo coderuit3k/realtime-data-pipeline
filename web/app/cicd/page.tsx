@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { CicdResponse, PipelineStage } from "@/lib/types";
 
+/** Unknown statuses (e.g. "pending") fall through to a neutral style. */
 function stageColor(status: PipelineStage["status"]): { ring: string; bg: string; text: string } {
   if (status === "success") return { ring: "border-success", bg: "bg-success/10", text: "text-success" };
   if (status === "waiting") return { ring: "border-warning", bg: "bg-warning/10", text: "text-warning" };
@@ -13,12 +14,14 @@ function stageColor(status: PipelineStage["status"]): { ring: string; bg: string
   return { ring: "border-border", bg: "bg-surface", text: "text-textMuted" };
 }
 
+/** GitHub reports a null conclusion while a run is still in progress. */
 function conclusionLabel(conclusion: string | null): string {
   if (conclusion === "success") return "apply ok";
   if (conclusion === null) return "đang chạy";
   return conclusion;
 }
 
+/** Compact "3m12s" style; null means GitHub reported no start time. */
 function formatDuration(ms: number | null): string {
   if (ms === null) return "—";
   const totalSeconds = Math.round(ms / 1000);
@@ -27,6 +30,10 @@ function formatDuration(ms: number | null): string {
   return minutes > 0 ? `${minutes}m${seconds}s` : `${seconds}s`;
 }
 
+/**
+ * Latest deploy workflow as a stage timeline plus recent runs. Approval
+ * itself happens on GitHub; this page only links to the waiting run.
+ */
 export default function CicdPage() {
   const [data, setData] = useState<CicdResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -106,6 +113,7 @@ export default function CicdPage() {
                         <path d="M18 6 6 18M6 6l12 12" />
                       </svg>
                     )}
+                    {/* Not-started stages show their step number rather than a status icon. */}
                     {!["success", "in_progress", "waiting", "failure", "cancelled", "skipped"].includes(stage.status) && (
                       <span className={`text-xs font-mono ${colors.text}`}>{i + 1}</span>
                     )}

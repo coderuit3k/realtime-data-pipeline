@@ -1,3 +1,5 @@
+"""Synchronous Athena query helper for the RAG agent and the trend scan."""
+
 import logging
 import time
 from urllib.parse import urlparse
@@ -16,6 +18,7 @@ ATHENA_MAX_POLL_ATTEMPTS = 40  # ~20s cap per query
 
 
 def _athena():
+    """Created on first use and reused across warm Lambda invocations."""
     global _athena_client
     if _athena_client is None:
         _athena_client = boto3.client("athena", region_name=config.AWS_REGION)
@@ -23,6 +26,7 @@ def _athena():
 
 
 def _s3():
+    """Created on first use and reused across warm Lambda invocations."""
     global _s3_client
     if _s3_client is None:
         _s3_client = boto3.client("s3", region_name=config.AWS_REGION)
@@ -30,11 +34,13 @@ def _s3():
 
 
 def _delete_result_metadata(output_location: str) -> None:
-    """Athena writes a `<query-id>.csv.metadata` file alongside every CSV
-    result and has no option to suppress it. GetQueryResults itself reads
-    that file (column info), so this must only run AFTER get_query_results
-    -- deleting earlier makes Athena answer "Could not find results". Best
-    effort: failing to tidy storage must never fail the query's answer."""
+    """Delete the `.csv.metadata` file Athena always writes beside a result.
+
+    Athena has no option to suppress it. Must run only AFTER get_query_results:
+    GetQueryResults reads this file, and deleting it earlier makes Athena answer
+    "Could not find results". Best effort -- a failed cleanup must never fail
+    the query.
+    """
     parsed = urlparse(output_location)
     try:
         _s3().delete_object(Bucket=parsed.netloc, Key=parsed.path.lstrip("/") + ".metadata")
@@ -45,12 +51,12 @@ def _delete_result_metadata(output_location: str) -> None:
 
 
 def run_query(sql: str, max_rows: int = 25) -> tuple[list[dict], bool]:
-    """Runs sql against config.ATHENA_WORKGROUP/config.ATHENA_DATABASE.
-    Returns (rows, truncated) -- rows as column-name-keyed dicts,
-    truncated True if more rows existed than max_rows. Raises
-    RuntimeError if the Athena query fails or times out. Does not
-    validate sql -- callers passing untrusted SQL must guard it
-    themselves first."""
+    """Run sql and return (rows, truncated), rows as column-name-keyed dicts.
+
+    truncated is True when more than max_rows rows existed. Raises RuntimeError
+    if the query fails or times out. Does NOT validate sql: callers passing
+    untrusted SQL must run it through common.sql_guard first.
+    """
     client = _athena()
     execution_id = client.start_query_execution(
         QueryString=sql,
@@ -71,9 +77,8 @@ def run_query(sql: str, max_rows: int = 25) -> tuple[list[dict], bool]:
     else:
         raise RuntimeError("Athena query timed out waiting for SUCCEEDED state")
 
-    # MaxResults counts the header row, so ask for max_rows+2 (header + up to
-    # max_rows+1 data rows) -- seeing that extra (max_rows+1)-th data row is
-    # what proves more data existed than max_rows allows through.
+    # MaxResults counts the header row: +1 for the header, +1 for a probe row
+    # whose presence is the only way to know the result was truncated.
     results = client.get_query_results(QueryExecutionId=execution_id, MaxResults=max_rows + 2)
     _delete_result_metadata(execution["ResultConfiguration"]["OutputLocation"])
     result_set = results["ResultSet"]

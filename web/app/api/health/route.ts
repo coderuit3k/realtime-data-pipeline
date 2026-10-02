@@ -6,6 +6,10 @@ import type { HealthResponse, SourceVolume } from "@/lib/types";
 
 export const maxDuration = 60;
 
+/**
+ * Lightweight status check: how many sources ingested data today (UTC), plus
+ * region and environment labels. Runs one Athena query, cached for 60s.
+ */
 export async function GET() {
   try {
     const parts = todayUtcParts();

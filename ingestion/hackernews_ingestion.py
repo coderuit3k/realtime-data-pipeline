@@ -1,3 +1,5 @@
+"""Lambda: ingests stories from a Hacker News feed (config.HN_FEED)."""
+
 import logging
 from datetime import datetime, timezone
 
@@ -14,6 +16,7 @@ HN_BASE_URL = "https://hacker-news.firebaseio.com/v0"
 
 
 def normalize_story(item: dict) -> dict:
+    """Map an HN item to the raw hackernews record; self-posts have text but no url."""
     return {
         "story_id": str(item["id"]),
         "source": "hackernews",
@@ -30,12 +33,14 @@ def normalize_story(item: dict) -> dict:
 
 
 def fetch_item(session: requests.Session, item_id: int) -> dict | None:
+    """Fetch one item; deleted/dead items come back as None."""
     response = session.get(f"{HN_BASE_URL}/item/{item_id}.json", timeout=10)
     response.raise_for_status()
     return response.json()
 
 
 def fetch_new_stories(limit: int) -> list[dict]:
+    """Fetch the feed's first `limit` ids, then each item concurrently (one request per id)."""
     session = make_session(config.INGESTION_FETCH_WORKERS)
     response = session.get(f"{HN_BASE_URL}/{config.HN_FEED}.json", timeout=10)
     response.raise_for_status()
@@ -44,12 +49,13 @@ def fetch_new_stories(limit: int) -> list[dict]:
     items = map_concurrently(
         lambda story_id: fetch_item(session, story_id), story_ids, config.INGESTION_FETCH_WORKERS
     )
-    # Deleted/dead items come back as None; "job"/"comment"/"poll" show up
-    # in some feeds too -- only "story" items match our schema.
+    # Feeds also carry deleted/dead items (None) and job/comment/poll entries;
+    # only "story" items match the schema.
     return [normalize_story(item) for item in items if item and item.get("type") == "story"]
 
 
 def lambda_handler(event, context):
+    """Scheduled entry point: fetch stories and write them to the raw zone."""
     stories = fetch_new_stories(config.HN_STORY_LIMIT)
     key = write_records("hackernews", stories, "story_id")
     logger.info("Wrote %d records to %s", len(stories), key)

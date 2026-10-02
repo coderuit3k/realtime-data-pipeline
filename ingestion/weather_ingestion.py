@@ -1,3 +1,5 @@
+"""Lambda: ingests current conditions from Open-Meteo for config.WEATHER_LOCATIONS."""
+
 import logging
 from datetime import datetime, timezone
 
@@ -15,27 +17,24 @@ CURRENT_FIELDS = "temperature_2m,relative_humidity_2m,precipitation,weather_code
 
 
 def _as_float(value) -> float | None:
+    """float() that passes None through (missing fields stay null)."""
     return None if value is None else float(value)
 
 
 def normalize_current(location: dict, payload: dict) -> dict:
+    """Map an Open-Meteo `current` block to the raw weather record."""
     current = payload.get("current") or {}
     observed_at = current.get("time")
     return {
-        # Open-Meteo has no stable reading id -- location + observed timestamp
-        # together are unique per fetch.
+        # Open-Meteo has no reading id; location + observed timestamp is unique.
         "weather_id": f"{location['name']}-{observed_at}",
         "source": "weather",
         "location": location["name"],
         "latitude": float(location["latitude"]),
         "longitude": float(location["longitude"]),
-        # Explicit float() -- Open-Meteo returns relative_humidity_2m as a
-        # JSON int, and if every reading in a batch happens to be a whole
-        # number, pandas infers int64 for the column. The Glue table declares
-        # these "double", and Athena's Parquet reader rejects an INT64
-        # physical type against a DOUBLE schema column (verified live:
-        # HIVE_BAD_DATA on a real query). Forcing float here keeps the
-        # written column type stable regardless of the values in any batch.
+        # Force float: Open-Meteo sends humidity as a JSON int, and an all-int
+        # batch makes pandas write INT64 Parquet, which Athena rejects against
+        # the Glue "double" column (HIVE_BAD_DATA, seen on a live query).
         "temperature_c": _as_float(current.get("temperature_2m")),
         "humidity_pct": _as_float(current.get("relative_humidity_2m")),
         "precipitation_mm": _as_float(current.get("precipitation")),
@@ -47,6 +46,7 @@ def normalize_current(location: dict, payload: dict) -> dict:
 
 
 def fetch_location(session: requests.Session, location: dict) -> dict:
+    """Fetch and normalize current conditions for one location."""
     params = {
         "latitude": location["latitude"],
         "longitude": location["longitude"],
@@ -59,6 +59,7 @@ def fetch_location(session: requests.Session, location: dict) -> dict:
 
 
 def fetch_weather() -> list[dict]:
+    """Fetch every location concurrently; any single failure fails the run."""
     session = make_session(config.INGESTION_FETCH_WORKERS)
     return map_concurrently(
         lambda location: fetch_location(session, location),
@@ -68,6 +69,7 @@ def fetch_weather() -> list[dict]:
 
 
 def lambda_handler(event, context):
+    """Scheduled entry point: fetch weather and write it to the raw zone."""
     records = fetch_weather()
     key = write_records("weather", records, "weather_id")
     logger.info("Wrote %d records to %s", len(records), key)

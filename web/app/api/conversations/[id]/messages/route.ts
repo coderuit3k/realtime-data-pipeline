@@ -16,6 +16,7 @@ function toMessageJSON(row: MessageRow) {
   };
 }
 
+/** Message history of one conversation; 404 unless it belongs to the caller's session. Not CDN-cached (per-session data). */
 export async function GET(request: NextRequest, { params }: RouteContext) {
   const sessionId = getSessionIdHeader(request.headers);
   if (!sessionId) {

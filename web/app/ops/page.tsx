@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { OpsResponse, CostResponse } from "@/lib/types";
 
+/** Hours are the largest unit: Lambda health only covers the last 24h. */
 function relativeTime(iso: string | null, now: Date = new Date()): string {
   if (!iso) return "chưa có dữ liệu";
   const diffMs = now.getTime() - new Date(iso).getTime();
@@ -25,6 +26,7 @@ function statusLabel(status: string): string {
   return "● Chưa chạy";
 }
 
+/** CloudWatch lines carry no structured level, so infer it from the text; WARNING folds into WARN. */
 function detectLogLevel(message: string): "ERROR" | "WARN" | "INFO" {
   const match = message.match(/\b(ERROR|WARN(?:ING)?|INFO)\b/);
   if (!match) return "INFO";
@@ -37,6 +39,11 @@ function logLevelColor(level: "ERROR" | "WARN" | "INFO"): string {
   return "text-accent";
 }
 
+/**
+ * Lambda health, schedule, alarms, logs and cost. Not linked from the sidebar
+ * (the dashboard covers it) but still reachable by URL. Cost is fetched
+ * separately so a failing Cost Explorer call never blocks the page.
+ */
 export default function OpsPage() {
   const [data, setData] = useState<OpsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +72,7 @@ export default function OpsPage() {
         if (ok && typeof body?.monthToDateCostUsd === "number") setCost(body);
       })
       .catch(() => {
-        /* cost is secondary -- never block the page over it */
+        /* secondary: the cost card just shows "—" */
       });
   }, []);
 

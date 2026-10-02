@@ -3,6 +3,11 @@ import type { CatalogColumn } from "./types";
 
 type BareTable = { name: string; columns: CatalogColumn[]; location: string };
 
+/**
+ * Tables in the Glue database with their columns, partition keys appended last
+ * (Glue lists them separately but they are queryable like regular columns).
+ * Only the first GetTables page is read.
+ */
 export async function listCuratedTables(client: GlueClient, database: string): Promise<BareTable[]> {
   const response = await client.send(new GetTablesCommand({ DatabaseName: database }));
   return (response.TableList ?? []).map((table) => ({

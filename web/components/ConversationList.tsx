@@ -4,6 +4,11 @@ import { useState } from "react";
 import type { ConversationJSON } from "@/lib/conversations";
 import { PanelToggleButton } from "./PanelToggleButton";
 
+/**
+ * Conversation sidebar for the assistant page, with inline rename and a
+ * two-click delete (first click arms, second confirms). Collapses to a rail
+ * that still offers "new conversation" and an error dot via `hasError`.
+ */
 export function ConversationList({
   conversations,
   selectedId,
@@ -34,6 +39,7 @@ export function ConversationList({
     setEditingTitle(conversation.title);
   }
 
+  // Runs on both Enter and blur; a blank title cancels instead of renaming.
   function commitEditing() {
     const trimmed = editingTitle.trim();
     if (editingId && trimmed) {
@@ -90,6 +96,7 @@ export function ConversationList({
             }`}
             onClick={() => onSelect(c.id)}
           >
+            {/* Controls inside the row stop propagation so they don't also select the conversation. */}
             {editingId === c.id ? (
               <input
                 autoFocus

@@ -53,12 +53,9 @@ const NAV_LINKS: NavLink[] = [
   },
 ];
 
-// Temporary secondary nav for pages the 4-item IA collapse (an earlier
-// task on this branch) silently dropped: /cicd, /explorer, and
-// /insights are real, fully-working pages with real data -- not part of
-// the intentional settings/weather removal. Keep them reachable here
-// until later sub-projects fold their content into the 4-item IA, then
-// delete this group.
+// Working pages that fell outside the 4-item main nav. They stay reachable
+// here until their content is folded into the main pages; /settings and
+// /weather were dropped from the nav on purpose and are not listed.
 const LEGACY_LINKS: NavLink[] = [
   {
     href: "/cicd",
@@ -104,6 +101,7 @@ const LEGACY_LINKS: NavLink[] = [
   },
 ];
 
+/** When collapsed only the icon shows, so the label moves to aria-label/title. */
 function SidebarLink({ link, active, collapsed }: { link: NavLink; active: boolean; collapsed: boolean }) {
   return (
     <Link
@@ -125,6 +123,7 @@ function SidebarLink({ link, active, collapsed }: { link: NavLink; active: boole
   );
 }
 
+/** App-wide navigation; the collapsed state is remembered in localStorage. */
 export default function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
@@ -132,6 +131,8 @@ export default function Sidebar() {
   // visitor with a collapsed sidebar doesn't watch it slide shut on load.
   const [ready, setReady] = useState(false);
 
+  // localStorage is read in an effect, not during render, to keep the
+  // server-rendered markup and the first client render identical.
   useEffect(() => {
     setCollapsed(readPanelCollapsed(window.localStorage, SIDEBAR_COLLAPSED_KEY));
     const frame = requestAnimationFrame(() => setReady(true));

@@ -7,14 +7,14 @@ export type DataSourceMeta = {
   usesNewsSchedule: boolean;
 };
 
-// CRYPTO_COIN_IDS: verbatim from common/config.py.
+// Mirrors of Python config with no runtime cross-check: keep in sync with
+// common/config.py by hand.
 const CRYPTO_COIN_IDS = ["bitcoin", "ethereum", "solana"];
 
-// NEWS_QUERY default: common/config.py. GITHUB_TRENDING_DAYS/LIMIT:
-// common/config.py (7 / 20). GitHub's real unauthenticated Search API
-// rate limit (10 req/min) is documented by GitHub itself, not this
-// repo's code -- ingestion/github_trending_ingestion.py calls
-// GET /search/repositories, the Search endpoint this limit applies to.
+// Display metadata for the 5 UI-facing ingestion sources. Details come from
+// common/config.py (NEWS_QUERY, GITHUB_TRENDING_DAYS=7, GITHUB_TRENDING_LIMIT=20);
+// the 10 req/min figure is GitHub's documented unauthenticated Search API limit.
+// `usesNewsSchedule` marks sources driven by the separate news EventBridge rule.
 export const DATA_SOURCES: DataSourceMeta[] = [
   {
     id: "hackernews",
@@ -48,4 +48,5 @@ export const DATA_SOURCES: DataSourceMeta[] = [
   },
 ];
 
+// Display names only; order must match the secret lookups in app/api/settings/route.ts.
 export const SECRET_LABELS = ["news-api-key", "tavily-api-key"];

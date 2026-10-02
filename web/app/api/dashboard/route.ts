@@ -25,6 +25,11 @@ import type { DashboardResponse, SourceVolume, ActivityItem } from "@/lib/types"
 
 export const maxDuration = 60;
 
+/**
+ * Everything the Dashboard shows, fetched in parallel in one request. A single
+ * failing source fails the whole response (Promise.all). CDN-cached for 60s,
+ * which also caps how often the Athena queries run.
+ */
 export async function GET() {
   try {
     const parts = todayUtcParts();
@@ -75,6 +80,7 @@ export async function GET() {
     }));
 
     const recordsToday = sourceVolumes.reduce((sum, s) => sum + s.records, 0);
+    // "Healthy" = ingested at least one record today (UTC).
     const sourcesHealthy = sourceVolumes.filter((s) => s.records > 0).length;
 
     const response: DashboardResponse = {

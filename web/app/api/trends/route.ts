@@ -7,6 +7,7 @@ import type { TrendsResponse } from "@/lib/types";
 
 export const maxDuration = 60;
 
+/** Trend events from the last 90 days of partitions, newest first. */
 export async function GET() {
   try {
     const partsList = lastNDaysUtcParts(90);

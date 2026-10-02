@@ -4,6 +4,7 @@ import { renameConversation, deleteConversation, toConversationJSON, getSessionI
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+/** Renames a conversation; 404 (not 403) for another session's id so ids can't be probed. */
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
   const sessionId = getSessionIdHeader(request.headers);
   if (!sessionId) {
@@ -35,6 +36,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   }
 }
 
+/** Deletes a conversation (messages cascade in the DB); 404 if not the caller's. */
 export async function DELETE(request: NextRequest, { params }: RouteContext) {
   const sessionId = getSessionIdHeader(request.headers);
   if (!sessionId) {

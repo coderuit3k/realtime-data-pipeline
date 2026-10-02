@@ -3,6 +3,10 @@ import { GetMetricDataCommand, type CloudWatchClient } from "@aws-sdk/client-clo
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 const PERIOD_SECONDS = 3600;
 
+/**
+ * Mean of the hourly TotalExecutionTime averages over the last 24h, in ms.
+ * Returns null when the workgroup ran no queries (CloudWatch has no datapoints).
+ */
 export async function getAthenaAvgQueryTimeMs(client: CloudWatchClient, workgroup: string): Promise<number | null> {
   const now = new Date();
   const response = await client.send(

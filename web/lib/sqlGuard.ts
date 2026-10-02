@@ -3,6 +3,12 @@ export type SqlGuardResult = { ok: true } | { ok: false; reason: string };
 const FORBIDDEN_KEYWORDS =
   /\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|GRANT|REVOKE|TRUNCATE|MERGE|UNLOAD|VACUUM|CALL)\b/i;
 
+/**
+ * First-line check for Explorer SQL: a single statement starting with SELECT or
+ * WITH and containing no write/DDL keyword. It is deliberately strict (a
+ * forbidden word inside a string literal is rejected too) and is not the only
+ * barrier: the web app's read-only IAM user (infra/README.md) is the real enforcement.
+ */
 export function validateReadOnlySelect(sql: string): SqlGuardResult {
   const trimmed = sql.trim();
 

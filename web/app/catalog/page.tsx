@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { CatalogTable, CicdResponse, PipelineStage, CostBreakdownEntry } from "@/lib/types";
 import { ArchitectureFlow } from "@/components/ArchitectureFlow";
 
+/** Tells the viewer whether the RAG assistant can answer questions about this table. */
 function badgeLabel(table: CatalogTable): string {
   return table.ragIndexed ? "RAG indexed" : "không vào RAG";
 }
@@ -17,6 +18,7 @@ function stageIconColor(status: PipelineStage["status"]): string {
   return "text-textMuted";
 }
 
+/** Compact status icon for the CI/CD summary card. */
 function StageIcon({ status }: { status: PipelineStage["status"] }) {
   const color = stageIconColor(status);
   if (status === "success") {
@@ -48,12 +50,9 @@ function StageIcon({ status }: { status: PipelineStage["status"] }) {
       </svg>
     );
   }
-  // "pending" (a stage that hasn't started yet, e.g. a later stage while an
-  // earlier one still runs) and any other status this codebase's
-  // PipelineStage type doesn't otherwise recognize -- a neutral "not
-  // started" dot, never the X-mark, so a pending stage never misreads as
-  // failed/cancelled (matches app/cicd/page.tsx's numbered-badge fallback
-  // intent for the same set of statuses).
+  // "pending" (not started yet) and anything unrecognised get a neutral dot,
+  // never the X-mark, so a queued stage can't be misread as failed. Same
+  // intent as the numbered badge on the CI/CD page.
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" className={`${color} flex-shrink-0`}>
       <circle cx="12" cy="12" r="4" />
@@ -61,6 +60,11 @@ function StageIcon({ status }: { status: PipelineStage["status"] }) {
   );
 }
 
+/**
+ * Architecture overview plus the Glue Data Catalog browser. Only the catalog
+ * fetch is blocking; the CI/CD and cost cards load independently and keep a
+ * loading placeholder if their requests fail.
+ */
 export default function CatalogPage() {
   const [tables, setTables] = useState<CatalogTable[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +79,7 @@ export default function CatalogPage() {
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Không tải được Data Catalog.");
       setTables(body);
-      setSelected((current) => current ?? body[0]?.name ?? null);
+      setSelected((current) => current ?? body[0]?.name ?? null); // keep the selection across retries
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không tải được Data Catalog.");
     }
@@ -92,7 +96,7 @@ export default function CatalogPage() {
         if (ok) setCicd(body);
       })
       .catch(() => {
-        /* CI/CD summary is secondary -- never block the catalog page over it */
+        /* secondary: the card stays on its placeholder */
       });
   }, []);
 
@@ -103,7 +107,7 @@ export default function CatalogPage() {
         if (ok && Array.isArray(body?.costBreakdown)) setCostBreakdown(body.costBreakdown);
       })
       .catch(() => {
-        /* cost breakdown is secondary -- never block the catalog page over it */
+        /* secondary: the card stays on its placeholder */
       });
   }, []);
 

@@ -28,23 +28,18 @@ type RawAgentPayload = {
   sources: AssistantSource[];
 };
 
-// Bounds how much prior conversation gets re-sent as context on every
-// follow-up turn -- otherwise a long-running conversation would make each
-// later question progressively more expensive (and eventually blow past
-// rag_agent's own MAX_QUESTION_LENGTH-adjacent token budget) for no benefit,
-// since only the last few turns are usually relevant to a follow-up.
+// Caps the history re-sent on each follow-up so long conversations don't grow
+// every request's token cost; only the last few turns matter for a follow-up.
 const MAX_CONTEXT_TURNS = 4;
 const MAX_CONTEXT_ANSWER_LENGTH = 400;
 
 export type PriorTurn = { question: string; answer: string };
 
 /**
- * Prefixes `question` with the last few turns of `priorMessages` so a
- * follow-up like "why those two days?" carries enough context for
- * rag_agent (which is stateless -- see rag/agent.py lambda_handler) to
- * resolve "those two days" itself. Returns `question` unchanged when there
- * is no prior history, so a fresh conversation's first turn -- and the
- * DynamoDB answer cache's lookup key for it -- is unaffected.
+ * Prefixes the question with recent turns, because rag_agent is stateless and
+ * cannot otherwise resolve follow-ups like "why those two days?".
+ * With no history the question is returned unchanged, so first turns keep
+ * hitting rag_agent's DynamoDB answer cache under the same key.
  */
 export function buildContextualQuestion(question: string, priorMessages: PriorTurn[]): string {
   if (priorMessages.length === 0) return question;
@@ -61,6 +56,7 @@ export function buildContextualQuestion(question: string, priorMessages: PriorTu
   );
 }
 
+/** Maps rag_agent's snake_case Lambda payload to the camelCase API shape, defaulting missing arrays. */
 export function normalizeAssistantResult(raw: unknown): AssistantResult {
   const payload = raw as RawAgentPayload;
   return {

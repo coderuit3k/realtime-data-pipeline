@@ -3,6 +3,10 @@ import { requiredEnv } from "@/lib/aws";
 import { todayUtcParts } from "@/lib/athena";
 import { buildSampleQueryGroups } from "@/lib/explorerQueries";
 
+/**
+ * Sample queries for today's partitions plus the workgroup/database names shown
+ * in the UI. Cached for only 60s so the embedded date rolls over soon after midnight UTC.
+ */
 export async function GET() {
   try {
     const workgroup = requiredEnv("ATHENA_WORKGROUP");

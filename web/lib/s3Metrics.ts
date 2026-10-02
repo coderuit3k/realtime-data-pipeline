@@ -1,12 +1,12 @@
 import { GetMetricDataCommand, type CloudWatchClient } from "@aws-sdk/client-cloudwatch";
 import type { StorageStats } from "./types";
 
-// S3 storage metrics (BucketSizeBytes, NumberOfObjects) publish once per
-// day, not in real time -- a 2-day window guarantees at least one real
-// datapoint even right after UTC midnight before today's has landed.
+// S3 storage metrics are published only once a day, so a 2-day window
+// guarantees at least one datapoint even before today's has landed.
 const WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
 const PERIOD_SECONDS = 86400;
 
+// GetMetricData doesn't guarantee chronological order, so pick by timestamp.
 function latestValue(values: number[], timestamps: Date[]): number | null {
   if (values.length === 0) return null;
   let latestIndex = 0;
@@ -16,6 +16,11 @@ function latestValue(values: number[], timestamps: Date[]): number | null {
   return Math.round(values[latestIndex]);
 }
 
+/**
+ * Latest bucket size and object count from CloudWatch, without listing objects.
+ * Size counts STANDARD storage only; S3 requires a StorageType dimension and
+ * reports object counts under AllStorageTypes. Null means no datapoint yet.
+ */
 export async function getBucketStorageStats(client: CloudWatchClient, bucketName: string): Promise<StorageStats> {
   const now = new Date();
   const response = await client.send(

@@ -3,14 +3,10 @@ import localFont from "next/font/local";
 import Sidebar from "@/components/Sidebar";
 import "./globals.css";
 
-// Self-hosted (not next/font/google) -- the CI runner's build step hit a
-// recurring `next/font/google` crash ("Cannot read properties of null
-// (reading '1')" in @next/font's loader) fetching from Google's font API,
-// while local builds and Vercel's own build both succeeded every time.
-// Vendoring the exact same files Google serves removes that build-time
-// network dependency entirely. Each entry below points at the same
-// variable-font file with a different `weight`, matching how Google's own
-// served CSS declares multiple weights against one variable file.
+// Self-hosted instead of next/font/google: fetching from Google's font API
+// crashed the CI build intermittently ("Cannot read properties of null
+// (reading '1')"), so the same files are vendored to remove that network
+// dependency. Every weight points at one variable font, as Google's own CSS does.
 const inter = localFont({
   src: [
     { path: "./fonts/Inter-Variable.woff2", weight: "400" },
@@ -26,6 +22,7 @@ export const metadata: Metadata = {
   description: "Real-time data pipeline dashboard & RAG assistant",
 };
 
+/** Root shell: persistent sidebar beside a scrollable content area. UI copy is Vietnamese, hence lang="vi". */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi" className={inter.variable}>

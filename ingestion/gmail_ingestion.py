@@ -1,3 +1,9 @@
+"""Lambda: ingests the latest Gmail messages and archives the raw .eml to Cloudflare R2.
+
+Only metadata (subject, sender, short snippet) goes to the raw S3 zone; the full
+message lives in R2.
+"""
+
 import base64
 import logging
 from datetime import datetime, timezone
@@ -21,6 +27,7 @@ GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1/users/me"
 
 
 def _safe_decode(raw_bytes: bytes, charset: str | None) -> str:
+    """Decode with the declared charset, falling back to UTF-8 when it is bogus or unknown."""
     try:
         return raw_bytes.decode(charset or "utf-8", errors="replace")
     except (LookupError, TypeError):
@@ -28,6 +35,7 @@ def _safe_decode(raw_bytes: bytes, charset: str | None) -> str:
 
 
 def _decode_header_value(raw_value: str | None) -> str:
+    """Decode RFC 2047 encoded-words (e.g. =?UTF-8?B?...?=) into plain text."""
     if not raw_value:
         return ""
     parts = decode_header(raw_value)
@@ -38,6 +46,7 @@ def _decode_header_value(raw_value: str | None) -> str:
 
 
 def _extract_snippet(parsed_email, max_len: int = 200) -> str:
+    """First max_len chars of the first text/plain part; "" for HTML-only mail."""
     if parsed_email.is_multipart():
         for part in parsed_email.walk():
             if part.get_content_type() == "text/plain":
@@ -51,6 +60,7 @@ def _extract_snippet(parsed_email, max_len: int = 200) -> str:
 
 
 def get_access_token(creds: dict) -> str:
+    """Exchange the stored OAuth refresh token for a short-lived access token."""
     response = requests.post(
         GMAIL_TOKEN_URL,
         data={
@@ -66,10 +76,11 @@ def get_access_token(creds: dict) -> str:
 
 
 def archive_to_r2(client, bucket: str, message_id: str, raw_bytes: bytes) -> None:
+    """Upload the raw message unless an earlier run already archived it."""
     key = f"messages/{message_id}.eml"
     try:
         client.head_object(Bucket=bucket, Key=key)
-        return  # already archived in a prior run -- skip re-upload
+        return
     except ClientError as error:
         if error.response.get("Error", {}).get("Code") not in ("404", "NoSuchKey"):
             raise
@@ -77,6 +88,8 @@ def archive_to_r2(client, bucket: str, message_id: str, raw_bytes: bytes) -> Non
 
 
 def normalize_message(message_id: str, raw_response: dict) -> tuple[bytes, dict]:
+    """Return (raw .eml bytes, raw gmail record) for a format=raw API response."""
+    # The payload may lack base64 padding; surplus "=" is ignored by the decoder.
     raw_bytes = base64.urlsafe_b64decode(raw_response["raw"] + "==")
     parsed = message_from_bytes(raw_bytes)
 
@@ -100,6 +113,7 @@ def normalize_message(message_id: str, raw_response: dict) -> tuple[bytes, dict]
 
 
 def fetch_message_ids(access_token: str, limit: int) -> list[str]:
+    """Ids of the newest `limit` messages in the mailbox."""
     response = requests.get(
         f"{GMAIL_API_BASE}/messages",
         params={"maxResults": limit},
@@ -111,6 +125,7 @@ def fetch_message_ids(access_token: str, limit: int) -> list[str]:
 
 
 def fetch_raw_message(access_token: str, message_id: str) -> dict:
+    """Fetch one message in format=raw (the full RFC 822 source, base64url-encoded)."""
     response = requests.get(
         f"{GMAIL_API_BASE}/messages/{message_id}",
         params={"format": "raw"},
@@ -122,9 +137,12 @@ def fetch_raw_message(access_token: str, message_id: str) -> dict:
 
 
 def get_r2_client(creds: dict):
-    # R2 doesn't support the AWS-specific checksum headers botocore >=1.36 sends
-    # by default (e.g. x-amz-checksum-crc32), which makes PutObject fail against
-    # non-AWS S3-compatible endpoints unless we opt back into the old behavior.
+    """S3 client pointed at Cloudflare R2.
+
+    The "when_required" checksum settings are needed: botocore >=1.36 sends
+    AWS-only checksum headers (x-amz-checksum-crc32) by default, which R2
+    rejects, failing every PutObject.
+    """
     return boto3.client(
         "s3",
         endpoint_url=f"https://{creds['r2_account_id']}.r2.cloudflarestorage.com",
@@ -139,6 +157,11 @@ def get_r2_client(creds: dict):
 
 
 def fetch_and_archive_messages() -> list[dict]:
+    """Fetch, normalize and archive the latest messages; returns their records.
+
+    A message that fails to fetch is skipped, but an R2 archive failure still
+    keeps its record -- losing the archive copy shouldn't drop the metadata.
+    """
     creds = get_secret(config.GMAIL_SECRET_NAME)
     access_token = get_access_token(creds)
     r2_client = get_r2_client(creds)
@@ -160,6 +183,7 @@ def fetch_and_archive_messages() -> list[dict]:
 
 
 def lambda_handler(event, context):
+    """Scheduled entry point: ingest the latest messages into the raw zone."""
     records = fetch_and_archive_messages()
     key = write_records("gmail", records, "message_id")
     logger.info("Wrote %d records to %s", len(records), key)

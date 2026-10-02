@@ -4,6 +4,8 @@ import type { CicdResponse, PipelineStage, GithubJob, GithubRun } from "@/lib/ty
 
 export const maxDuration = 60;
 
+// Collapses GitHub's separate status/conclusion fields into one stage status.
+// A missing job (workflow never ran) shows as pending.
 function jobStatus(job: GithubJob | undefined): PipelineStage["status"] {
   if (!job) return "pending";
   if (job.status === "completed") {
@@ -17,6 +19,8 @@ function jobStatus(job: GithubJob | undefined): PipelineStage["status"] {
   return "pending";
 }
 
+// The manual approval gate isn't a job of its own (it's the apply job's
+// `environment: production` protection), so its stage is inferred from apply.
 function buildStages(
   lintJob: GithubJob | undefined,
   planJob: GithubJob | undefined,
@@ -32,13 +36,12 @@ function buildStages(
     approvalStatus = "waiting";
     applyStatus = "pending";
   } else if (applyJob.status === "completed" && applyJob.conclusion === "skipped") {
-    // apply's `needs: plan` dependency failed, so apply never ran and the
-    // approval gate was never reached -- not the same as "passed"
+    // plan failed, so apply was skipped and the gate was never reached.
     approvalStatus = "pending";
     applyStatus = "skipped";
   } else if (applyJob.status === "completed" && applyJob.conclusion === "cancelled") {
-    // cancelled while waiting on the gate or while applying -- GitHub's
-    // API gives no way to tell which, so never claim the gate passed
+    // Cancelled at the gate or mid-apply; the API can't tell which, so never
+    // claim the gate passed.
     approvalStatus = "cancelled";
     applyStatus = "cancelled";
   } else {
@@ -54,11 +57,17 @@ function buildStages(
   ];
 }
 
+// Approximate: for a finished run updated_at is effectively its end time.
 function toDurationMs(run: GithubRun): number | null {
   if (!run.runStartedAt) return null;
   return new Date(run.updatedAt).getTime() - new Date(run.runStartedAt).getTime();
 }
 
+/**
+ * Pipeline view of the latest ci.yml + deploy.yml runs plus recent deploys.
+ * Cached briefly (30s) so a running pipeline still looks live without each
+ * visitor spending GitHub API quota.
+ */
 export async function GET() {
   try {
     const [ciRun, deployRun] = await Promise.all([

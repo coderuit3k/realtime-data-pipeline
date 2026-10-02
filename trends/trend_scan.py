@@ -1,3 +1,8 @@
+"""Lambda: daily scan for keywords trending on GitHub, Hacker News and the news at once.
+
+Results land in the curated zone as trend_events Parquet.
+"""
+
 import logging
 import os
 import uuid
@@ -15,6 +20,7 @@ _s3_client = None
 
 
 def _s3():
+    """Created on first use and reused across warm Lambda invocations."""
     global _s3_client
     if _s3_client is None:
         _s3_client = boto3.client("s3", region_name=config.AWS_REGION)
@@ -22,12 +28,13 @@ def _s3():
 
 
 def build_detection_query(year: str, month: str, day: str) -> str:
-    """One fixed, Lambda-authored query -- not user/LLM input, so
-    validate_read_only_select does not apply here. Exact keyword-token
-    matching via UNNEST/split (not the substring-POSITION() style some
-    existing Insights queries use), and distinct item ids per keyword
-    (not raw row counts -- ingestion re-ingests the same story/article
-    across its ~48 runs/day)."""
+    """Build the SQL finding keywords present in all three sources on the given day.
+
+    Fixed, Lambda-authored SQL (no user/LLM input), so sql_guard isn't needed.
+    Matches whole keyword tokens via UNNEST(split(...)), not substrings, and
+    counts DISTINCT item ids because ingestion re-ingests the same story or
+    article across its ~48 runs a day.
+    """
     where = f"year='{year}' AND month='{month}' AND day='{day}' AND k <> ''"
     return f"""WITH gh AS (
   SELECT DISTINCT repo_id AS item_id, k AS keyword
@@ -63,6 +70,7 @@ LIMIT {config.TREND_MAX_EVENTS_PER_DAY}"""
 
 
 def build_curated_key(ts: datetime) -> str:
+    """Day-partitioned key; the random suffix keeps same-second writes apart."""
     return (
         f"source=trend_events/year={ts:%Y}/month={ts:%m}/day={ts:%d}/"
         f"{ts:%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:8]}.parquet"
@@ -70,10 +78,11 @@ def build_curated_key(ts: datetime) -> str:
 
 
 def write_trend_events(rows: list[dict], event_date: str, now: datetime | None = None) -> str:
-    """Athena's GetQueryResults returns every cell as a string regardless
-    of the underlying Glue column type -- github_count/hn_count/news_count
-    must be cast to int before they reach the DataFrame, or the written
-    Parquet column ends up string-typed instead of numeric."""
+    """Write detected events as one Parquet file and return its key ("" if none).
+
+    GetQueryResults returns every cell as a string, so the counts are cast to
+    int here -- otherwise the Parquet columns would be written as strings.
+    """
     if not rows:
         return ""
 
@@ -111,6 +120,7 @@ def write_trend_events(rows: list[dict], event_date: str, now: datetime | None =
 
 
 def lambda_handler(event, context):
+    """Daily entry point: detect today's (UTC) trend events and write them."""
     now = datetime.now(timezone.utc)
     event_date = now.strftime("%Y-%m-%d")
     sql = build_detection_query(now.strftime("%Y"), now.strftime("%m"), now.strftime("%d"))

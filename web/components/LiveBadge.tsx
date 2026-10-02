@@ -9,6 +9,7 @@ const STATUS_CONFIG = {
   idle: { dot: "bg-textMuted", text: "text-textMuted", pulse: false, defaultLabel: "CHƯA CHẠY" },
 } as const;
 
+/** Coloured status dot plus label; only the "ok" state pulses, so failures read as static. */
 export function LiveBadge({ status, label }: LiveBadgeProps) {
   const config = STATUS_CONFIG[status];
   return (

@@ -18,9 +18,14 @@ import type { InsightsResponse } from "@/lib/types";
 
 export const maxDuration = 60;
 
+/**
+ * All Insights cards for `?range=today|7d` as 10 parallel Athena queries.
+ * Weather is always today's snapshot regardless of range.
+ */
 export async function GET(request: NextRequest) {
   try {
     const rangeParam = request.nextUrl.searchParams.get("range");
+    // Anything other than "7d" falls back to today, so the param never reaches SQL.
     const range = rangeParam === "7d" ? "7d" : "today";
     const partsList = lastNDaysUtcParts(range === "7d" ? 7 : 1);
     const athena = getAthenaClient();

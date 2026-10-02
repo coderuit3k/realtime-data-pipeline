@@ -1,5 +1,10 @@
 import type { ActivityItem } from "@/lib/types";
 
+/**
+ * Today's most recent ingested records, one line per item. Thumbnails come
+ * from third-party URLs, so a broken one hides itself instead of showing a
+ * broken-image icon.
+ */
 export function ActivityFeed({ items }: { items: ActivityItem[] }) {
   return (
     <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md p-6 flex flex-col gap-3">

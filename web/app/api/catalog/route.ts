@@ -6,6 +6,10 @@ import type { CatalogTable } from "@/lib/types";
 
 export const maxDuration = 60;
 
+/**
+ * Glue tables merged with the hand-maintained CATALOG_META. Schemas change only
+ * on deploy, so responses are CDN-cached for 5 minutes.
+ */
 export async function GET() {
   try {
     const database = requiredEnv("ATHENA_DATABASE");
@@ -18,16 +22,15 @@ export async function GET() {
         name: table.name,
         location: table.location,
         columns: table.columns.map((col) => {
-          // col.note is the Glue column's own comment (its general meaning,
-          // set in infra/glue.tf); columnNotes is a specific operational
-          // caveat about that column (e.g. a data-quality workaround) --
-          // show both when present instead of one clobbering the other.
+          // Glue's column comment (meaning) and CATALOG_META's note (an
+          // operational caveat) are complementary, so show both when present.
           const metaNote = meta?.columnNotes?.[col.name];
           const note = metaNote && col.note ? `${col.note} — ${metaNote}` : metaNote ?? col.note;
           return { ...col, note };
         }),
         ragIndexed: meta?.ragIndexed ?? false,
         sourceApi: meta?.sourceApi ?? "",
+        // ALARM_NAME_PREFIX doubles as the Lambda function-name prefix.
         ingestionLambda: meta ? `${alarmPrefix}-${meta.ingestionLambda}` : "",
         cadence: meta?.cadence ?? "",
       };

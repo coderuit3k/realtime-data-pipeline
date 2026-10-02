@@ -23,6 +23,8 @@ type RawCommit = {
   html_url: string;
 };
 
+// GITHUB_READ_TOKEN is a read-only token used server-side only; never send it
+// to the browser or put it in a NEXT_PUBLIC_ variable.
 async function githubRequest<T>(path: string): Promise<T> {
   const token = requiredEnv("GITHUB_READ_TOKEN");
   const response = await fetch(`${GITHUB_API_BASE}${path}`, {
@@ -52,6 +54,7 @@ function mapRun(run: RawRun): GithubRun {
   };
 }
 
+// Keeps only the subject line. GitHub's schema marks `commit.author` nullable.
 function mapCommit(raw: RawCommit): GithubCommit {
   return {
     sha: raw.sha,
@@ -62,6 +65,7 @@ function mapCommit(raw: RawCommit): GithubCommit {
   };
 }
 
+/** Most recent run of a workflow file on main, or null if it has never run. */
 export async function getLatestWorkflowRun(workflowFile: string): Promise<GithubRun | null> {
   const data = await githubRequest<{ workflow_runs: RawRun[] }>(
     `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${workflowFile}/runs?branch=main&per_page=1`
@@ -70,6 +74,7 @@ export async function getLatestWorkflowRun(workflowFile: string): Promise<Github
   return run ? mapRun(run) : null;
 }
 
+/** Jobs of one workflow run (first page only, which covers this repo's few jobs). */
 export async function getRunJobs(runId: number): Promise<GithubJob[]> {
   const data = await githubRequest<{ jobs: { name: string; status: string; conclusion: string | null }[] }>(
     `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}/jobs`
@@ -77,6 +82,7 @@ export async function getRunJobs(runId: number): Promise<GithubJob[]> {
   return data.jobs.map((j) => ({ name: j.name, status: j.status, conclusion: j.conclusion }));
 }
 
+/** Latest `limit` runs of a workflow file on main, newest first. */
 export async function getRecentRuns(workflowFile: string, limit: number): Promise<GithubRun[]> {
   const data = await githubRequest<{ workflow_runs: RawRun[] }>(
     `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${workflowFile}/runs?branch=main&per_page=${limit}`
@@ -84,6 +90,7 @@ export async function getRecentRuns(workflowFile: string, limit: number): Promis
   return data.workflow_runs.map(mapRun);
 }
 
+/** Latest `limit` commits on the default branch, newest first. */
 export async function getRecentCommits(limit: number): Promise<GithubCommit[]> {
   const data = await githubRequest<RawCommit[]>(
     `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits?per_page=${limit}`

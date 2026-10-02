@@ -17,6 +17,8 @@ function field(row: { field?: string; value?: string }[], name: string): string 
   return row.find((f) => f.field === name)?.value ?? "";
 }
 
+// @log comes back as "<account-id>:/aws/lambda/<prefix><name>"; keep just
+// <name> so the account id never reaches the UI. Unknown shapes pass through.
 function stripLogGroupPrefix(log: string, prefixToStrip: string): string {
   const marker = `/aws/lambda/${prefixToStrip}`;
   const index = log.indexOf(marker);
@@ -24,10 +26,16 @@ function stripLogGroupPrefix(log: string, prefixToStrip: string): string {
   return log.slice(index + marker.length);
 }
 
+// Security: these logs are served on a public page, and logged request URLs
+// can carry API keys as query params.
 function redactSecrets(message: string): string {
   return message.replace(/(apiKey|api_key|token)=[^&\s]+/gi, "$1=[REDACTED]");
 }
 
+/**
+ * Latest INFO/WARN/ERROR lines from the last 24h via Logs Insights, polled every
+ * 500ms for up to ~20s. Messages are secret-redacted before they leave the server.
+ */
 export async function queryRecentLogs(
   client: CloudWatchLogsClient,
   logGroupNames: string[],

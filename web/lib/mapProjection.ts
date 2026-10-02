@@ -3,10 +3,9 @@ export type LatLngBounds = { latMin: number; latMax: number; lonMin: number; lon
 export type ViewBox = { width: number; height: number };
 export type Point = { x: number; y: number };
 
-// Real min/max lat/lon across the 12 locations in
-// common/config.py:WEATHER_LOCATIONS. latMin/lonMin: Ca Mau (9.1769) /
-// Rach Gia (105.0809). latMax/lonMax: Da Lat (11.9404 / 108.4583) -- Da
-// Lat happens to be both the northernmost and easternmost of the 12.
+// Bounding box of the 12 locations in common/config.py:WEATHER_LOCATIONS:
+// south = Ca Mau, west = Rach Gia, north and east = Da Lat. Update it if
+// locations are added, or new points will project off the map.
 export const WEATHER_BOUNDS: LatLngBounds = {
   latMin: 9.1769,
   latMax: 11.9404,
@@ -14,9 +13,10 @@ export const WEATHER_BOUNDS: LatLngBounds = {
   lonMax: 108.4583,
 };
 
-// Linear (equirectangular) projection -- fine at this scale (a few
-// hundred km across Southern Vietnam). y is inverted (latMax - lat)
-// since SVG y grows downward while latitude grows northward.
+/**
+ * Equirectangular projection into an SVG viewBox; distortion is negligible
+ * over a few hundred km. y is flipped because SVG y grows downward.
+ */
 export function projectLatLng(
   point: LatLng,
   bounds: LatLngBounds,

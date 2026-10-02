@@ -3,11 +3,10 @@ import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
 import type { AssistantResult, AssistantSource, ChatMessage } from "@/lib/assistant";
 
-// The agent's real answer text often contains markdown (bold, bullet/
-// numbered lists, links) -- render it properly instead of showing raw
-// "**"/"-" syntax to the user. These overrides just restyle the default
-// elements to match this page's existing dark theme; they don't change
-// what content renders.
+// Agent answers are markdown (lists, bold, links, GFM tables). These
+// overrides only restyle the default elements for the dark theme; they do
+// not change what renders. Table cells don't wrap, so tables get a
+// horizontal scroll wrapper instead of overflowing the bubble.
 const answerMarkdownComponents: Components = {
   p: ({ children }) => <p className="max-w-[75ch] text-sm leading-relaxed text-textSecondary">{children}</p>,
   strong: ({ children }) => <strong className="font-semibold text-textPrimary">{children}</strong>,
@@ -79,6 +78,11 @@ function AnswerBubble({ answer, sources }: { answer: string; sources: AssistantS
   );
 }
 
+/**
+ * Persisted turns followed by the in-flight one. The pending turn is kept
+ * separate so its answer can be shown before the reloaded history confirms
+ * it was saved.
+ */
 export function ChatThread({
   messages,
   pendingQuestion,

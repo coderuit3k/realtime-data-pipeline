@@ -1,3 +1,5 @@
+"""Lambda: polls CoinGecko for current prices of config.CRYPTO_COIN_IDS."""
+
 import logging
 from datetime import datetime, timezone
 
@@ -13,10 +15,12 @@ COINGECKO_API_URL = "https://api.coingecko.com/api/v3/simple/price"
 
 
 def _as_float(value) -> float | None:
+    """float() that passes None through (missing fields stay null)."""
     return None if value is None else float(value)
 
 
 def normalize_price(coin_id: str, data: dict) -> dict:
+    """Flatten one coin's /simple/price entry into the raw crypto record schema."""
     last_updated_at = data.get("last_updated_at")
     observed_at = (
         datetime.fromtimestamp(last_updated_at, tz=timezone.utc).isoformat()
@@ -24,18 +28,13 @@ def normalize_price(coin_id: str, data: dict) -> dict:
         else None
     )
     return {
-        # CoinGecko has no stable reading id -- coin + observed timestamp
-        # together are unique per fetch.
+        # CoinGecko has no reading id; coin + observed timestamp is unique.
         "price_id": f"{coin_id}-{last_updated_at}",
         "source": "crypto",
         "coin_id": coin_id,
-        # Explicit float() -- CoinGecko returns whole-dollar prices (e.g.
-        # bitcoin at 81314) as a JSON int, and if every price in a batch
-        # happens to be a whole number, pandas would infer int64 for the
-        # column while the Glue table declares "double" (same class of bug
-        # hit and fixed for weather_ingestion's humidity_pct -- Athena
-        # rejects the Parquet file outright). Forcing float here up front
-        # avoids repeating that.
+        # Force float: CoinGecko sends whole-dollar prices as JSON ints, and an
+        # all-int batch makes pandas write INT64 Parquet, which Athena rejects
+        # against the Glue "double" column (the bug hit in weather_ingestion).
         "price_usd": _as_float(data.get("usd")),
         "market_cap_usd": _as_float(data.get("usd_market_cap")),
         "volume_24h_usd": _as_float(data.get("usd_24h_vol")),
@@ -46,6 +45,7 @@ def normalize_price(coin_id: str, data: dict) -> dict:
 
 
 def fetch_prices() -> list[dict]:
+    """One request for all coins; coins missing from the response are skipped."""
     params = {
         "ids": ",".join(config.CRYPTO_COIN_IDS),
         "vs_currencies": "usd",
@@ -65,6 +65,7 @@ def fetch_prices() -> list[dict]:
 
 
 def lambda_handler(event, context):
+    """Scheduled entry point: fetch prices and write them to the raw zone."""
     records = fetch_prices()
     key = write_records("crypto", records, "price_id")
     logger.info("Wrote %d records to %s", len(records), key)

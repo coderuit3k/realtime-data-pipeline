@@ -8,7 +8,9 @@ const LABELS: Record<string, string> = {
   github: "GitHub",
 };
 
+/** Today's record count per source as bars scaled to the busiest source. */
 export function SourceVolumeChart({ sourceVolumes }: { sourceVolumes: SourceVolume[] }) {
+  // Floor of 1 avoids dividing by zero when every source is empty.
   const max = Math.max(1, ...sourceVolumes.map((s) => s.records));
   return (
     <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md p-6 flex flex-col gap-4">

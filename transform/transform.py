@@ -1,3 +1,9 @@
+"""Transform Lambda: turns a raw NDJSON batch into a cleaned, keyword-tagged Parquet file.
+
+Triggered by S3 object-created events on the raw bucket; writes to the curated bucket
+under the same source=/year=/month=/day= partition layout that the Glue tables expect.
+"""
+
 import json
 import logging
 import os
@@ -42,6 +48,7 @@ STOPWORDS = {
 
 
 def _client():
+    """Lazily create the S3 client so importing this module (e.g. in tests) needs no AWS."""
     global _s3_client
     if _s3_client is None:
         _s3_client = boto3.client("s3", region_name=config.AWS_REGION)
@@ -49,6 +56,7 @@ def _client():
 
 
 def _bedrock():
+    """Lazily create the Bedrock runtime client."""
     global _bedrock_client
     if _bedrock_client is None:
         _bedrock_client = boto3.client("bedrock-runtime", region_name=config.AWS_REGION)
@@ -56,13 +64,14 @@ def _bedrock():
 
 
 def extract_keywords(text: str, top_n: int = 5) -> list[str]:
-    """Regex + stopword fallback -- used when the LLM extraction below fails."""
+    """Regex + stopword keyword extraction; the fallback when the LLM path fails."""
     words = re.findall(r"[a-zA-Z]{4,}", (text or "").lower())
     words = [w for w in words if w not in STOPWORDS]
     return [word for word, _ in Counter(words).most_common(top_n)]
 
 
 def build_keyword_prompt(texts: list[str]) -> str:
+    """Build one numbered prompt for the whole batch (one Bedrock call, not one per record)."""
     items = "\n".join(f"[{i + 1}] {text[:300]}" for i, text in enumerate(texts))
     return (
         "For each numbered item below, extract up to 5 short topical keywords "
@@ -75,12 +84,12 @@ def build_keyword_prompt(texts: list[str]) -> str:
 
 
 def parse_keyword_response(raw: str, expected_count: int) -> list[list[str] | None]:
-    """Returns one entry per input item, in order; an item the model skipped
-    (or tagged with an out-of-range/duplicate "i") comes back as None so the
-    caller can fall back to regex extraction for just that item, instead of
-    discarding every item in the batch over one bad "i" -- unlike positional
-    matching, a missing/wrong "i" can't silently misattribute keywords to the
-    wrong item, it can only leave that one item unfilled."""
+    """Map the model's JSON reply back to input order, keyed by each entry's "i".
+
+    Matching on "i" rather than position means a skipped or bad entry can only leave
+    that one item as None (for a per-item regex fallback); it can never shift keywords
+    onto the wrong record.
+    """
     cleaned = raw.strip()
     if cleaned.startswith("```"):
         cleaned = re.sub(r"^```(?:json)?\n|\n```$", "", cleaned)
@@ -102,6 +111,7 @@ def parse_keyword_response(raw: str, expected_count: int) -> list[list[str] | No
 
 
 def extract_keywords_llm(texts: list[str]) -> list[list[str]]:
+    """Extract keywords for a batch with one Bedrock call; raises if the call or parse fails."""
     if not texts:
         return []
     response = _bedrock().invoke_model(
@@ -116,8 +126,7 @@ def extract_keywords_llm(texts: list[str]) -> list[list[str]]:
     )
     body = json.loads(response["body"].read())
     keyword_lists = parse_keyword_response(body["content"][0]["text"], len(texts))
-    # Per-item regex fallback for anything the model skipped, rather than
-    # discarding the whole batch's LLM output over one missed item.
+    # Fill only the items the model skipped, keeping its output for the rest.
     return [
         kws if kws is not None else extract_keywords(texts[i])
         for i, kws in enumerate(keyword_lists)
@@ -125,6 +134,7 @@ def extract_keywords_llm(texts: list[str]) -> list[list[str]]:
 
 
 def record_text(record: dict, source: str) -> str:
+    """Return the free-text fields of a record that keywords are extracted from."""
     if source == "hackernews":
         return f"{record.get('title') or ''} {record.get('text') or ''}".strip()
     if source == "github":
@@ -135,6 +145,7 @@ def record_text(record: dict, source: str) -> str:
 
 
 def attach_keywords(records: list[dict], source: str) -> list[dict]:
+    """Set record["keywords"] in place; any LLM failure degrades to regex, never fails the batch."""
     texts = [record_text(r, source) for r in records]
     try:
         keyword_lists = extract_keywords_llm(texts)
@@ -148,6 +159,7 @@ def attach_keywords(records: list[dict], source: str) -> list[dict]:
 
 
 def dedup_records(records: list[dict], id_field: str) -> list[dict]:
+    """Drop records whose id_field repeats, keeping the first occurrence."""
     seen = set()
     deduped = []
     for record in records:
@@ -160,6 +172,7 @@ def dedup_records(records: list[dict], id_field: str) -> list[dict]:
 
 
 def clean_hackernews_record(record: dict) -> dict:
+    """Return a copy with None/whitespace text fields normalised to stripped strings."""
     cleaned = dict(record)
     cleaned["title"] = (cleaned.get("title") or "").strip()
     cleaned["text"] = (cleaned.get("text") or "").strip()
@@ -167,6 +180,7 @@ def clean_hackernews_record(record: dict) -> dict:
 
 
 def clean_news_record(record: dict) -> dict:
+    """Return a copy with None/whitespace text fields normalised to stripped strings."""
     cleaned = dict(record)
     cleaned["title"] = (cleaned.get("title") or "").strip()
     cleaned["description"] = (cleaned.get("description") or "").strip()
@@ -174,18 +188,21 @@ def clean_news_record(record: dict) -> dict:
 
 
 def clean_weather_record(record: dict) -> dict:
+    """Return a copy with the location name normalised to a stripped string."""
     cleaned = dict(record)
     cleaned["location"] = (cleaned.get("location") or "").strip()
     return cleaned
 
 
 def clean_crypto_record(record: dict) -> dict:
+    """Return a copy with the coin id normalised to a stripped string."""
     cleaned = dict(record)
     cleaned["coin_id"] = (cleaned.get("coin_id") or "").strip()
     return cleaned
 
 
 def clean_github_record(record: dict) -> dict:
+    """Return a copy with None/whitespace text fields normalised to stripped strings."""
     cleaned = dict(record)
     cleaned["full_name"] = (cleaned.get("full_name") or "").strip()
     cleaned["description"] = (cleaned.get("description") or "").strip()
@@ -193,6 +210,7 @@ def clean_github_record(record: dict) -> dict:
 
 
 def clean_gmail_record(record: dict) -> dict:
+    """Return a copy with None/whitespace text fields normalised to stripped strings."""
     cleaned = dict(record)
     cleaned["subject"] = (cleaned.get("subject") or "").strip()
     cleaned["from_address"] = (cleaned.get("from_address") or "").strip()
@@ -201,6 +219,7 @@ def clean_gmail_record(record: dict) -> dict:
 
 
 def transform_records(source: str, records: list[dict]) -> list[dict]:
+    """Clean, dedup on the source's id field, and tag keywords; raises on an unknown source."""
     if source == "hackernews":
         cleaned = dedup_records([clean_hackernews_record(r) for r in records], "story_id")
         return attach_keywords(cleaned, source)
@@ -208,9 +227,8 @@ def transform_records(source: str, records: list[dict]) -> list[dict]:
         cleaned = dedup_records([clean_news_record(r) for r in records], "article_id")
         return attach_keywords(cleaned, source)
     elif source == "weather":
-        # Numeric readings, no natural-language text -- LLM/regex keyword
-        # extraction doesn't apply. "keywords" is set (empty) purely so
-        # write_parquet's column access below doesn't need a source-specific branch.
+        # Numeric readings have no text to extract from; an empty "keywords" column
+        # keeps write_parquet source-agnostic.
         cleaned = dedup_records([clean_weather_record(r) for r in records], "weather_id")
         for record in cleaned:
             record["keywords"] = []
@@ -230,23 +248,16 @@ def transform_records(source: str, records: list[dict]) -> list[dict]:
         raise ValueError(f"Unknown source: {source}")
 
 
-# A batch that collapses this much (or more) after dedup/cleaning, once it's
-# large enough to rule out small-sample noise, usually means an upstream API
-# changed shape (e.g. the id field used for dedup started coming back empty
-# for every record, collapsing them all onto one key) rather than genuine
-# duplicates. Note this minimum has no observable effect below raw_count=6:
-# for raw_count in [3, 5], the only way to exceed the 0.8 threshold without
-# hitting cleaned_count == 0 (the separate zero-output branch above) doesn't
-# exist -- e.g. crypto's batches (CRYPTO_COIN_IDS, 3 coins) can only ever hit
-# the zero-output check, never this one.
+# Losing more than 80% of a batch to dedup usually means an upstream API changed shape
+# (e.g. the id field came back empty for every record, collapsing them onto one key),
+# not genuine duplicates. The minimum batch size rules out small-sample noise; for
+# batches under 6 records only the zero-output check can actually fire.
 DUPLICATE_COLLAPSE_MIN_RAW_RECORDS = 3
 DUPLICATE_COLLAPSE_RATE_THRESHOLD = 0.8
 
 
 def detect_data_quality_issues(raw_records: list[dict], cleaned_records: list[dict]) -> list[str]:
-    """Source-agnostic anomaly checks run after transform_records -- doesn't
-    know about any source's specific fields, just the before/after counts.
-    Returns human-readable reason strings; empty list means no issues found."""
+    """Source-agnostic before/after count checks; returns alert reasons (empty if none)."""
     raw_count = len(raw_records)
     cleaned_count = len(cleaned_records)
 
@@ -268,6 +279,7 @@ def detect_data_quality_issues(raw_records: list[dict], cleaned_records: list[di
 
 
 def source_from_key(key: str) -> str:
+    """Read the source name from a raw key's leading "source=<name>/" partition."""
     match = re.match(r"source=([^/]+)/", key)
     if not match:
         raise ValueError(f"Cannot determine source from key: {key}")
@@ -275,17 +287,18 @@ def source_from_key(key: str) -> str:
 
 
 def decode_s3_event_key(key: str) -> str:
-    """S3 event notifications URL-encode the object key (e.g. "=" -> "%3D",
-    spaces -> "+"), unlike the S3 API itself. Must be undone before use."""
+    """Undo the URL-encoding S3 event notifications apply to keys ("=" -> "%3D", " " -> "+")."""
     return unquote_plus(key)
 
 
 def read_ndjson(bucket: str, key: str) -> list[dict]:
+    """Read a newline-delimited JSON object from S3, skipping blank lines."""
     body = _client().get_object(Bucket=bucket, Key=key)["Body"].read().decode("utf-8")
     return [json.loads(line) for line in body.splitlines() if line.strip()]
 
 
 def build_curated_key(source: str, ts: datetime) -> str:
+    """Hive-partitioned curated key; the random suffix keeps same-second writes distinct."""
     return (
         f"source={source}/year={ts:%Y}/month={ts:%m}/day={ts:%d}/"
         f"{ts:%Y%m%dT%H%M%S}-{uuid.uuid4().hex[:8]}.parquet"
@@ -293,15 +306,20 @@ def build_curated_key(source: str, ts: datetime) -> str:
 
 
 def write_parquet(records: list[dict], source: str) -> str:
+    """Write records as Parquet to the curated bucket (or local_output_curated/ in dry runs).
+
+    Returns the curated key, or "" when there is nothing to write.
+    """
     if not records:
         return ""
 
     df = pd.DataFrame(records)
-    # Parquet has no native list type support via the plain pandas API path here,
-    # so keywords travel as a comma-joined string instead of a Python list.
+    # Stored as a comma-joined string because the Glue/Athena schema declares
+    # keywords as a string column, not an array.
     df["keywords"] = df["keywords"].apply(lambda kw: ",".join(kw) if isinstance(kw, list) else kw)
 
     key = build_curated_key(source, datetime.now(timezone.utc))
+    # /tmp is the only writable path in Lambda.
     local_path = f"/tmp/{uuid.uuid4().hex}.parquet"
     df.to_parquet(local_path, engine="pyarrow", index=False)
 
@@ -320,6 +338,7 @@ def write_parquet(records: list[dict], source: str) -> str:
 
 
 def lambda_handler(event, context):
+    """Transform every raw object in an S3 event batch and log any data-quality alerts."""
     results = []
     for record in event.get("Records", []):
         bucket = record["s3"]["bucket"]["name"]
@@ -329,6 +348,7 @@ def lambda_handler(event, context):
         raw_records = read_ndjson(bucket, key)
         cleaned = transform_records(source, raw_records)
 
+        # The DATA_QUALITY_ALERT prefix is what the CloudWatch metric filter matches.
         for issue in detect_data_quality_issues(raw_records, cleaned):
             logger.warning("DATA_QUALITY_ALERT source=%s reason=%s", source, issue)
 

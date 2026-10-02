@@ -9,14 +9,14 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-// Explorer runs arbitrary user SQL, so a result column can be image_url/
-// avatar_url in any position/alias -- detect by column name at render time
-// rather than relying on a fixed query shape.
+// Explorer runs arbitrary SQL, so image columns can appear anywhere in the
+// result; they are recognised by column name at render time.
 const IMAGE_CELL_CLASS: Record<string, string> = {
   avatar_url: "w-6 h-6 rounded-full object-cover",
   image_url: "w-16 h-10 rounded object-cover",
 };
 
+/** Renders known image columns as thumbnails and everything else as text; NULL shows as blank. */
 function ExplorerCell({ column, value }: { column: string; value: string | null }) {
   const imageClass = IMAGE_CELL_CLASS[column.toLowerCase()];
   if (imageClass && value) {
@@ -36,6 +36,10 @@ function ExplorerCell({ column, value }: { column: string; value: string | null 
   return <>{value ?? ""}</>;
 }
 
+/**
+ * Ad-hoc Athena SQL against the lakehouse, pre-filled with the first sample
+ * query. Read-only enforcement happens server-side in /api/explorer/query.
+ */
 export default function ExplorerPage() {
   const [samples, setSamples] = useState<SamplesResponse | null>(null);
   const [samplesError, setSamplesError] = useState<string | null>(null);
