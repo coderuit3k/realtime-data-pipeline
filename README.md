@@ -4,6 +4,8 @@ Serverless ELT pipeline on AWS. It ingests Hacker News stories, news articles,
 weather, crypto prices and trending GitHub repos, lands them in an S3 data lake
 queryable with Athena, and adds an agentic RAG assistant on top.
 
+**Live demo:** <https://realtime-data-pipeline.vercel.app/>
+
 ## Architecture
 
 ```mermaid
@@ -169,6 +171,15 @@ Anthropic models on Bedrock need one extra one-time step beyond "Model
 access": submit the **use case details form** (Bedrock console -> Model
 catalog -> the model -> "Submit use case details") and wait up to ~15 minutes.
 Titan does not need it.
+
+### Example
+
+A cross-source question asked on the web app's RAG Assistant page. The agent
+combined GitHub trending repos with Hacker News topics and returned a table.
+The right-hand panel shows the tool calls it made (knowledge base search plus
+Athena queries).
+
+![RAG Assistant answering a question that combines GitHub trending and Hacker News](docs/images/rag-assistant-example.png)
 
 ### Evaluation (RAGAS)
 
