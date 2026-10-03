@@ -16,7 +16,7 @@ package_with_requests() {
   local source_file="$2"
   local target="$BUILD_DIR/$target_name"
   mkdir -p "$target"
-  pip install --quiet --platform manylinux2014_x86_64 --python-version 3.12 \
+  pip install --quiet --no-compile --platform manylinux2014_x86_64 --python-version 3.12 \
     --only-binary=:all: --target "$target" requests==2.32.3
   cp -r "$ROOT_DIR/common" "$target/common"
   cp "$ROOT_DIR/$source_file" "$target/"
@@ -44,5 +44,10 @@ package_no_deps transform transform/transform.py
 package_no_deps rag_build_index rag/build_index.py
 package_no_deps trend_scan trends/trend_scan.py
 package_with_requests rag_agent rag/agent.py
+
+# `cp -r common` copies the repo's local __pycache__ (built by the dev machine's own
+# Python, not the Lambda runtime's). Those .pyc files embed source mtimes, so they made
+# every rebuild's zip hash differ and Terraform plan a no-op redeploy of every Lambda.
+find "$BUILD_DIR" -name __pycache__ -type d -prune -exec rm -rf {} +
 
 echo "Lambda build artifacts ready under $BUILD_DIR"
