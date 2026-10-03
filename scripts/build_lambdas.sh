@@ -50,4 +50,9 @@ package_with_requests rag_agent rag/agent.py
 # every rebuild's zip hash differ and Terraform plan a no-op redeploy of every Lambda.
 find "$BUILD_DIR" -name __pycache__ -type d -prune -exec rm -rf {} +
 
+# archive_file stores each file's mode in the zip, and the mode follows the builder's umask
+# (0002 on many dev machines gives 0664, CI's 0022 gives 0644). Dropping group/other write
+# makes the modes match everywhere, keeping the executable bit, so the hash is the same.
+chmod -R go-w "$BUILD_DIR"
+
 echo "Lambda build artifacts ready under $BUILD_DIR"
