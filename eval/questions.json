@@ -4,5 +4,11 @@
   {"question": "What is trending in technology right now?"},
   {"question": "What's the best recipe for pho bo (Vietnamese beef noodle soup)?"},
   {"question": "What is the current weather forecast for Paris?"},
-  {"question": "Who won the most recent football World Cup?"}
+  {"question": "Who won the most recent football World Cup?"},
+  {"question": "Which Rust projects were trending on GitHub recently?"},
+  {"question": "What are people saying about PostgreSQL on Hacker News?"},
+  {"question": "Is there any recent news about OpenAI or Anthropic?"},
+  {"question": "What are developers discussing about Kubernetes?"},
+  {"question": "Are there recent repositories related to LangChain or LlamaIndex?"},
+  {"question": "What is being reported about Bitcoin ETFs?"}
 ]

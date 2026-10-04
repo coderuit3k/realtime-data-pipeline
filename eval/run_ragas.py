@@ -25,7 +25,7 @@ from ragas.metrics import (  # noqa: E402
 from ragas.run_config import RunConfig  # noqa: E402
 
 from common import config  # noqa: E402
-from rag.agent import load_index, run_agent  # noqa: E402
+from rag.agent import run_agent  # noqa: E402
 
 
 def load_questions() -> list[dict]:
@@ -33,13 +33,9 @@ def load_questions() -> list[dict]:
     return json.loads((Path(__file__).parent / "questions.json").read_text())
 
 
-def run_rag_agent(question: str, documents: list[dict]) -> dict:
-    """Answer one question with the deployed agent loop (rag.agent.run_agent).
-
-    `documents` is the RAG index, loaded once by main(): re-downloading the
-    ~27MB index per question was slow enough to hit S3 read timeouts.
-    """
-    result = run_agent(question, documents)
+def run_rag_agent(question: str) -> dict:
+    """Answer one question with the deployed agent loop (rag.agent.run_agent)."""
+    result = run_agent(question)
     contexts = [s["text"] for s in result["sources"] if s.get("text")]
     grounded = bool(result["sources"])
 
@@ -50,9 +46,7 @@ def run_rag_agent(question: str, documents: list[dict]) -> dict:
     }
 
 
-def build_dataset(
-    questions: list[dict], documents: list[dict]
-) -> tuple[EvaluationDataset, list[bool]]:
+def build_dataset(questions: list[dict]) -> tuple[EvaluationDataset, list[bool]]:
     """Run every question and return the RAGAS dataset plus per-question grounded flags.
 
     The flags are returned separately; main() adds them as a results column.
@@ -60,7 +54,7 @@ def build_dataset(
     rows = []
     grounded_flags = []
     for q in questions:
-        result = run_rag_agent(q["question"], documents)
+        result = run_rag_agent(q["question"])
         rows.append(
             {
                 "user_input": q["question"],
@@ -76,10 +70,8 @@ def build_dataset(
 def main():
     """Run the agent over every question, score with RAGAS, write eval/results.csv."""
     questions = load_questions()
-    print("Loading RAG index from S3 (once for this run)...")
-    documents = load_index()
     print(f"Running {len(questions)} questions through rag_agent (tool-calling loop)...")
-    dataset, grounded_flags = build_dataset(questions, documents)
+    dataset, grounded_flags = build_dataset(questions)
 
     judge_llm = LangchainLLMWrapper(
         ChatBedrockConverse(model=config.BEDROCK_TEXT_MODEL_ID, region_name=config.AWS_REGION)

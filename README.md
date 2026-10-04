@@ -188,6 +188,39 @@ and context precision, judged by Bedrock. It is dev-only (heavy `ragas` /
 `langchain` dependencies, never deployed). Setup, dependency pins and the
 latest numbers are in [`eval/README.md`](eval/README.md).
 
+### Retrieval upgrade (hybrid search + rerank)
+
+**What changed.** The agent's knowledge-base search used to load a 27 MB `index.json` from S3
+and compare vectors in Lambda memory. It now searches Qdrant Cloud with two retrievers (Titan
+meaning-based and BM25 keyword-based), merges them with Reciprocal Rank Fusion, and a Jina
+reranker picks the final 5.
+
+**Result** (12 questions, same agent and model, same 1,158 documents in all three stages):
+
+| Stage | Faithfulness | Answer relevancy | Context precision | Search p50 |
+|---|---|---|---|---|
+| 1. Cosine on `index.json` (before) | 0.676 | 0.729 | 0.385 | 672 ms (+ 12.3 s index load) |
+| 2. Hybrid + RRF | 0.681 | 0.611 | 0.462 | 1,338 ms |
+| 3. Hybrid + RRF + rerank | 0.705 | 0.666 | 0.300 | 2,505 ms |
+
+**Conclusion.** Hybrid search raised context precision (0.385 to 0.462) and rerank raised
+faithfulness (0.676 to 0.705), but neither stage beat the old index on every metric: answer
+relevancy fell in both, context precision fell with rerank, and search got slower.
+
+**Why.** Keyword search finds exact names the meaning-based search blurs, and the merge keeps
+what either retriever ranks high, which is why stage 2 retrieved more relevant passages. The
+reranker reads question and passage together, but in this run it also made the agent answer
+the out-of-domain pho question without sources, which the context-precision judge scores as 0
+even though not answering is the right behaviour. Search is slower because it is now a network
+call to Qdrant (about 1.3 s from a laptop, Titan query embedding included) and rerank adds a second one
+to Jina (about 1.2 s more). The real gain is scale: the old index could not load past about
+1.4k documents in a 512 MB Lambda, while Qdrant now holds all 34,977 documents and adds new
+ones incrementally. Rerank costs roughly $0.0004 per search (about 30 passages x 250 tokens at
+$0.05 per million tokens, an estimate), within Jina's free allowance.
+
+**Caveat.** 12 questions and an LLM judge that varies between runs: indicative, not a
+benchmark. Latency was measured from a laptop, not from inside AWS.
+
 ## OpenClaw ops agent
 
 [OpenClaw](https://github.com/openclaw/openclaw) is a self-hosted personal AI
