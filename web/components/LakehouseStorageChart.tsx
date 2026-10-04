@@ -41,7 +41,7 @@ export function LakehouseStorageChart({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-baseline gap-2">
-        <span className="font-mono tabular-nums text-2xl text-textPrimary">
+        <span className="text-3xl font-semibold tabular-nums text-textPrimary">
           {hasData ? formatBytes(total) : "—"}
         </span>
         <span className="text-[11px] text-textMuted">tổng dung lượng lakehouse</span>
@@ -68,10 +68,10 @@ export function LakehouseStorageChart({
               <span className={`w-2 h-2 rounded-full ${zone.swatch}`} />
               {zone.label}
             </span>
-            <span className="font-mono tabular-nums text-sm text-textPrimary">
+            <span className="text-sm font-semibold tabular-nums text-textPrimary">
               {formatBytes(stats[zone.key].sizeBytes)}
             </span>
-            <span className="font-mono tabular-nums text-[10.5px] text-textMuted">
+            <span className="tabular-nums text-[11.5px] text-textMuted">
               {stats[zone.key].objectCount === null ? "—" : `${stats[zone.key].objectCount} object`}
             </span>
           </div>

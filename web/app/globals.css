@@ -28,8 +28,23 @@ body {
   animation: barGrow 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
+@keyframes barGrowY {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.bar-grow-y {
+  transform-origin: bottom;
+  animation: barGrowY 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .bar-grow {
+  .bar-grow,
+  .bar-grow-y {
     animation: none;
   }
 }

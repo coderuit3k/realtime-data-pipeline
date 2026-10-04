@@ -38,6 +38,13 @@ const config: Config = {
         mono: ["var(--font-inter)"],
       },
       keyframes: {
+        // Same dot travelling down the 16px connectors in the home page's pipeline visual.
+        flowDotY: {
+          "0%, 10%": { transform: "translateY(0)", opacity: "0" },
+          "25%": { opacity: "1" },
+          "80%": { opacity: "1" },
+          "100%": { transform: "translateY(16px)", opacity: "0" },
+        },
         // Dot travelling along ArchitectureFlow's arrows; 22px matches the arrow shaft.
         flowDot: {
           "0%, 10%": { transform: "translateX(0)", opacity: "0" },
@@ -47,6 +54,7 @@ const config: Config = {
         },
       },
       animation: {
+        flowDotY: "flowDotY 1.8s ease-in-out infinite",
         flowDot: "flowDot 1.8s ease-in-out infinite",
       },
     },

@@ -7,6 +7,7 @@ import { cryptoTicker } from "@/lib/cryptoIcons";
 import { KpiCard } from "@/components/KpiCard";
 import { CardIcon, SectionCard } from "@/components/SectionCard";
 import { SpotlightCard } from "@/components/SpotlightCard";
+import { RankRow } from "@/components/RankRow";
 import { StackedBar } from "@/components/StackedBar";
 
 /** Maps a WMO weather code to one of a few icon groups. */
@@ -66,44 +67,6 @@ function formatCountCompact(value: number): string {
 /** Categorical slots from the dataviz palette (dark mode), in fixed order; extra languages fold into "Khác". */
 const LANGUAGE_COLORS = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#9085e9"];
 const OTHER_COLOR = "#5b6572";
-
-/** Horizontal rank row: label, proportional bar (top row highlighted) and value. */
-function RankRow({
-  label,
-  value,
-  max,
-  display,
-  lead,
-  labelWidth = "w-24",
-}: {
-  label: string;
-  value: number;
-  max: number;
-  display?: string;
-  lead?: React.ReactNode;
-  labelWidth?: string;
-}) {
-  const isTop = value === max;
-  return (
-    <div className="flex items-center gap-3">
-      {lead}
-      <span className={`${labelWidth} shrink-0 truncate text-[12px] text-textSecondary`} title={label}>
-        {label}
-      </span>
-      <div className="h-2 flex-grow rounded-full bg-white/[0.04]">
-        <div
-          className={`bar-grow h-full rounded-full ${
-            isTop ? "bg-gradient-to-r from-accent to-accentBright shadow-glowCyan" : "bg-accent/40"
-          }`}
-          style={{ width: `${Math.max(2, (value / max) * 100)}%` }}
-        />
-      </div>
-      <span className="w-12 shrink-0 text-right text-[12px] font-semibold tabular-nums text-textPrimary">
-        {display ?? value}
-      </span>
-    </div>
-  );
-}
 
 /** Cross-source trend dashboard (HN, News, GitHub, crypto, weather) for today or the last 7 days. */
 export default function InsightsPage() {

@@ -27,9 +27,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="vi" className={inter.variable}>
       <body>
-        <div className="flex min-h-screen">
+        <div className="flex min-h-screen flex-col lg:flex-row">
           <Sidebar />
-          <main className="flex-1 overflow-auto">{children}</main>
+          <main className="min-w-0 flex-1 overflow-auto">{children}</main>
         </div>
       </body>
     </html>
