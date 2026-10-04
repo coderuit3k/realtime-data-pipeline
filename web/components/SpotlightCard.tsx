@@ -9,18 +9,20 @@ type SpotlightCardProps = {
   /** Big figures pinned to the bottom of the card; fills the space when a sibling card is taller. */
   stats?: { label: string; value: string }[];
   /** Accent for the label chip and the top edge. */
+  /** SVG path(s) drawn large in a banner where a cover image would go, for stories that have none. */
+  artPaths?: string[];
   tone: "orange" | "indigo" | "cyan";
   emptyText: string;
 };
 
 const TONES = {
-  orange: { chip: "bg-[#d95926]/15 text-[#f08a5d]", edge: "from-[#d95926]" },
-  indigo: { chip: "bg-secondary/15 text-[#a5a8f7]", edge: "from-secondary" },
-  cyan: { chip: "bg-accent/15 text-accentBright", edge: "from-accent" },
+  orange: { chip: "bg-[#d95926]/15 text-[#f08a5d]", edge: "from-[#d95926]", art: "from-[#d95926]/30 text-[#f08a5d]" },
+  indigo: { chip: "bg-secondary/15 text-[#a5a8f7]", edge: "from-secondary", art: "from-secondary/30 text-[#a5a8f7]" },
+  cyan: { chip: "bg-accent/15 text-accentBright", edge: "from-accent", art: "from-accent/30 text-accentBright" },
 } as const;
 
 /** Featured story: coloured top edge, label chip, large linked headline, optional cover image. */
-export function SpotlightCard({ label, title, url, imageUrl, footer, stats, tone, emptyText }: SpotlightCardProps) {
+export function SpotlightCard({ label, title, url, imageUrl, footer, stats, artPaths, tone, emptyText }: SpotlightCardProps) {
   const t = TONES[tone];
   return (
     <article className="relative flex flex-col gap-3 overflow-hidden rounded-xl border border-border bg-surface/75 p-5 backdrop-blur-md transition-colors hover:border-accent/30">
@@ -39,6 +41,19 @@ export function SpotlightCard({ label, title, url, imageUrl, footer, stats, tone
                 e.currentTarget.style.display = "none";
               }}
             />
+          ) : artPaths ? (
+            <div
+              aria-hidden="true"
+              className={`relative flex h-24 w-full items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br to-transparent ${t.art}`}
+            >
+              <span className="absolute h-40 w-40 rounded-full border border-current opacity-10" />
+              <span className="absolute h-24 w-24 rounded-full border border-current opacity-20" />
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+                {artPaths.map((d) => (
+                  <path key={d} d={d} />
+                ))}
+              </svg>
+            </div>
           ) : null}
           <a
             href={url}
