@@ -792,3 +792,12 @@ def test_query_athena_description_lists_the_github_id_and_ingested_at_columns():
     assert "github_repos(repo_id, full_name" in text
     assert "stars, forks, created_at, pushed_at, ingested_at, keywords)" in text
 
+
+def test_query_athena_description_explains_windows_that_cross_a_month_boundary():
+    text = _athena_tool_description()
+
+    # year/month/day are separate strings: "month='10' AND day >= '28'" silently drops
+    # September 28-30 when a 7-day window starts in the previous month. One comparison on the
+    # concatenated date has no month branch to get wrong.
+    assert "month boundary" in text
+    assert "concat(year, month, day) BETWEEN '20260928' AND '20261004'" in text

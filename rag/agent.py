@@ -147,7 +147,16 @@ TOOLS = [
                 "= 1) or its MAX, never SUM or COUNT across rows. Say 'distinct' "
                 "when you report such a count. weather_observations and "
                 "crypto_prices can repeat a reading too when the source had not "
-                "updated between runs."
+                "updated between runs. TIME WINDOWS: year, month and day are "
+                "separate strings, so a window that crosses a month boundary "
+                "(e.g. the last 7 days on 2026-10-04 start on 2026-09-28) cannot "
+                "be written as month = '10' AND day >= '28': that silently drops "
+                "the earlier month's days. For any multi-day window filter on the "
+                "joined date instead: concat(year, month, day) BETWEEN "
+                "'20260928' AND '20261004' (zero-padded, inclusive; the same form "
+                "works inside one month). Take today's date from the system "
+                "prompt, count 'the last 7 days' as today and the 6 days before "
+                "it, and state the exact dates you queried."
             ),
             "inputSchema": {
                 "json": {
