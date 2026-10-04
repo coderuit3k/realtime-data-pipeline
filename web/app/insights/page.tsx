@@ -49,6 +49,13 @@ function formatUsdCompact(value: number): string {
   return `$${value.toFixed(2)}`;
 }
 
+/** dd/mm/yyyy for an ISO timestamp; null when the value is missing or unparseable. */
+function formatNewsDate(iso: string | undefined): string | null {
+  const d = iso ? new Date(iso) : null;
+  if (!d || Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("vi-VN");
+}
+
 /** Compact count (1.2K, 3.4M) for star totals. */
 function formatCountCompact(value: number): string {
   if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
@@ -275,7 +282,16 @@ export default function InsightsPage() {
           url={data.newsSpotlight?.url}
           imageUrl={data.newsSpotlight?.imageUrl}
           emptyText="Chưa có tin nào."
-          footer={data.newsSpotlight?.provider}
+          stats={
+            data.newsSpotlight
+              ? [
+                  { label: "nguồn tin", value: data.newsSpotlight.provider },
+                  ...(formatNewsDate(data.newsSpotlight.publishedAt)
+                    ? [{ label: "ngày đăng", value: formatNewsDate(data.newsSpotlight.publishedAt) as string }]
+                    : []),
+                ]
+              : undefined
+          }
         />
       </div>
 

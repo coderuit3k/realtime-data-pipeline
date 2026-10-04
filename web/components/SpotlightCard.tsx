@@ -67,7 +67,7 @@ export function SpotlightCard({ label, title, url, imageUrl, footer, stats, artP
             <dl className="mt-auto grid gap-2" style={{ gridTemplateColumns: `repeat(${stats.length}, minmax(0, 1fr))` }}>
               {stats.map((st) => (
                 <div key={st.label} className="rounded-lg bg-bg/70 px-3 py-2.5">
-                  <dd className="text-xl font-semibold tabular-nums text-textPrimary">{st.value}</dd>
+                  <dd className="truncate text-xl font-semibold tabular-nums text-textPrimary" title={st.value}>{st.value}</dd>
                   <dt className="text-[11px] text-textMuted">{st.label}</dt>
                 </div>
               ))}
