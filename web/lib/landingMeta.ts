@@ -15,10 +15,10 @@ export const DATA_SOURCE_COUNT = DATA_SOURCES.length;
 // trend_scan derives from existing sources rather than adding one.
 export const LAMBDA_COUNT = 10;
 
-// Python + web test totals (last checked 2026-10-02):
-//   .venv/bin/python -m pytest tests/ --collect-only -q   -> 177
-//   cd web && npx vitest run                              -> 275
-export const TEST_COUNT = 452;
+// Python + web test totals (last checked 2026-10-05):
+//   .venv/bin/python -m pytest tests/ --collect-only -q   -> 214
+//   cd web && npx vitest run                              -> 283
+export const TEST_COUNT = 497;
 
 export const MONTHLY_COST_USD = COST_ESTIMATE_USD;
 

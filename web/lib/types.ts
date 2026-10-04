@@ -178,7 +178,8 @@ export type WeatherHistoryResponse = { location: string; points: WeatherHistoryP
 
 export type ScheduleStatus = { scheduleExpression: string; enabled: boolean };
 
-export type SecretStatus = { name: string; configured: boolean };
+/** `configured` is null when the web app could not check the secret (env var or IAM grant missing). */
+export type SecretStatus = { name: string; configured: boolean | null };
 
 export type SettingsResponse = {
   sharedSchedule: ScheduleStatus;

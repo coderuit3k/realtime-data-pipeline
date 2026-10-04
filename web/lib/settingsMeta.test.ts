@@ -32,7 +32,7 @@ describe("DATA_SOURCES", () => {
 });
 
 describe("SECRET_LABELS", () => {
-  it("has exactly the 2 real secrets", () => {
-    expect(SECRET_LABELS).toEqual(["news-api-key", "tavily-api-key"]);
+  it("has exactly the 4 secrets the web app can check", () => {
+    expect(SECRET_LABELS).toEqual(["news-api-key", "tavily-api-key", "qdrant-cloud", "jina-api-key"]);
   });
 });

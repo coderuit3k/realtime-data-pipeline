@@ -56,7 +56,8 @@ export default function SettingsPage() {
   }
 
   const enabledCount = DATA_SOURCES.filter((s) => (s.usesNewsSchedule ? data.newsSchedule : data.sharedSchedule).enabled).length;
-  const configuredCount = data.secrets.filter((s) => s.configured).length;
+  const configuredCount = data.secrets.filter((s) => s.configured === true).length;
+  const unknownCount = data.secrets.filter((s) => s.configured === null).length;
 
   return (
     <div className="p-6 lg:p-9 flex flex-col gap-6">
@@ -76,8 +77,14 @@ export default function SettingsPage() {
         <KpiCard
           label="Secrets đã cấu hình"
           value={`${configuredCount} / ${data.secrets.length}`}
-          hint={configuredCount === data.secrets.length ? "đầy đủ" : "còn secret chưa cấu hình"}
-          hintColor={configuredCount === data.secrets.length ? "success" : "error"}
+          hint={
+            unknownCount > 0
+              ? `${unknownCount} secret chưa kiểm tra được`
+              : configuredCount === data.secrets.length
+                ? "đầy đủ"
+                : "còn secret chưa cấu hình"
+          }
+          hintColor={unknownCount > 0 ? "muted" : configuredCount === data.secrets.length ? "success" : "error"}
           icon={<CardIcon d={["M5 11h14v10H5z", "M8 11V7a4 4 0 0 1 8 0v4"]} />}
         />
       </div>
@@ -113,7 +120,9 @@ export default function SettingsPage() {
             {data.secrets.map((secret) => (
               <div key={secret.name} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-bg/60 px-4 py-3">
                 <span className="min-w-0 break-all text-[12.5px] text-textSecondary">{secret.name}</span>
-                <Chip tone={secret.configured ? "success" : "error"}>{secret.configured ? "configured" : "chưa cấu hình"}</Chip>
+                <Chip tone={secret.configured === null ? "muted" : secret.configured ? "success" : "error"}>
+                  {secret.configured === null ? "không kiểm tra được" : secret.configured ? "configured" : "chưa cấu hình"}
+                </Chip>
               </div>
             ))}
           </div>

@@ -48,5 +48,5 @@ export const DATA_SOURCES: DataSourceMeta[] = [
   },
 ];
 
-// Display names only; order must match the secret lookups in app/api/settings/route.ts.
-export const SECRET_LABELS = ["news-api-key", "tavily-api-key"];
+// Display names only; order must match SECRET_ENV_NAMES in app/api/settings/route.ts.
+export const SECRET_LABELS = ["news-api-key", "tavily-api-key", "qdrant-cloud", "jina-api-key"];
