@@ -247,7 +247,11 @@ export default function InsightsPage() {
           title={data.hnSpotlight?.title}
           url={data.hnSpotlight?.url}
           emptyText="Chưa có story nào."
-          footer={data.hnSpotlight && `${data.hnSpotlight.score} điểm · ${data.hnSpotlight.comments} bình luận · ${data.hnSpotlight.author}`}
+          stats={data.hnSpotlight ? [
+            { label: "điểm", value: String(data.hnSpotlight.score) },
+            { label: "bình luận", value: String(data.hnSpotlight.comments) },
+          ] : undefined}
+          footer={data.hnSpotlight && `Đăng bởi ${data.hnSpotlight.author}`}
         />
         <SpotlightCard
           tone="indigo"
@@ -255,12 +259,12 @@ export default function InsightsPage() {
           title={data.hnControversial?.title}
           url={data.hnControversial?.url}
           emptyText="Chưa có story nào."
-          footer={
-            data.hnControversial &&
-            `${data.hnControversial.comments} bình luận / ${data.hnControversial.score} điểm (tỉ lệ ${(
-              data.hnControversial.comments / Math.max(1, data.hnControversial.score)
-            ).toFixed(1)}) · ${data.hnControversial.author}`
-          }
+          stats={data.hnControversial ? [
+            { label: "bình luận", value: String(data.hnControversial.comments) },
+            { label: "điểm", value: String(data.hnControversial.score) },
+            { label: "tỉ lệ", value: (data.hnControversial.comments / Math.max(1, data.hnControversial.score)).toFixed(1) },
+          ] : undefined}
+          footer={data.hnControversial && `Đăng bởi ${data.hnControversial.author}`}
         />
         <SpotlightCard
           tone="cyan"
