@@ -22,3 +22,15 @@ resource "aws_secretsmanager_secret" "tavily_api" {
 resource "aws_secretsmanager_secret" "gmail_ingestion" {
   name = "${local.name_prefix}/gmail-ingestion"
 }
+
+# Qdrant Cloud (vector store for the RAG knowledge base, rag/build_index.py and rag/agent.py).
+# JSON: {"url": "https://<cluster>.<region>.aws.cloud.qdrant.io:6333", "api_key": "..."}.
+# Value set by hand with `aws secretsmanager put-secret-value`, never Terraform-managed.
+resource "aws_secretsmanager_secret" "qdrant" {
+  name = "${local.name_prefix}/qdrant"
+}
+
+# Jina AI (reranker API used by the agent's search_knowledge_base). JSON: {"api_key": "..."}.
+resource "aws_secretsmanager_secret" "jina_api" {
+  name = "${local.name_prefix}/jina-api"
+}

@@ -162,3 +162,15 @@ variable "trend_max_events_per_day" {
   type        = number
   default     = 3
 }
+
+variable "rag_candidates" {
+  description = "Candidates taken from each retriever (dense, BM25) and kept after RRF, before the rerank cuts them to rag_top_k"
+  type        = number
+  default     = 30
+}
+
+variable "jina_rerank_model" {
+  description = "Jina reranker model name sent to the rerank API"
+  type        = string
+  default     = "jina-reranker-v3.5"
+}

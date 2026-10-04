@@ -37,6 +37,19 @@ aws secretsmanager put-secret-value \
   --secret-string '{"api_key":"..."}'
 ```
 
+Qdrant Cloud (free cluster, cloud.qdrant.io) holds the RAG vectors and Jina
+reranks the results:
+
+```bash
+aws secretsmanager put-secret-value \
+  --secret-id "$(terraform output -raw qdrant_secret_name)" \
+  --secret-string '{"url":"https://<cluster>.<region>.aws.cloud.qdrant.io:6333","api_key":"..."}'
+
+aws secretsmanager put-secret-value \
+  --secret-id "$(terraform output -raw jina_secret_name)" \
+  --secret-string '{"api_key":"..."}'
+```
+
 ## Web app IAM user (manual, not in Terraform)
 
 The `web/` app needs its own read-only AWS credentials (Athena, Glue, S3,

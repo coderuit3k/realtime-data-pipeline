@@ -96,6 +96,12 @@ data "aws_iam_policy_document" "rag_permissions" {
     resources = [aws_secretsmanager_secret.tavily_api.arn]
   }
 
+  statement {
+    sid       = "ReadHybridSearchSecrets"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [aws_secretsmanager_secret.qdrant.arn, aws_secretsmanager_secret.jina_api.arn]
+  }
+
   # query_athena tool: same workgroup/database the public Data Explorer page
   # queries (infra/glue.tf) -- scoped to the "curated" Glue database only, the
   # gmail database stays excluded, same boundary the Explorer page enforces.
@@ -170,12 +176,14 @@ data "archive_file" "rag_agent" {
 }
 
 resource "aws_lambda_function" "rag_build_index" {
-  function_name    = "${local.name_prefix}-rag-build-index"
-  role             = aws_iam_role.rag_lambda.arn
-  handler          = "build_index.lambda_handler"
-  runtime          = var.lambda_runtime
-  timeout          = 300
-  memory_size      = 512
+  function_name = "${local.name_prefix}-rag-build-index"
+  role          = aws_iam_role.rag_lambda.arn
+  handler       = "build_index.lambda_handler"
+  runtime       = var.lambda_runtime
+  # Reads ~3,400 Parquet files and embeds new documents concurrently; stops with 30 s left and
+  # continues on the next run, so a long first fill just needs more runs. 900 s is Lambda's cap.
+  timeout          = 900
+  memory_size      = 1024
   filename         = data.archive_file.rag_build_index.output_path
   source_code_hash = data.archive_file.rag_build_index.output_base64sha256
   layers           = [var.pandas_layer_arn] # provides pandas/pyarrow/numpy/boto3
@@ -184,6 +192,7 @@ resource "aws_lambda_function" "rag_build_index" {
     variables = {
       CURATED_BUCKET         = aws_s3_bucket.curated.bucket
       BEDROCK_EMBED_MODEL_ID = var.bedrock_embed_model_id
+      QDRANT_SECRET_NAME     = aws_secretsmanager_secret.qdrant.name
     }
   }
 }
@@ -242,6 +251,10 @@ resource "aws_lambda_function" "rag_agent" {
       ATHENA_WORKGROUP       = aws_athena_workgroup.main.name
       ATHENA_DATABASE        = aws_glue_catalog_database.curated.name
       RAG_MEMORY_TABLE       = aws_dynamodb_table.rag_memory.name
+      QDRANT_SECRET_NAME     = aws_secretsmanager_secret.qdrant.name
+      JINA_SECRET_NAME       = aws_secretsmanager_secret.jina_api.name
+      JINA_RERANK_MODEL      = var.jina_rerank_model
+      RAG_CANDIDATES         = tostring(var.rag_candidates)
     }
   }
 }

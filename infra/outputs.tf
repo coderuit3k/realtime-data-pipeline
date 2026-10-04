@@ -69,3 +69,11 @@ output "news_secret_arn" {
 output "tavily_secret_arn" {
   value = aws_secretsmanager_secret.tavily_api.arn
 }
+
+output "qdrant_secret_name" {
+  value = aws_secretsmanager_secret.qdrant.name
+}
+
+output "jina_secret_name" {
+  value = aws_secretsmanager_secret.jina_api.name
+}
