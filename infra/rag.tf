@@ -1,14 +1,9 @@
-# Serverless Agentic RAG over the curated zone: build_index embeds every
-# curated record via Bedrock Titan and writes a JSON index to S3 (now also on
-# a nightly EventBridge schedule, see rag_build_index_schedule below -- still
-# cache-aware via build_index.py's model_id-keyed cache, so a nightly run only
-# re-embeds genuinely new/changed documents, not the whole curated zone);
-# agent (on-demand only, unchanged) is a Bedrock Converse tool-calling loop
-# that decides for itself whether/when to query that index
-# (search_knowledge_base) or fall back to a real web search (search_web,
-# Tavily). Still no vector database (e.g. OpenSearch Serverless) -- that
-# would run 24/7 and cost real money even idle; at this dataset's size,
-# Lambda-memory cosine search is plenty and costs $0 outside a run.
+# Serverless Agentic RAG over the curated zone: rag_build_index (nightly, EventBridge) embeds
+# curated records with Bedrock Titan and upserts them into a Qdrant Cloud collection together
+# with a BM25 sparse vector; rag_agent (on-demand) is a Bedrock Converse tool-calling loop whose
+# search_knowledge_base runs a hybrid query (dense + BM25, fused with RRF) in Qdrant and reranks
+# with the Jina API, or falls back to search_web (Tavily). Qdrant's free tier and Jina's free
+# token allowance keep the extra cost near zero.
 
 # Question/answer cache for rag_agent: a repeated question is served straight
 # from here instead of re-running the Bedrock tool-calling loop. On-demand
@@ -61,12 +56,6 @@ data "aws_iam_policy_document" "rag_permissions" {
     sid       = "ListCuratedZone"
     actions   = ["s3:ListBucket"]
     resources = [aws_s3_bucket.curated.arn]
-  }
-
-  statement {
-    sid       = "WriteRagIndex"
-    actions   = ["s3:PutObject"]
-    resources = ["${aws_s3_bucket.curated.arn}/rag-index/*"]
   }
 
   # Scoped to the two specific model families this project uses, not a

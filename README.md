@@ -25,10 +25,11 @@ flowchart TD
     F -.-> J
 
     G --> K[Lambda: rag_build_index<br/>hackernews/news/github only]
-    K -->|Titan embeddings| L[S3 rag-index/index.json]
+    K -->|Titan dense + BM25 sparse| L[Qdrant Cloud collection]
 
     Q[Question] --> AG[Lambda: rag_agent<br/>tool-calling loop]
-    L --> AG
+    L -->|hybrid search + RRF| RR[Jina rerank]
+    RR --> AG
     AG -->|LLM decides tools/retries| R2[Answer + sources]
 
     T[EventBridge Scheduler<br/>daily] --> TS[Lambda: trend_scan]
@@ -127,20 +128,24 @@ mentions vs same-day price change, GitHub vs Hacker News keywords.
 
 ## Agentic RAG
 
-`rag/` answers questions over the curated zone with Amazon Bedrock. There is
-no vector database: at this size, cosine similarity in Lambda memory is enough
-and avoids a service that bills 24/7.
+`rag/` answers questions over the curated zone with Amazon Bedrock. Vectors
+live in a Qdrant Cloud collection (free tier), so the Lambda no longer loads
+the whole index into memory.
 
-- **`rag/build_index.py`** (on-demand): embeds every record from the three
+- **`rag/build_index.py`** (nightly): embeds every record from the three
   text sources (`hackernews_stories`, `news_articles`, `github_repos`) with
-  Titan (`amazon.titan-embed-text-v2:0`) into `s3://<curated-bucket>/rag-index/index.json`.
-  Weather and crypto are numeric and not worth embedding; the agent reads them
-  with its own tools. It is incremental: it caches by document id + text, so a
-  re-run only embeds new or changed records.
+  Titan (`amazon.titan-embed-text-v2:0`) and upserts it into Qdrant together
+  with a BM25 sparse vector that Qdrant computes. Weather and crypto are
+  numeric and not worth embedding; the agent reads them with its own tools.
+  It is incremental: it skips documents whose text hash and embedding model
+  are unchanged, and it stops before the Lambda time limit and continues on
+  the next run. The nightly run also keeps the free cluster from being
+  suspended for inactivity.
 - **`rag/agent.py`** (on-demand): a tool-calling agent on Bedrock's Converse
   API. On each turn the model decides whether to call a tool, with what input,
   whether to search again, or to answer. Tools:
-  - `search_knowledge_base`: semantic search over the index.
+  - `search_knowledge_base`: hybrid search in Qdrant (meaning + keywords, merged
+    with Reciprocal Rank Fusion), then a Jina rerank of the top 30 down to 5.
   - `get_crypto_prices`, `get_weather`: exact, current data read from the curated zone.
   - `query_athena`: read-only SQL for aggregates (averages, counts, time
     windows), with the same SELECT-only guard as the web Data Explorer.
@@ -156,7 +161,7 @@ queries and cite 13 real sources; an out-of-domain one (a banh mi recipe) went
 straight to `search_web`, with no hardcoded domain check.
 
 ```bash
-# 1. (Re)build the index after new data lands
+# 1. (Re)build the vector collection after new data lands
 aws lambda invoke --function-name realtime-data-pipeline-dev-rag-build-index \
   --cli-read-timeout 300 /tmp/out.json && cat /tmp/out.json
 
