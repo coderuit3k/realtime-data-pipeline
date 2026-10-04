@@ -186,6 +186,49 @@ Athena queries).
 
 ![RAG Assistant answering a question that combines GitHub trending and Hacker News](docs/images/rag-assistant-example.png)
 
+### Questions to try
+
+The RAG Assistant page (or the `rag_agent` Lambda) takes free-form questions in
+any language. These work well with the data the pipeline collects. The tool
+column is what the agent usually reaches for; it chooses tools on its own, so
+the trace can differ.
+
+| Question | Typical tool |
+|---|---|
+| What are people discussing about AI safety and regulation? | `search_knowledge_base` |
+| Any interesting AI agent or developer tools mentioned recently? | `search_knowledge_base` |
+| What are people saying about PostgreSQL on Hacker News? | `search_knowledge_base` |
+| Summarize the latest news about the semiconductor industry. | `search_knowledge_base` |
+| Are there recent repositories related to LangChain or LlamaIndex? | `search_knowledge_base` |
+| What are the current prices of Bitcoin, Ethereum and Solana? | `get_crypto_prices` |
+| Which of the three coins moved the most in the last 24 hours? | `get_crypto_prices` |
+| If I had bought 10 SOL 24 hours ago, how much has my position changed in percent? | `get_crypto_prices` |
+| Which tracked location is the hottest right now, and which is the most humid? | `get_weather` |
+| What are the current conditions in Bien Hoa, and is it raining there right now? | `get_weather` |
+| Which Rust projects were trending on GitHub recently? | `search_knowledge_base` + `query_athena` |
+| Which Hacker News stories got the highest scores in the last 24 hours? | `query_athena` |
+| Which five Hacker News authors posted the most stories in the past week? | `query_athena` |
+| What was Bitcoin's average price per day over the last week? | `query_athena` |
+| Which topics are trending on both Hacker News and GitHub today? | `query_athena` + `search_knowledge_base` |
+| Has the crypto market moved a lot today, and is Hacker News discussing it? | `get_crypto_prices` + `search_knowledge_base` |
+| Who won the most recent football World Cup? | `search_web` |
+| Quel est le prix du Bitcoin aujourd'hui ? | `get_crypto_prices` (answers in French) |
+
+Know the limits before judging an answer:
+
+- **Weather** is the current observation at 12 locations (11 in southern
+  Vietnam plus Da Lat), not a forecast.
+- **Crypto** covers Bitcoin, Ethereum and Solana only. The 24-hour change comes
+  from CoinGecko; for any other time window the agent has to query the history.
+- **Time** ("today", "this week", "this month") is resolved against the current
+  UTC date, and history only goes back to when ingestion started, so an early
+  "since the start of the month" answer can be incomplete.
+- **Read-only:** `query_athena` accepts a single `SELECT`, so a request such as
+  `DROP TABLE hackernews_stories;` cannot run. The private Gmail table has no
+  tool, so questions about emails cannot be answered.
+- **Repeats:** an identical question can be served from the answer cache (the
+  response then has `"cached": true`).
+
 ### Evaluation (RAGAS)
 
 `eval/run_ragas.py` scores the real agent on faithfulness, answer relevancy
