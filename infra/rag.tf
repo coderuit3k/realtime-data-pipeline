@@ -1,4 +1,4 @@
-# Serverless Agentic RAG over the curated zone: rag_build_index (nightly, EventBridge) embeds
+# Serverless Agentic RAG over the curated zone: rag_build_index (every 6 hours, EventBridge) embeds
 # curated records with Bedrock Titan and upserts them into a Qdrant Cloud collection together
 # with a BM25 sparse vector; rag_agent (on-demand) is a Bedrock Converse tool-calling loop whose
 # search_knowledge_base runs a hybrid query (dense + BM25, fused with RRF) in Qdrant and reranks

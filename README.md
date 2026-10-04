@@ -132,14 +132,14 @@ mentions vs same-day price change, GitHub vs Hacker News keywords.
 live in a Qdrant Cloud collection (free tier), so the Lambda no longer loads
 the whole index into memory.
 
-- **`rag/build_index.py`** (nightly): embeds every record from the three
+- **`rag/build_index.py`** (every 6 hours): embeds every record from the three
   text sources (`hackernews_stories`, `news_articles`, `github_repos`) with
   Titan (`amazon.titan-embed-text-v2:0`) and upserts it into Qdrant together
   with a BM25 sparse vector that Qdrant computes. Weather and crypto are
   numeric and not worth embedding; the agent reads them with its own tools.
   It is incremental: it skips documents whose text hash and embedding model
   are unchanged, and it stops before the Lambda time limit and continues on
-  the next run. The nightly run also keeps the free cluster from being
+  the next run. Each run also keeps the free cluster from being
   suspended for inactivity.
 - **`rag/agent.py`** (on-demand): a tool-calling agent on Bedrock's Converse
   API. On each turn the model decides whether to call a tool, with what input,

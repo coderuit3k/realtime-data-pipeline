@@ -140,9 +140,9 @@ variable "trend_scan_schedule" {
 }
 
 variable "rag_build_index_schedule" {
-  description = "EventBridge schedule expression for the nightly rag_build_index Lambda -- runs after trend_scan (23:00 UTC) and after the day's ingestion so the RAG index reflects that day's curated data before it's queried the next day."
+  description = "EventBridge schedule expression for the rag_build_index Lambda (every 6 hours by default, at 00/06/12/18 UTC). Each run is incremental: it embeds only new or changed documents and stops before the Lambda time limit, so a longer gap just means a bigger run."
   type        = string
-  default     = "cron(0 0 * * ? *)"
+  default     = "cron(0 */6 * * ? *)"
 }
 
 variable "trend_hn_min_stories" {

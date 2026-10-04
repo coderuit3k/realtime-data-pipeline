@@ -25,7 +25,7 @@ ATHENA_WORKGROUP=realtime-data-pipeline-dev-analytics ATHENA_DATABASE=realtime_d
 - Athena GetQueryResults needs the `.csv.metadata` file. Delete it only after fetching results.
 - Bedrock Converse requires `toolConfig` whenever the history contains toolUse/toolResult, including on the forced final answer.
 - Lambda Python can't stream natively (needs Web Adapter + Function URL).
-- Qdrant Cloud free tier suspends after 1 week idle (deleted after 4); the nightly `rag_build_index` keeps it active, and the collection is rebuildable from curated Parquet.
+- Qdrant Cloud free tier suspends after 1 week idle (deleted after 4); the scheduled `rag_build_index` (every 6 hours) keeps it active, and the collection is rebuildable from curated Parquet.
 - `eval/results.csv` is gitignored.
 - GitHub/HN/news curated tables are append-only snapshots (a row per item per ingestion run): count with `COUNT(DISTINCT repo_id|story_id|article_id)`. `year/month/day` are string partitions, so a window spanning two months needs `concat(year, month, day) BETWEEN 'YYYYMMDD' AND 'YYYYMMDD'`. The `query_athena` tool description in `rag/agent.py` is the model's only schema guide: keep it in sync with the Glue tables.
 - Athena workgroup `realtime-data-pipeline-dev-analytics` caps each query at 1 GiB scanned.
