@@ -12,9 +12,8 @@ import { CardIcon, SectionCard } from "@/components/SectionCard";
 const ROW_GRID = "grid grid-cols-2 gap-x-4 gap-y-1.5 md:grid-cols-[2fr_1fr_1.2fr_0.6fr_0.9fr] md:items-center";
 
 /**
- * Lambda health, schedule, alarms, logs and cost. Not linked from the sidebar
- * (the dashboard covers it) but still reachable by URL. Cost is fetched
- * separately so a failing Cost Explorer call never blocks the page.
+ * Lambda health, schedule, alarms, logs and cost. Cost is fetched separately
+ * so a failing Cost Explorer call never blocks the page.
  */
 export default function OpsPage() {
   const [data, setData] = useState<OpsResponse | null>(null);

@@ -9,8 +9,7 @@ import { CardIcon, SectionCard } from "@/components/SectionCard";
 
 /**
  * Read-only view of source schedules and whether each secret is set; secret
- * values never reach the browser. Not linked from the sidebar, but still
- * reachable by URL.
+ * values never reach the browser.
  */
 export default function SettingsPage() {
   const [data, setData] = useState<SettingsResponse | null>(null);

@@ -74,7 +74,6 @@ function Sparkline({ points }: { points: { hourBucket: string; avgTemperatureC: 
 
 /**
  * Map of current readings plus a 24h chart for the selected location.
- * Not linked from the sidebar, but still reachable by URL.
  */
 export default function WeatherPage() {
   const [data, setData] = useState<WeatherResponse | null>(null);
