@@ -73,6 +73,21 @@ RAG_MEMORY_TABLE = os.environ.get("RAG_MEMORY_TABLE", "")
 RAG_MEMORY_TTL_SECONDS = int(os.environ.get("RAG_MEMORY_TTL_SECONDS", str(7 * 24 * 3600)))
 RAG_MEMORY_PROMOTE_AFTER_HITS = int(os.environ.get("RAG_MEMORY_PROMOTE_AFTER_HITS", "2"))
 RAG_INDEX_KEY = os.environ.get("RAG_INDEX_KEY", "rag-index/index.json")
+# Parquet files read at once when rag/build_index.py scans the curated history. Sequential reads
+# (~3,400 files) took longer than the Lambda's 300 s timeout.
+RAG_READ_WORKERS = int(os.environ.get("RAG_READ_WORKERS", "10"))
+# Bedrock embedding calls made at once (new documents are embedded in concurrent chunks).
+RAG_EMBED_WORKERS = int(os.environ.get("RAG_EMBED_WORKERS", "10"))
+
+# Hybrid search: Qdrant Cloud (dense + BM25 sparse, fused with RRF) and a Jina rerank on top.
+QDRANT_SECRET_NAME = os.environ.get("QDRANT_SECRET_NAME", "realtime-data-pipeline-dev/qdrant")
+QDRANT_COLLECTION = os.environ.get("QDRANT_COLLECTION", "datapulse-rag")
+JINA_SECRET_NAME = os.environ.get("JINA_SECRET_NAME", "realtime-data-pipeline-dev/jina-api")
+JINA_RERANK_MODEL = os.environ.get("JINA_RERANK_MODEL", "jina-reranker-v3.5")
+# Candidates taken from each retriever and kept after RRF, before the rerank cuts to RAG_TOP_K.
+RAG_CANDIDATES = int(os.environ.get("RAG_CANDIDATES", "30"))
+# false skips the Jina call, so hybrid + RRF alone can be measured with the same code.
+RAG_RERANK = os.environ.get("RAG_RERANK", "true").lower() == "true"
 
 # Tavily web search: the agent's fallback when the knowledge base has nothing
 # relevant.

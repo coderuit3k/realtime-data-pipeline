@@ -5,3 +5,4 @@ boto3==1.36.1
 # so these are left unpinned to match whatever wheels are available locally.
 pandas>=2.2
 pyarrow>=17.0
+qdrant-client==1.19.1
