@@ -150,3 +150,23 @@ def test_hybrid_search_returns_empty_list_for_an_empty_collection(monkeypatch):
     use(monkeypatch, FakeClient())
 
     assert qdrant_store.hybrid_search("anything", [0.1], candidates=30) == []
+
+
+def test_client_is_created_with_an_explicit_timeout(monkeypatch):
+    captured = {}
+
+    class RecordingClient:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(qdrant_store, "_client_instance", None)
+    monkeypatch.setattr(qdrant_store, "QdrantClient", RecordingClient)
+    monkeypatch.setattr(
+        qdrant_store, "get_secret", lambda name: {"url": "https://q", "api_key": "k"}
+    )
+
+    qdrant_store._client()
+
+    assert captured["timeout"] == qdrant_store.QDRANT_TIMEOUT_SECONDS
+    assert qdrant_store.QDRANT_TIMEOUT_SECONDS >= 30
+    monkeypatch.setattr(qdrant_store, "_client_instance", None)

@@ -723,3 +723,49 @@ def test_lambda_handler_does_not_cache_a_truncated_answer(monkeypatch):
 
     assert result["answer"].endswith(agent.TRUNCATED_NOTICE)
     assert agent.question_hash("Another question?") not in table.items
+
+
+def test_run_agent_flags_a_run_where_a_tool_failed(monkeypatch):
+    def boom(query, top_k):
+        raise RuntimeError("qdrant down")
+
+    monkeypatch.setattr(agent, "search_knowledge_base", boom)
+    fake = FakeBedrock(
+        [_tool_use_response("tu1", "search_knowledge_base", "Q"), _final_response("No data.")]
+    )
+    monkeypatch.setattr(agent, "_bedrock", lambda: fake)
+
+    result = agent.run_agent("Q")
+
+    assert result["degraded"] is True
+
+
+def test_run_agent_does_not_flag_a_run_where_tools_succeeded(monkeypatch):
+    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, top_k: [])
+    fake = FakeBedrock(
+        [_tool_use_response("tu1", "search_knowledge_base", "Q"), _final_response("Nothing.")]
+    )
+    monkeypatch.setattr(agent, "_bedrock", lambda: fake)
+
+    assert agent.run_agent("Q")["degraded"] is False
+
+
+def test_lambda_handler_does_not_cache_an_answer_produced_after_a_tool_failure(monkeypatch):
+    table = FakeTable()
+    monkeypatch.setattr(agent, "RAG_MEMORY_TABLE", "rag-memory")
+    monkeypatch.setattr(agent, "_dynamodb", lambda: FakeDynamoDB(table))
+    monkeypatch.setattr(
+        agent,
+        "run_agent",
+        lambda question: {
+            "answer": "No data.",
+            "trace": [],
+            "sources": [],
+            "truncated": False,
+            "degraded": True,
+        },
+    )
+
+    agent.lambda_handler({"question": "Degraded question?"}, None)
+
+    assert agent.question_hash("Degraded question?") not in table.items

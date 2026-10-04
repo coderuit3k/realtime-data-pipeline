@@ -88,13 +88,15 @@ def build_document(record: dict, source: str) -> dict:
 
 
 def dedup_documents(documents: list[dict]) -> list[dict]:
-    """Keep the first document per id; the same item is re-ingested across many runs."""
+    """Keep the first document per (source, id): the same item is re-ingested across many runs,
+    and the three sources have independent id spaces."""
     seen = set()
     deduped = []
     for doc in documents:
-        if doc["id"] in seen:
+        key = (doc["source"], doc["id"])
+        if key in seen:
             continue
-        seen.add(doc["id"])
+        seen.add(key)
         deduped.append(doc)
     return deduped
 

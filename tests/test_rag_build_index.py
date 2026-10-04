@@ -65,11 +65,15 @@ def test_build_document_github_maps_fields():
 
 
 def test_dedup_documents_keeps_first_occurrence():
-    docs = [{"id": "1", "v": "a"}, {"id": "2", "v": "b"}, {"id": "1", "v": "c"}]
+    docs = [
+        {"id": "1", "source": "news", "v": "a"},
+        {"id": "2", "source": "news", "v": "b"},
+        {"id": "1", "source": "news", "v": "c"},
+    ]
 
     result = dedup_documents(docs)
 
-    assert result == [{"id": "1", "v": "a"}, {"id": "2", "v": "b"}]
+    assert [d["v"] for d in result] == ["a", "b"]
 
 
 def test_build_documents_reads_parquet_files_concurrently_and_keeps_order(monkeypatch):
@@ -289,3 +293,15 @@ def test_bedrock_client_retries_adaptively_so_throttling_slows_the_run(monkeypat
     retries = captured["config"].retries
     assert retries["mode"] == "adaptive"
     assert retries["max_attempts"] >= 8
+
+
+def test_dedup_documents_keeps_the_same_id_from_different_sources():
+    docs = [
+        {"id": "1", "source": "news", "v": "a"},
+        {"id": "1", "source": "github", "v": "b"},
+        {"id": "1", "source": "news", "v": "c"},
+    ]
+
+    result = dedup_documents(docs)
+
+    assert [d["v"] for d in result] == ["a", "b"]

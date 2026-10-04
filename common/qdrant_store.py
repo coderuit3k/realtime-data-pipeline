@@ -21,6 +21,9 @@ SPARSE_VECTOR = "sparse"
 DENSE_SIZE = 1024
 BM25_MODEL = "qdrant/bm25"
 SCROLL_PAGE_SIZE = 1000
+# A 64-point upsert makes Qdrant Cloud Inference compute BM25 vectors, which can outlast the
+# library's short default.
+QDRANT_TIMEOUT_SECONDS = 60
 # Fixed namespace: point ids must be identical on every run so an upsert updates in place.
 _ID_NAMESPACE = uuid.UUID("5d1c3a2e-8f4b-4a6e-9c1d-2b7e0f3a9d10")
 
@@ -37,6 +40,7 @@ def _client() -> QdrantClient:
             api_key=secret["api_key"],
             cloud_inference=True,
             prefer_grpc=False,
+            timeout=QDRANT_TIMEOUT_SECONDS,
         )
     return _client_instance
 

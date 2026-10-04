@@ -513,8 +513,12 @@ def extract_text(message: dict) -> str:
     return "".join(block["text"] for block in message["content"] if "text" in block)
 
 
-def _final_result(response: dict, trace: list, sources_by_url: dict) -> dict:
-    """Package the final answer, flagging and annotating it if it hit the token cap."""
+def _final_result(response: dict, trace: list, sources_by_url: dict, degraded: bool) -> dict:
+    """Package the final answer, flagging and annotating it if it hit the token cap.
+
+    `degraded` means a tool failed during the run, so the answer was built from less data than
+    normal and must not be cached.
+    """
     text = extract_text(response["output"]["message"])
     truncated = response["stopReason"] == "max_tokens"
     if truncated:
@@ -524,6 +528,7 @@ def _final_result(response: dict, trace: list, sources_by_url: dict) -> dict:
         "trace": trace,
         "sources": list(sources_by_url.values()),
         "truncated": truncated,
+        "degraded": degraded,
     }
 
 
@@ -532,6 +537,7 @@ def run_agent(question: str) -> dict:
     messages = [{"role": "user", "content": [{"text": question}]}]
     trace = []
     sources_by_url: dict[str, dict] = {}
+    degraded = False
     system_prompt = build_system_prompt()
 
     for _ in range(MAX_ITERATIONS):
@@ -546,7 +552,7 @@ def run_agent(question: str) -> dict:
         messages.append(output_message)
 
         if response["stopReason"] != "tool_use":
-            return _final_result(response, trace, sources_by_url)
+            return _final_result(response, trace, sources_by_url, degraded)
 
         tool_result_blocks = []
         for block in output_message["content"]:
@@ -556,6 +562,8 @@ def run_agent(question: str) -> dict:
             name = tool_use["name"]
             tool_input = tool_use.get("input") or {}
             summary, raw_results = run_tool(name, tool_input)
+            if len(summary) == 1 and "error" in summary[0]:
+                degraded = True
             trace.append({"tool": name, "input": tool_input, "result_count": len(raw_results)})
             for r in raw_results:
                 if r.get("url"):
@@ -581,7 +589,7 @@ def run_agent(question: str) -> dict:
         toolConfig={"tools": TOOLS},
         inferenceConfig={"maxTokens": MAX_ANSWER_TOKENS},
     )
-    return _final_result(response, trace, sources_by_url)
+    return _final_result(response, trace, sources_by_url, degraded)
 
 
 def lambda_handler(event, context):
@@ -617,9 +625,9 @@ def lambda_handler(event, context):
         {"title": s.get("title", ""), "url": s.get("url", ""), "source": s.get("source", "")}
         for s in result["sources"]
     ]
-    # Never cache a truncated answer: if the question recurs it is promoted to a
-    # permanent entry and would serve the cut-off text forever.
-    if not result["truncated"]:
+    # Never cache a truncated or degraded (a tool failed) answer: if the question recurs it is
+    # promoted to a permanent entry and would serve the weaker text forever.
+    if not result["truncated"] and not result.get("degraded"):
         store_cached_answer(question, result["answer"], sources, result["trace"], hit_count=1)
 
     return {
