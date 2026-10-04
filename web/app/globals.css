@@ -12,3 +12,24 @@ body {
   color: #dfe2ee;
   font-family: var(--font-inter), sans-serif;
 }
+
+/* Bars grow from the left once on load; this is the page's single entrance motion. */
+@keyframes barGrow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.bar-grow {
+  transform-origin: left;
+  animation: barGrow 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar-grow {
+    animation: none;
+  }
+}
