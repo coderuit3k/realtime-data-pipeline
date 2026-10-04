@@ -34,6 +34,26 @@ package_no_deps() {
   cp "$ROOT_DIR/$source_file" "$target/"
 }
 
+# rag_agent and rag_build_index: requests + the pinned qdrant-client from requirements.txt.
+# qdrant-client declares numpy by `python_version` markers, and pip evaluates those markers on
+# the BUILD machine's Python, not on --python-version: on Python 3.14 it demands numpy>=2.3,
+# which has no manylinux2014 wheel, so the install fails (and CI's Python would resolve a
+# different set). numpy comes from the pandas layer anyway, so install qdrant-client without
+# dependencies and then its other runtime dependencies explicitly.
+package_with_qdrant() {
+  local target_name="$1"
+  local source_file="$2"
+  local target="$BUILD_DIR/$target_name"
+  mkdir -p "$target"
+  local flags=(--quiet --no-compile --platform manylinux2014_x86_64 --python-version 3.12
+    --only-binary=:all: --target "$target")
+  pip install "${flags[@]}" --no-deps "$(grep -E '^qdrant-client==' "$ROOT_DIR/requirements.txt")"
+  pip install "${flags[@]}" requests==2.32.3 grpcio "httpx[http2]" portalocker protobuf \
+    pydantic urllib3
+  cp -r "$ROOT_DIR/common" "$target/common"
+  cp "$ROOT_DIR/$source_file" "$target/"
+}
+
 package_with_requests hackernews_ingestion ingestion/hackernews_ingestion.py
 package_with_requests news_ingestion ingestion/news_ingestion.py
 package_with_requests weather_ingestion ingestion/weather_ingestion.py
@@ -41,9 +61,9 @@ package_with_requests crypto_ingestion ingestion/crypto_ingestion.py
 package_with_requests github_trending_ingestion ingestion/github_trending_ingestion.py
 package_with_requests gmail_ingestion ingestion/gmail_ingestion.py
 package_no_deps transform transform/transform.py
-package_no_deps rag_build_index rag/build_index.py
+package_with_qdrant rag_build_index rag/build_index.py
 package_no_deps trend_scan trends/trend_scan.py
-package_with_requests rag_agent rag/agent.py
+package_with_qdrant rag_agent rag/agent.py
 
 # `cp -r common` copies the repo's local __pycache__ (built by the dev machine's own
 # Python, not the Lambda runtime's). Those .pyc files embed source mtimes, so they made

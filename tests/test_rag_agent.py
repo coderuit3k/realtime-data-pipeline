@@ -6,10 +6,6 @@ import pytest
 from rag import agent
 
 
-def test_cosine_similarity_identical_vectors_is_one():
-    assert agent.cosine_similarity([1.0, 0.0], [1.0, 0.0]) == 1.0
-
-
 def test_build_system_prompt_states_the_given_date():
     now = datetime(2026, 10, 1, tzinfo=timezone.utc)
     prompt = agent.build_system_prompt(now)
@@ -109,29 +105,78 @@ def test_sanitize_nan_leaves_non_float_and_normal_values_untouched():
     assert result == records
 
 
-def test_search_knowledge_base_orders_by_score_and_truncates(monkeypatch):
-    monkeypatch.setattr(agent, "embed_text", lambda text: [1.0, 0.0])
-    documents = [
-        {"id": "low", "embedding": [0.0, 1.0]},
-        {"id": "high", "embedding": [1.0, 0.0]},
-        {"id": "mid", "embedding": [0.7, 0.7]},
+def test_search_knowledge_base_reranks_the_hybrid_candidates(monkeypatch):
+    candidates = [
+        {"title": "a", "url": "u1", "text": "ta", "source": "news", "score": 0.5},
+        {"title": "b", "url": "u2", "text": "tb", "source": "news", "score": 0.4},
+    ]
+    seen = {}
+
+    def fake_hybrid(query, vector, n):
+        seen["args"] = (query, vector, n)
+        return candidates
+
+    monkeypatch.setattr(agent, "embed_text", lambda text: [0.1])
+    monkeypatch.setattr(agent.qdrant_store, "hybrid_search", fake_hybrid)
+    monkeypatch.setattr(agent, "rerank", lambda q, docs, top_n: list(reversed(docs))[:top_n])
+    monkeypatch.setattr(agent.config, "RAG_CANDIDATES", 30)
+    monkeypatch.setattr(agent.config, "RAG_RERANK", True)
+
+    result = agent.search_knowledge_base("q", top_k=1)
+
+    assert seen["args"] == ("q", [0.1], 30)
+    assert [d["title"] for d in result] == ["b"]
+
+
+def test_search_knowledge_base_skips_rerank_when_disabled(monkeypatch):
+    candidates = [
+        {"title": str(i), "url": "", "text": "", "source": "", "score": 0} for i in range(4)
     ]
 
-    result = agent.search_knowledge_base("query", documents, top_k=2)
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("rerank must not run when RAG_RERANK is false")
 
-    assert [d["id"] for d in result] == ["high", "mid"]
+    monkeypatch.setattr(agent, "embed_text", lambda text: [0.1])
+    monkeypatch.setattr(agent.qdrant_store, "hybrid_search", lambda q, v, n: candidates)
+    monkeypatch.setattr(agent, "rerank", fail_if_called)
+    monkeypatch.setattr(agent.config, "RAG_RERANK", False)
+
+    result = agent.search_knowledge_base("q", top_k=2)
+
+    assert [d["title"] for d in result] == ["0", "1"]
 
 
 def test_run_tool_search_knowledge_base_returns_summary_and_raw(monkeypatch):
     matches = [{"title": "t", "url": "https://example.com", "text": "x" * 400, "score": 0.9}]
-    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, documents, top_k: matches)
+    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, top_k: matches)
 
-    summary, raw = agent.run_tool("search_knowledge_base", {"query": "q"}, documents=[])
+    summary, raw = agent.run_tool("search_knowledge_base", {"query": "q"})
 
     assert summary[0]["title"] == "t"
     assert summary[0]["url"] == "https://example.com"
     assert len(summary[0]["snippet"]) == 300
     assert raw == matches
+
+
+def test_run_tool_search_knowledge_base_with_no_matches_returns_empty_lists(monkeypatch):
+    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, top_k: [])
+
+    summary, raw = agent.run_tool("search_knowledge_base", {"query": "q"})
+
+    assert summary == []
+    assert raw == []
+
+
+def test_run_tool_search_knowledge_base_failure_becomes_an_error_result(monkeypatch):
+    def boom(query, top_k):
+        raise RuntimeError("cluster suspended")
+
+    monkeypatch.setattr(agent, "search_knowledge_base", boom)
+
+    summary, raw = agent.run_tool("search_knowledge_base", {"query": "q"})
+
+    assert summary == [{"error": "knowledge base search failed"}]
+    assert raw == []
 
 
 def test_run_tool_get_crypto_prices_returns_summary_and_sources(monkeypatch):
@@ -146,7 +191,7 @@ def test_run_tool_get_crypto_prices_returns_summary_and_sources(monkeypatch):
     ]
     monkeypatch.setattr(agent, "get_crypto_prices", lambda: records)
 
-    summary, raw = agent.run_tool("get_crypto_prices", {}, documents=[])
+    summary, raw = agent.run_tool("get_crypto_prices", {})
 
     assert summary[0]["coin_id"] == "bitcoin"
     assert summary[0]["price_usd"] == 88420.0
@@ -158,7 +203,7 @@ def test_run_tool_get_crypto_prices_returns_summary_and_sources(monkeypatch):
 def test_run_tool_get_crypto_prices_empty_snapshot_returns_empty(monkeypatch):
     monkeypatch.setattr(agent, "get_crypto_prices", lambda: [])
 
-    summary, raw = agent.run_tool("get_crypto_prices", {}, documents=[])
+    summary, raw = agent.run_tool("get_crypto_prices", {})
 
     assert summary == []
     assert raw == []
@@ -177,7 +222,7 @@ def test_run_tool_get_weather_returns_summary_and_sources(monkeypatch):
     ]
     monkeypatch.setattr(agent, "get_weather", lambda: records)
 
-    summary, raw = agent.run_tool("get_weather", {}, documents=[])
+    summary, raw = agent.run_tool("get_weather", {})
 
     assert summary[0]["location"] == "Hanoi"
     assert summary[0]["temperature_c"] == 22.0
@@ -189,7 +234,7 @@ def test_run_tool_get_weather_returns_summary_and_sources(monkeypatch):
 def test_run_tool_get_weather_empty_snapshot_returns_empty(monkeypatch):
     monkeypatch.setattr(agent, "get_weather", lambda: [])
 
-    summary, raw = agent.run_tool("get_weather", {}, documents=[])
+    summary, raw = agent.run_tool("get_weather", {})
 
     assert summary == []
     assert raw == []
@@ -199,7 +244,7 @@ def test_run_tool_search_web_returns_summary_and_raw(monkeypatch):
     results = [{"title": "t", "url": "https://example.com", "text": "body", "source": "web"}]
     monkeypatch.setattr(agent, "search_web", lambda query: results)
 
-    summary, raw = agent.run_tool("search_web", {"query": "q"}, documents=[])
+    summary, raw = agent.run_tool("search_web", {"query": "q"})
 
     assert summary[0]["title"] == "t"
     assert raw == results
@@ -211,7 +256,7 @@ def test_run_tool_search_web_failure_returns_empty_raw(monkeypatch):
 
     monkeypatch.setattr(agent, "search_web", failing_search)
 
-    summary, raw = agent.run_tool("search_web", {"query": "q"}, documents=[])
+    summary, raw = agent.run_tool("search_web", {"query": "q"})
 
     assert raw == []
     assert "error" in summary[0]
@@ -244,7 +289,7 @@ def test_run_tool_query_athena_returns_summary_and_no_sources(monkeypatch):
     )
 
     summary, raw = agent.run_tool(
-        "query_athena", {"sql": "SELECT * FROM crypto_prices"}, documents=[]
+        "query_athena", {"sql": "SELECT * FROM crypto_prices"}
     )
 
     assert summary == [{"coin_id": "bitcoin"}]
@@ -256,7 +301,7 @@ def test_run_tool_query_athena_appends_truncation_note(monkeypatch):
         agent, "query_athena", lambda sql, **kwargs: ([{"n": "1"}], True)
     )
 
-    summary, raw = agent.run_tool("query_athena", {"sql": "SELECT n FROM t"}, documents=[])
+    summary, raw = agent.run_tool("query_athena", {"sql": "SELECT n FROM t"})
 
     assert summary[0] == {"n": "1"}
     assert "note" in summary[1]
@@ -269,14 +314,14 @@ def test_run_tool_query_athena_failure_returns_error_summary(monkeypatch):
 
     monkeypatch.setattr(agent, "query_athena", failing_query)
 
-    summary, raw = agent.run_tool("query_athena", {"sql": "DROP TABLE x"}, documents=[])
+    summary, raw = agent.run_tool("query_athena", {"sql": "DROP TABLE x"})
 
     assert raw == []
     assert "error" in summary[0]
 
 
 def test_run_tool_unknown_tool_name():
-    summary, raw = agent.run_tool("not_a_real_tool", {}, documents=[])
+    summary, raw = agent.run_tool("not_a_real_tool", {})
     assert raw == []
     assert "error" in summary[0]
 
@@ -321,7 +366,7 @@ def _final_response(text: str) -> dict:
 
 def test_run_agent_calls_tool_then_returns_final_answer(monkeypatch):
     matches = [{"title": "t", "url": "https://example.com", "text": "body", "score": 0.9}]
-    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, documents, top_k: matches)
+    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, top_k: matches)
 
     fake = FakeBedrock(
         [
@@ -331,7 +376,7 @@ def test_run_agent_calls_tool_then_returns_final_answer(monkeypatch):
     )
     monkeypatch.setattr(agent, "_bedrock", lambda: fake)
 
-    result = agent.run_agent("What is AI safety?", documents=[])
+    result = agent.run_agent("What is AI safety?")
 
     assert result["answer"] == "AI safety is widely discussed [1]."
     assert len(result["trace"]) == 1
@@ -363,7 +408,7 @@ def test_run_agent_calls_get_crypto_prices_tool_then_returns_final_answer(monkey
     )
     monkeypatch.setattr(agent, "_bedrock", lambda: fake)
 
-    result = agent.run_agent("What's the Bitcoin price?", documents=[])
+    result = agent.run_agent("What's the Bitcoin price?")
 
     assert result["answer"] == "Bitcoin is $88,420, up 2.4% in 24h [1]."
     assert result["trace"][0]["tool"] == "get_crypto_prices"
@@ -397,7 +442,7 @@ def test_run_agent_calls_query_athena_tool_then_returns_final_answer(monkeypatch
     fake = FakeBedrock([tool_use, _final_response("The average price was $88,420.50.")])
     monkeypatch.setattr(agent, "_bedrock", lambda: fake)
 
-    result = agent.run_agent("What was the average BTC price?", documents=[])
+    result = agent.run_agent("What was the average BTC price?")
 
     assert result["answer"] == "The average price was $88,420.50."
     assert result["trace"][0]["tool"] == "query_athena"
@@ -407,7 +452,7 @@ def test_run_agent_answers_directly_with_no_tool_calls(monkeypatch):
     fake = FakeBedrock([_final_response("2 + 2 = 4.")])
     monkeypatch.setattr(agent, "_bedrock", lambda: fake)
 
-    result = agent.run_agent("What is 2+2?", documents=[])
+    result = agent.run_agent("What is 2+2?")
 
     assert result["answer"] == "2 + 2 = 4."
     assert result["trace"] == []
@@ -427,7 +472,7 @@ def test_run_agent_forces_final_answer_after_max_iterations(monkeypatch):
     )
     monkeypatch.setattr(agent, "_bedrock", lambda: fake)
 
-    result = agent.run_agent("A tricky question", documents=[])
+    result = agent.run_agent("A tricky question")
 
     assert result["answer"] == "Best effort answer."
     assert len(result["trace"]) == 2
@@ -535,7 +580,6 @@ def test_lambda_handler_returns_cached_answer_without_calling_run_agent(monkeypa
     def fail_if_called(*args, **kwargs):
         raise AssertionError("run_agent should not be called on a cache hit")
 
-    monkeypatch.setattr(agent, "load_index", fail_if_called)
     monkeypatch.setattr(agent, "run_agent", fail_if_called)
 
     result = agent.lambda_handler({"question": "what is trending?"}, None)
@@ -573,12 +617,11 @@ def test_lambda_handler_runs_agent_and_caches_on_miss(monkeypatch):
     table = FakeTable()
     monkeypatch.setattr(agent, "RAG_MEMORY_TABLE", "rag-memory")
     monkeypatch.setattr(agent, "_dynamodb", lambda: FakeDynamoDB(table))
-    monkeypatch.setattr(agent, "load_index", lambda: [])
     fresh_trace = [{"tool": "query_athena", "input": {"sql": "SELECT 1"}, "result_count": 1}]
     monkeypatch.setattr(
         agent,
         "run_agent",
-        lambda question, documents: {
+        lambda question: {
             "answer": "Fresh answer.",
             "trace": fresh_trace,
             "sources": [{"title": "T", "url": "https://y", "source": "news"}],
@@ -610,7 +653,7 @@ def test_run_agent_flags_and_labels_an_answer_cut_off_by_max_tokens(monkeypatch)
     fake = FakeBedrock([_truncated_response("Một câu trả lời dài bị cắt giữa chừng, tác động t")])
     monkeypatch.setattr(agent, "_bedrock", lambda: fake)
 
-    result = agent.run_agent("Q", documents=[])
+    result = agent.run_agent("Q")
 
     assert result["truncated"] is True
     assert result["answer"].startswith("Một câu trả lời dài bị cắt giữa chừng, tác động t")
@@ -622,7 +665,7 @@ def test_run_agent_never_returns_a_blank_answer_when_cut_off_with_no_text(monkey
     fake = FakeBedrock([_truncated_response("")])
     monkeypatch.setattr(agent, "_bedrock", lambda: fake)
 
-    result = agent.run_agent("Q", documents=[])
+    result = agent.run_agent("Q")
 
     assert result["truncated"] is True
     assert result["answer"].strip() == agent.TRUNCATED_NOTICE.strip()
@@ -634,7 +677,7 @@ def test_run_agent_flags_truncation_of_the_forced_final_answer(monkeypatch):
     fake = FakeBedrock([_tool_use_response("tu1", "search_web", "a"), _truncated_response("Cụt")])
     monkeypatch.setattr(agent, "_bedrock", lambda: fake)
 
-    result = agent.run_agent("Q", documents=[])
+    result = agent.run_agent("Q")
 
     assert result["truncated"] is True
     assert result["answer"].endswith(agent.TRUNCATED_NOTICE)
@@ -644,7 +687,7 @@ def test_run_agent_does_not_flag_a_complete_answer(monkeypatch):
     fake = FakeBedrock([_final_response("Đầy đủ.")])
     monkeypatch.setattr(agent, "_bedrock", lambda: fake)
 
-    result = agent.run_agent("Q", documents=[])
+    result = agent.run_agent("Q")
 
     assert result["truncated"] is False
     assert result["answer"] == "Đầy đủ."
@@ -656,7 +699,7 @@ def test_run_agent_gives_every_converse_call_the_answer_token_cap(monkeypatch):
     fake = FakeBedrock([_tool_use_response("tu1", "search_web", "a"), _final_response("ok")])
     monkeypatch.setattr(agent, "_bedrock", lambda: fake)
 
-    agent.run_agent("Q", documents=[])
+    agent.run_agent("Q")
 
     assert [c["inferenceConfig"]["maxTokens"] for c in fake.calls] == [agent.MAX_ANSWER_TOKENS] * 2
 
@@ -665,11 +708,10 @@ def test_lambda_handler_does_not_cache_a_truncated_answer(monkeypatch):
     table = FakeTable()
     monkeypatch.setattr(agent, "RAG_MEMORY_TABLE", "rag-memory")
     monkeypatch.setattr(agent, "_dynamodb", lambda: FakeDynamoDB(table))
-    monkeypatch.setattr(agent, "load_index", lambda: [])
     monkeypatch.setattr(
         agent,
         "run_agent",
-        lambda question, documents: {
+        lambda question: {
             "answer": "Cụt" + agent.TRUNCATED_NOTICE,
             "trace": [],
             "sources": [],

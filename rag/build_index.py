@@ -1,8 +1,9 @@
-"""Build-index Lambda (nightly): embeds curated HN/news/GitHub records for rag/agent.py.
+"""Build-index Lambda (nightly): embeds curated HN/news/GitHub records into Qdrant Cloud.
 
-The index is a single JSON object in S3 rather than a vector database: at this size, in-memory
-cosine similarity is enough and avoids a service that bills 24/7. Weather and crypto are numeric
-and are read by the agent's own tools instead of being embedded.
+Each document becomes one Qdrant point with a Titan dense vector and a BM25 sparse vector
+(computed by Qdrant). Documents already stored with the same text and embedding model are skipped,
+so a re-run only embeds new or changed ones. Weather and crypto are numeric and are read by the
+agent's own tools instead of being embedded.
 """
 
 import json
@@ -11,8 +12,10 @@ from io import BytesIO
 
 import boto3
 import pandas as pd
+from botocore.config import Config
 
-from common import config
+from common import config, qdrant_store
+from common.http import map_concurrently
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -33,7 +36,13 @@ def _bedrock():
     """Lazily create the Bedrock runtime client."""
     global _bedrock_client
     if _bedrock_client is None:
-        _bedrock_client = boto3.client("bedrock-runtime", region_name=config.AWS_REGION)
+        # Adaptive retries make Bedrock throttling slow the concurrent embedding down instead
+        # of failing the run.
+        _bedrock_client = boto3.client(
+            "bedrock-runtime",
+            region_name=config.AWS_REGION,
+            config=Config(retries={"max_attempts": 8, "mode": "adaptive"}),
+        )
     return _bedrock_client
 
 
@@ -118,73 +127,84 @@ def build_documents() -> list[dict]:
         ("github", "source=github/"),
     )
     for source, prefix in sources:
-        for key in list_parquet_keys(bucket, prefix):
-            for record in read_parquet_records(bucket, key):
-                documents.append(build_document(record, source))
+        # Each file is reduced to small document dicts inside its worker, so only those (not
+        # every raw DataFrame) are held in memory at once.
+        per_file = map_concurrently(
+            lambda key, source=source: [
+                build_document(record, source) for record in read_parquet_records(bucket, key)
+            ],
+            list_parquet_keys(bucket, prefix),
+            config.RAG_READ_WORKERS,
+        )
+        for file_documents in per_file:
+            documents.extend(file_documents)
     return dedup_documents(documents)
 
 
-def load_existing_index() -> dict[str, dict]:
-    """Return the previous index keyed by document id, or {} if it is missing or unusable."""
-    try:
-        response = _s3().get_object(Bucket=config.CURATED_BUCKET, Key=config.RAG_INDEX_KEY)
-    except _s3().exceptions.NoSuchKey:
-        return {}
-
-    payload = json.loads(response["Body"].read())
-    # Vectors from different embedding models are not comparable, so a model change
-    # invalidates the whole cache.
-    if payload.get("model_id") != config.BEDROCK_EMBED_MODEL_ID:
-        return {}
-    return {doc["id"]: doc for doc in payload["documents"]}
+UPSERT_BATCH = 64
+# Stop embedding with this much Lambda time left, so the upsert and the response still finish.
+TIME_BUFFER_MS = 30_000
 
 
-def partition_by_cache(
+def partition_changed(
     documents: list[dict], existing: dict[str, dict]
 ) -> tuple[list[dict], list[dict]]:
-    """Split into (cached, needs_embedding), reusing a vector when the id and text are unchanged.
+    """Split into (unchanged, needs_embedding) by comparing text hash and embedding model.
 
-    Bedrock bills per embedded token, so re-runs only embed new or edited documents.
+    Bedrock bills per embedded token, so only new or edited documents, or all of them after an
+    embedding-model change (vectors from different models are not comparable), are embedded.
     """
-    cached, needs_embedding = [], []
+    unchanged, needs_embedding = [], []
     for doc in documents:
-        entry = existing.get(doc["id"])
-        if entry is not None and entry.get("text") == doc["text"]:
-            doc["embedding"] = entry["embedding"]
-            cached.append(doc)
-        else:
-            needs_embedding.append(doc)
-    return cached, needs_embedding
+        stored = existing.get(qdrant_store.point_id(doc["source"], doc["id"]))
+        current = {
+            "text_hash": qdrant_store.text_hash(doc["text"]),
+            "embed_model": config.BEDROCK_EMBED_MODEL_ID,
+        }
+        (unchanged if stored == current else needs_embedding).append(doc)
+    return unchanged, needs_embedding
+
+
+def _has_time_left(context) -> bool:
+    return context is None or context.get_remaining_time_in_millis() > TIME_BUFFER_MS
 
 
 def lambda_handler(event, context):
-    """Rebuild the full index and overwrite it in S3, embedding only uncached documents."""
+    """Upsert new or changed documents into Qdrant; stop early if Lambda time runs low.
+
+    Documents are embedded concurrently in chunks and each chunk is upserted before the next
+    starts, so a run that ends early (time) keeps its progress and the next run continues.
+    """
     documents = [doc for doc in build_documents() if doc["text"]]
-    existing = load_existing_index()
-    cached_docs, needs_embedding = partition_by_cache(documents, existing)
+    qdrant_store.ensure_collection()
+    unchanged, needs_embedding = partition_changed(documents, qdrant_store.existing_hashes())
 
-    for doc in needs_embedding:
-        doc["embedding"] = embed_text(doc["text"])
+    chunk_size = UPSERT_BATCH * 2
+    embedded = 0
+    for start in range(0, len(needs_embedding), chunk_size):
+        if not _has_time_left(context):
+            break
+        chunk = needs_embedding[start : start + chunk_size]
+        vectors = map_concurrently(
+            lambda doc: embed_text(doc["text"]), chunk, config.RAG_EMBED_WORKERS
+        )
+        for doc, vector in zip(chunk, vectors):
+            doc["embedding"] = vector
+        qdrant_store.upsert_documents(chunk)
+        embedded += len(chunk)
 
-    all_docs = cached_docs + needs_embedding
-    body = json.dumps({"model_id": config.BEDROCK_EMBED_MODEL_ID, "documents": all_docs})
-    _s3().put_object(
-        Bucket=config.CURATED_BUCKET,
-        Key=config.RAG_INDEX_KEY,
-        Body=body.encode("utf-8"),
-        ContentType="application/json",
-    )
-
+    remaining = len(needs_embedding) - embedded
     logger.info(
-        "Indexed %d documents (%d newly embedded, %d from cache) to %s",
-        len(all_docs), len(needs_embedding), len(cached_docs), config.RAG_INDEX_KEY,
+        "Indexed %d documents (%d newly embedded, %d unchanged, %d remaining) into %s",
+        len(documents), embedded, len(unchanged), remaining, config.QDRANT_COLLECTION,
     )
     return {
         "statusCode": 200,
-        "documents_indexed": len(all_docs),
-        "newly_embedded": len(needs_embedding),
-        "cached": len(cached_docs),
-        "s3_key": config.RAG_INDEX_KEY,
+        "documents_seen": len(documents),
+        "newly_embedded": embedded,
+        "unchanged": len(unchanged),
+        "remaining": remaining,
+        "collection": config.QDRANT_COLLECTION,
     }
 
 

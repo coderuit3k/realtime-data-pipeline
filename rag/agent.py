@@ -13,11 +13,11 @@ from datetime import datetime, timedelta, timezone
 from io import BytesIO
 
 import boto3
-import numpy as np
 import pandas as pd
 import requests
 
-from common import athena, config
+from common import athena, config, qdrant_store
+from common.rerank import rerank
 from common.secrets import get_secret
 from common.sql_guard import validate_read_only_select
 
@@ -314,12 +314,6 @@ def embed_text(text: str) -> list[float]:
     return json.loads(response["body"].read())["embedding"]
 
 
-def load_index() -> list[dict]:
-    """Load the embedded documents written by rag/build_index.py."""
-    response = _s3().get_object(Bucket=config.CURATED_BUCKET, Key=config.RAG_INDEX_KEY)
-    return json.loads(response["Body"].read())["documents"]
-
-
 def list_parquet_keys(bucket: str, prefix: str) -> list[str]:
     """List every .parquet key under prefix, following S3 pagination."""
     keys = []
@@ -367,19 +361,15 @@ def read_latest_curated_snapshot(source: str, now: datetime | None = None) -> li
     return []
 
 
-def cosine_similarity(a: list[float], b: list[float]) -> float:
-    """Cosine similarity, defined as 0.0 for a zero vector."""
-    a_arr, b_arr = np.array(a, dtype=float), np.array(b, dtype=float)
-    denom = np.linalg.norm(a_arr) * np.linalg.norm(b_arr)
-    return float(np.dot(a_arr, b_arr) / denom) if denom else 0.0
+def search_knowledge_base(query: str, top_k: int) -> list[dict]:
+    """Hybrid search (Titan dense + BM25 sparse, fused with RRF in Qdrant), then a rerank.
 
-
-def search_knowledge_base(query: str, documents: list[dict], top_k: int) -> list[dict]:
-    """Brute-force cosine ranking over the in-memory index; fine at this corpus size."""
-    embedding = embed_text(query)
-    scored = [{**doc, "score": cosine_similarity(embedding, doc["embedding"])} for doc in documents]
-    scored.sort(key=lambda d: d["score"], reverse=True)
-    return scored[:top_k]
+    RAG_RERANK=false returns the RRF top results directly, which is how that stage is measured.
+    """
+    candidates = qdrant_store.hybrid_search(query, embed_text(query), config.RAG_CANDIDATES)
+    if not config.RAG_RERANK:
+        return candidates[:top_k]
+    return rerank(query, candidates, top_k)
 
 
 def query_athena(sql: str, max_rows: int = 25) -> tuple[list[dict], bool]:
@@ -423,7 +413,7 @@ def search_web(query: str, max_results: int = 5) -> list[dict]:
     ]
 
 
-def run_tool(name: str, tool_input: dict, documents: list[dict]) -> tuple[list[dict], list[dict]]:
+def run_tool(name: str, tool_input: dict) -> tuple[list[dict], list[dict]]:
     """Run one tool call and return (summary for the model, records for source tracking).
 
     The summary is kept small (no embeddings, truncated text) to limit input tokens. Athena
@@ -432,7 +422,11 @@ def run_tool(name: str, tool_input: dict, documents: list[dict]) -> tuple[list[d
     query = (tool_input or {}).get("query", "")
 
     if name == "search_knowledge_base":
-        matches = search_knowledge_base(query, documents, config.RAG_TOP_K)
+        try:
+            matches = search_knowledge_base(query, config.RAG_TOP_K)
+        except Exception:
+            logger.exception("search_knowledge_base tool failed")
+            return [{"error": "knowledge base search failed"}], []
         summary = [
             {
                 "title": m["title"],
@@ -533,7 +527,7 @@ def _final_result(response: dict, trace: list, sources_by_url: dict) -> dict:
     }
 
 
-def run_agent(question: str, documents: list[dict]) -> dict:
+def run_agent(question: str) -> dict:
     """Run the Converse tool loop until the model answers in text or MAX_ITERATIONS is hit."""
     messages = [{"role": "user", "content": [{"text": question}]}]
     trace = []
@@ -561,7 +555,7 @@ def run_agent(question: str, documents: list[dict]) -> dict:
                 continue
             name = tool_use["name"]
             tool_input = tool_use.get("input") or {}
-            summary, raw_results = run_tool(name, tool_input, documents)
+            summary, raw_results = run_tool(name, tool_input)
             trace.append({"tool": name, "input": tool_input, "result_count": len(raw_results)})
             for r in raw_results:
                 if r.get("url"):
@@ -617,8 +611,7 @@ def lambda_handler(event, context):
             "cached": True,
         }
 
-    documents = load_index()
-    result = run_agent(question, documents)
+    result = run_agent(question)
 
     sources = [
         {"title": s.get("title", ""), "url": s.get("url", ""), "source": s.get("source", "")}
