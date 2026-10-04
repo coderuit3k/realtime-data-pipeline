@@ -769,3 +769,26 @@ def test_lambda_handler_does_not_cache_an_answer_produced_after_a_tool_failure(m
     agent.lambda_handler({"question": "Degraded question?"}, None)
 
     assert agent.question_hash("Degraded question?") not in table.items
+
+
+def _athena_tool_description():
+    spec = next(t["toolSpec"] for t in agent.TOOLS if t["toolSpec"]["name"] == "query_athena")
+    return spec["description"]
+
+
+def test_query_athena_description_warns_that_item_tables_are_repeated_snapshots():
+    text = _athena_tool_description()
+
+    # Without this the model counts rows: 1,792 "Python repositories" that were really 18.
+    assert "COUNT(DISTINCT" in text
+    for id_column in ("story_id", "article_id", "repo_id"):
+        assert id_column in text
+    assert "ROW_NUMBER()" in text  # the latest-row pattern for an item's current score/stars
+
+
+def test_query_athena_description_lists_the_github_id_and_ingested_at_columns():
+    text = _athena_tool_description()
+
+    assert "github_repos(repo_id, full_name" in text
+    assert "stars, forks, created_at, pushed_at, ingested_at, keywords)" in text
+
