@@ -1,64 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { CatalogTable, CicdResponse, PipelineStage, CostBreakdownEntry } from "@/lib/types";
+import type { CatalogTable, CicdResponse, CostBreakdownEntry } from "@/lib/types";
 import { ArchitectureFlow } from "@/components/ArchitectureFlow";
-
-/** Tells the viewer whether the RAG assistant can answer questions about this table. */
-function badgeLabel(table: CatalogTable): string {
-  return table.ragIndexed ? "RAG indexed" : "không vào RAG";
-}
-
-function stageIconColor(status: PipelineStage["status"]): string {
-  if (status === "success") return "text-success";
-  if (status === "waiting") return "text-warning";
-  if (status === "in_progress") return "text-accent";
-  if (status === "failure") return "text-error";
-  if (status === "cancelled" || status === "skipped") return "text-textMuted";
-  return "text-textMuted";
-}
-
-/** Compact status icon for the CI/CD summary card. */
-function StageIcon({ status }: { status: PipelineStage["status"] }) {
-  const color = stageIconColor(status);
-  if (status === "success") {
-    return (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={`${color} flex-shrink-0`}>
-        <path d="M20 6 9 17l-5-5" />
-      </svg>
-    );
-  }
-  if (status === "in_progress") {
-    return (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={`${color} flex-shrink-0 animate-spin motion-reduce:animate-none`}>
-        <path d="M21 12a9 9 0 1 1-9-9" />
-      </svg>
-    );
-  }
-  if (status === "waiting") {
-    return (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={`${color} flex-shrink-0`}>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M12 7v5l3.5 2" />
-      </svg>
-    );
-  }
-  if (status === "failure" || status === "cancelled" || status === "skipped") {
-    return (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={`${color} flex-shrink-0`}>
-        <path d="M18 6 6 18M6 6l12 12" />
-      </svg>
-    );
-  }
-  // "pending" (not started yet) and anything unrecognised get a neutral dot,
-  // never the X-mark, so a queued stage can't be misread as failed. Same
-  // intent as the numbered badge on the CI/CD page.
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" className={`${color} flex-shrink-0`}>
-      <circle cx="12" cy="12" r="4" />
-    </svg>
-  );
-}
+import { Chip } from "@/components/Chip";
+import { KpiCard } from "@/components/KpiCard";
+import { RankRow } from "@/components/RankRow";
+import { CardIcon, SectionCard } from "@/components/SectionCard";
+import { StageTimeline } from "@/components/StageTimeline";
 
 /**
  * Architecture overview plus the Glue Data Catalog browser. Only the catalog
@@ -127,132 +76,122 @@ export default function CatalogPage() {
 
   if (!tables) {
     return (
-      <div className="p-9 grid grid-cols-[270px_1fr] gap-4">
-        <div className="h-96 rounded-lg border border-border bg-surface animate-pulse" />
-        <div className="h-96 rounded-lg border border-border bg-surface animate-pulse" />
+      <div className="p-6 lg:p-9 grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
+        <div className="h-96 rounded-xl border border-border bg-surface animate-pulse" />
+        <div className="h-96 rounded-xl border border-border bg-surface animate-pulse" />
       </div>
     );
   }
 
   const current = tables.find((t) => t.name === selected) ?? tables[0];
+  const totalColumns = tables.reduce((sum, t) => sum + t.columns.length, 0);
+  const ragCount = tables.filter((t) => t.ragIndexed).length;
+  const maxCost = Math.max(1, ...(costBreakdown ?? []).map((x) => x.monthlyUsd));
 
   return (
-    <div className="p-9 flex flex-col gap-5">
-      <div>
-        <h1 className="font-heading text-2xl font-semibold text-textPrimary">Architecture & Lakehouse</h1>
-        <p className="mt-1.5 text-sm text-textSecondary tabular-nums">
+    <div className="p-6 lg:p-9 flex flex-col gap-6">
+      <div className="flex flex-col gap-1">
+        <h1 className="font-heading text-3xl font-semibold tracking-tight text-textPrimary">Architecture & Lakehouse</h1>
+        <p className="text-[13px] text-textMuted tabular-nums">
           Kiến trúc pipeline, trạng thái CI/CD, chi phí hạ tầng, và {tables.length} bảng trong Glue Data Catalog
         </p>
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <KpiCard label="Bảng trong Glue Catalog" value={String(tables.length)} icon={<CardIcon d={["M4 5a8 3 0 1 0 16 0 8 3 0 1 0-16 0", "M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5", "M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"]} />} />
+        <KpiCard label="Tổng số cột" value={String(totalColumns)} icon={<CardIcon d={["M3 4h18v16H3z", "M3 10h18M9 4v16"]} />} />
+        <KpiCard
+          label="Bảng vào RAG"
+          value={`${ragCount} / ${tables.length}`}
+          hint="trợ lý có thể trả lời về các bảng này"
+          icon={<CardIcon d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />}
+        />
+      </div>
+
       <ArchitectureFlow />
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-4 flex flex-col gap-3">
-          <span className="text-xs font-semibold text-textPrimary">Trạng thái CI/CD</span>
-          {cicd ? (
-            <div className="flex flex-wrap gap-3">
-              {cicd.stages.map((stage) => (
-                <div key={stage.name} className="flex items-center gap-1.5 rounded-lg bg-bg px-2.5 py-1.5">
-                  <StageIcon status={stage.status} />
-                  <span className="text-[11px] text-textSecondary">{stage.name}</span>
-                </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+        <SectionCard title="Trạng thái CI/CD" icon={<CardIcon d="M13 2 3 14h8l-1 8 10-12h-8l1-8z" />}>
+          {cicd ? <StageTimeline stages={cicd.stages} approveUrl={null} /> : <span className="text-[12px] text-textMuted">Đang tải…</span>}
+        </SectionCard>
+
+        <SectionCard title="Chi phí hạ tầng" icon={<CardIcon d={["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z", "M12 6.5v1M12 16v1"]} />}>
+          {costBreakdown ? (
+            <div className="flex flex-col gap-3">
+              {costBreakdown.map((c) => (
+                <RankRow key={c.category} label={c.category} value={c.monthlyUsd} max={maxCost} display={`$${c.monthlyUsd.toFixed(2)}`} labelWidth="w-28" />
               ))}
             </div>
           ) : (
-            <span className="text-[11px] text-textMuted">Đang tải…</span>
+            <span className="text-[12px] text-textMuted">Đang tải…</span>
           )}
-        </div>
-
-        <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-4 flex flex-col gap-2.5">
-          <span className="text-xs font-semibold text-textPrimary">Chi phí hạ tầng</span>
-          {costBreakdown ? (
-            <div className="flex flex-col gap-2">
-              {costBreakdown.map((c) => {
-                const maxCost = Math.max(1, ...costBreakdown.map((x) => x.monthlyUsd));
-                return (
-                  <div key={c.category} className="flex items-center gap-2">
-                    <span className="w-[110px] text-[11px] text-textSecondary">{c.category}</span>
-                    <div className="flex-grow h-1.5 rounded bg-border">
-                      <div
-                        className="h-full rounded bg-gradient-to-r from-accent to-accentBright"
-                        style={{ width: `${(c.monthlyUsd / maxCost) * 100}%` }}
-                      />
-                    </div>
-                    <span className="font-mono tabular-nums text-[10.5px] text-textMuted">${c.monthlyUsd.toFixed(2)}</span>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <span className="text-[11px] text-textMuted">Đang tải…</span>
-          )}
-        </div>
+        </SectionCard>
       </div>
 
-      <div className="flex gap-4 flex-grow min-h-0">
-        <div className="w-[270px] shrink-0 rounded-lg border border-border bg-surface/75 backdrop-blur-md p-3.5 flex flex-col gap-1.5 overflow-auto">
-          {tables.map((table) => (
-            <button
-              key={table.name}
-              onClick={() => setSelected(table.name)}
-              className={`text-left flex flex-col rounded-lg px-3 py-2.5 ${
-                table.name === current?.name
-                  ? "bg-accent/10 border border-accent"
-                  : "border border-transparent"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="text-accent flex-shrink-0">
-                  <ellipse cx="12" cy="5" rx="8" ry="3" />
-                  <path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5" />
-                  <path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
-                </svg>
-                <span className="text-[12.5px] font-semibold text-textPrimary">{table.name}</span>
-              </div>
-              <span className="text-[10.5px] text-textMuted tabular-nums">
-                {table.columns.length} cột · {badgeLabel(table)}
-              </span>
-            </button>
-          ))}
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 items-start">
+        <div
+          role="tablist"
+          aria-label="Bảng dữ liệu"
+          className="flex gap-2 overflow-x-auto rounded-xl border border-border bg-surface/75 p-2.5 backdrop-blur-md lg:flex-col lg:overflow-visible"
+        >
+          {tables.map((table) => {
+            const active = table.name === current?.name;
+            return (
+              <button
+                key={table.name}
+                role="tab"
+                aria-selected={active}
+                onClick={() => setSelected(table.name)}
+                className={`flex shrink-0 flex-col gap-1 rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent lg:w-full ${
+                  active ? "border-accent/50 bg-accent/10" : "border-transparent hover:bg-white/[0.03]"
+                }`}
+              >
+                <span className="text-[13px] font-semibold text-textPrimary">{table.name}</span>
+                <span className="flex items-center gap-2 text-[11.5px] tabular-nums text-textMuted">
+                  {table.columns.length} cột
+                  <Chip tone={table.ragIndexed ? "success" : "muted"}>{table.ragIndexed ? "RAG indexed" : "không vào RAG"}</Chip>
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         {current && (
-          <div className="flex-grow flex flex-col gap-4 min-h-0">
-            <div className="rounded-lg border border-border bg-surface/75 backdrop-blur-md px-5 py-5 flex flex-col gap-2.5 flex-grow min-h-0 overflow-auto">
-              <div className="flex items-center gap-2">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="text-accent flex-shrink-0">
-                  <rect x="3" y="4" width="18" height="16" rx="2" />
-                  <path d="M3 10h18M9 4v16" />
-                </svg>
-                <span className="text-[12.5px] font-semibold text-textPrimary">Schema</span>
-              </div>
-              <table className="font-mono w-full border-collapse text-xs">
+          <SectionCard title={current.name} meta={`${current.columns.length} cột`} icon={<CardIcon d={["M3 4h18v16H3z", "M3 10h18M9 4v16"]} />}>
+            <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {[
+                ["Nguồn API", current.sourceApi],
+                ["Lambda ingestion", current.ingestionLambda],
+                ["Tần suất", current.cadence],
+                ["Vị trí", current.location],
+              ].map(([label, value]) => (
+                <div key={label} className="min-w-0 rounded-lg bg-bg/70 px-3 py-2.5">
+                  <dt className="text-[11.5px] text-textMuted">{label}</dt>
+                  <dd className="break-all text-[12.5px] text-textPrimary">{value}</dd>
+                </div>
+              ))}
+            </dl>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-[12.5px]">
                 <thead>
-                  <tr>
-                    <th className="text-left text-textSecondary text-[10.5px] uppercase tracking-wide border-b border-border py-2 px-2.5">
-                      Cột
-                    </th>
-                    <th className="text-left text-textSecondary text-[10.5px] uppercase tracking-wide border-b border-border py-2 px-2.5">
-                      Kiểu
-                    </th>
-                    <th className="text-left text-textSecondary text-[10.5px] uppercase tracking-wide border-b border-border py-2 px-2.5">
-                      Ghi chú
-                    </th>
+                  <tr className="text-left text-[12px] font-medium text-textMuted">
+                    <th className="border-b border-border py-2 pr-4 font-medium">Cột</th>
+                    <th className="border-b border-border py-2 pr-4 font-medium">Kiểu</th>
+                    <th className="border-b border-border py-2 font-medium">Ghi chú</th>
                   </tr>
                 </thead>
                 <tbody>
                   {current.columns.map((col) => (
                     <tr key={col.name}>
-                      <td className="text-textSecondary border-b border-border py-2 px-2.5">{col.name}</td>
-                      <td className="text-textSecondary border-b border-border py-2 px-2.5">{col.type}</td>
-                      <td className="text-textMuted border-b border-border py-2 px-2.5">{col.note ?? ""}</td>
+                      <td className="border-b border-border py-2 pr-4 font-semibold text-textPrimary">{col.name}</td>
+                      <td className="whitespace-nowrap border-b border-border py-2 pr-4 text-accentBright">{col.type}</td>
+                      <td className="border-b border-border py-2 text-textMuted">{col.note ?? ""}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </div>
+          </SectionCard>
         )}
       </div>
     </div>

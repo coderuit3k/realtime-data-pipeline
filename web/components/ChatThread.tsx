@@ -19,7 +19,7 @@ const answerMarkdownComponents: Components = {
       {children}
     </a>
   ),
-  code: ({ children }) => <code className="font-mono text-[12px] bg-bg rounded px-1 py-0.5 text-accent">{children}</code>,
+  code: ({ children }) => <code className="font-mono text-[12.5px] bg-bg rounded px-1 py-0.5 text-accent">{children}</code>,
   table: ({ children }) => (
     <div className="overflow-x-auto rounded border border-border">
       <table className="w-full text-sm border-collapse">{children}</table>
@@ -39,7 +39,7 @@ const answerMarkdownComponents: Components = {
 function QuestionBubble({ question }: { question: string }) {
   return (
     <div className="flex items-end gap-2 justify-end">
-      <div className="max-w-[70%] rounded-lg rounded-br-sm bg-[#1B2540] px-4 py-3">
+      <div className="max-w-[85%] sm:max-w-[70%] rounded-2xl rounded-br-sm bg-[#1B2540] px-4 py-3">
         <span className="text-sm text-textPrimary">{question}</span>
       </div>
       <span className="w-7 h-7 rounded-full bg-bg border border-border flex items-center justify-center text-textSecondary flex-shrink-0">
@@ -60,19 +60,28 @@ function AnswerBubble({ answer, sources }: { answer: string; sources: AssistantS
           <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
         </svg>
       </span>
-      <div className="min-w-0 max-w-full rounded-lg rounded-bl-sm border border-border bg-surface/75 backdrop-blur-md px-4 py-3 flex flex-col gap-3">
+      <div className="min-w-0 max-w-full rounded-2xl rounded-bl-sm border border-border bg-surface/75 backdrop-blur-md px-4 py-3 flex flex-col gap-3">
         <div className="flex flex-col gap-2">
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={answerMarkdownComponents}>
             {answer}
           </ReactMarkdown>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {sources.map((s, i) => (
-            <span key={i} className="font-mono text-[10.5px] text-accent bg-accent/10 rounded px-2 py-1">
-              {s.source} · {s.title}
-            </span>
-          ))}
-        </div>
+        {sources.length > 0 && (
+          <div className="flex flex-wrap gap-2 border-t border-border pt-3">
+            {sources.map((s, i) => {
+              const chip = "max-w-full truncate rounded-md bg-accent/10 px-2.5 py-1 text-[11.5px] text-accent";
+              return /^https?:\/\//.test(s.url ?? "") ? (
+                <a key={i} href={s.url} target="_blank" rel="noreferrer" title={s.title} className={`${chip} transition-colors hover:bg-accent/20 hover:text-accentBright focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent`}>
+                  {s.source} · {s.title}
+                </a>
+              ) : (
+                <span key={i} title={s.title} className={chip}>
+                  {s.source} · {s.title}
+                </span>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -88,14 +97,36 @@ export function ChatThread({
   pendingQuestion,
   pendingResult,
   loading,
+  suggestions = [],
+  onSuggest,
 }: {
   messages: ChatMessage[];
   pendingQuestion: string | null;
   pendingResult: AssistantResult | null;
   loading: boolean;
+  suggestions?: string[];
+  onSuggest?: (question: string) => void;
 }) {
   if (messages.length === 0 && !pendingQuestion) {
-    return <p className="text-sm text-textMuted">Đặt câu hỏi về dữ liệu đã ingest để bắt đầu.</p>;
+    return (
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-textMuted">Đặt câu hỏi về dữ liệu đã ingest để bắt đầu, hoặc thử một câu bên dưới.</p>
+        {onSuggest && suggestions.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {suggestions.map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => onSuggest(q)}
+                className="rounded-xl border border-border bg-bg/60 px-4 py-3 text-left text-[13px] text-textSecondary transition-colors hover:border-accent/40 hover:text-textPrimary focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   }
   return (
     <div className="flex flex-col gap-4">
@@ -108,7 +139,12 @@ export function ChatThread({
       {pendingQuestion && (
         <div className="flex flex-col gap-4">
           <QuestionBubble question={pendingQuestion} />
-          {loading && <span className="text-xs text-textMuted">Đang xử lý…</span>}
+          {loading && (
+            <span className="flex items-center gap-2 text-xs text-textMuted" role="status">
+              <span className="h-2 w-2 rounded-full bg-accent animate-pulse motion-reduce:animate-none" />
+              Đang xử lý…
+            </span>
+          )}
           {pendingResult && <AnswerBubble answer={pendingResult.answer} sources={pendingResult.sources} />}
         </div>
       )}

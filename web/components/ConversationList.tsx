@@ -50,7 +50,7 @@ export function ConversationList({
 
   if (collapsed) {
     return (
-      <div className="w-full rounded-lg border border-border bg-surface/75 backdrop-blur-md py-3 flex flex-col items-center gap-3">
+      <div className="w-full rounded-xl border border-border bg-surface/75 backdrop-blur-md py-3 flex flex-col items-center gap-3">
         <PanelToggleButton
           collapsed
           edge="left"
@@ -72,11 +72,11 @@ export function ConversationList({
   }
 
   return (
-    <div className="w-full min-w-0 rounded-lg border border-border bg-surface/75 backdrop-blur-md p-3 flex flex-col gap-2 overflow-auto">
+    <div className="w-full min-w-0 rounded-xl border border-border bg-surface/75 backdrop-blur-md p-3 flex flex-col gap-2 overflow-auto">
       <div className="flex items-center gap-2">
         <button
           onClick={onCreate}
-          className="flex-grow rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-bg transition-shadow hover:shadow-glowCyan"
+          className="flex-grow rounded-lg bg-accent px-3 py-2.5 text-[13px] font-semibold text-bg transition-shadow hover:shadow-glowCyan focus-visible:outline focus-visible:outline-2 focus-visible:outline-accentBright"
         >
           + Cuộc trò chuyện mới
         </button>
@@ -91,7 +91,7 @@ export function ConversationList({
         {conversations.map((c) => (
           <div
             key={c.id}
-            className={`group flex items-center gap-1.5 rounded-lg px-2.5 py-2 cursor-pointer ${
+            className={`group flex items-center gap-1.5 rounded-lg px-2.5 py-2.5 cursor-pointer ${
               c.id === selectedId ? "bg-accent/10 border border-accent" : "border border-transparent hover:bg-bg/40"
             }`}
             onClick={() => onSelect(c.id)}
@@ -112,14 +112,14 @@ export function ConversationList({
                 className="flex-grow bg-transparent text-[12.5px] text-textPrimary outline-none border-b border-accent"
               />
             ) : (
-              <span className="flex-grow text-[12.5px] text-textPrimary truncate">{c.title}</span>
+              <span className="flex-grow text-[13px] text-textPrimary truncate">{c.title}</span>
             )}
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 startEditing(c);
               }}
-              className="opacity-0 group-hover:opacity-100 text-textMuted hover:text-accent flex-shrink-0"
+              className="p-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 focus-visible:opacity-100 text-textMuted hover:text-accent flex-shrink-0"
               aria-label="Đổi tên"
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -134,7 +134,7 @@ export function ConversationList({
                   onDelete(c.id);
                   setConfirmingDeleteId(null);
                 }}
-                className="text-[10px] font-semibold text-error flex-shrink-0"
+                className="p-1 text-[11px] font-semibold text-error flex-shrink-0"
               >
                 Xóa?
               </button>
@@ -144,7 +144,7 @@ export function ConversationList({
                   e.stopPropagation();
                   setConfirmingDeleteId(c.id);
                 }}
-                className="opacity-0 group-hover:opacity-100 text-textMuted hover:text-error flex-shrink-0"
+                className="p-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 focus-visible:opacity-100 text-textMuted hover:text-error flex-shrink-0"
                 aria-label="Xóa"
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -156,7 +156,7 @@ export function ConversationList({
           </div>
         ))}
         {conversations.length === 0 && (
-          <span className="text-[11px] text-textMuted px-2.5 py-2">Chưa có cuộc trò chuyện nào.</span>
+          <span className="text-[12px] text-textMuted px-2.5 py-2">Chưa có cuộc trò chuyện nào. Gửi một câu hỏi để bắt đầu.</span>
         )}
       </div>
     </div>
