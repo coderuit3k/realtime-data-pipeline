@@ -50,7 +50,7 @@ def embed_text(text: str) -> list[float]:
     """Embed text with the configured Bedrock model, truncated to stay under its input limit."""
     response = _bedrock().invoke_model(
         modelId=config.BEDROCK_EMBED_MODEL_ID,
-        body=json.dumps({"inputText": text[:8000]}),
+        body=json.dumps({"inputText": text}),
     )
     return json.loads(response["body"].read())["embedding"]
 

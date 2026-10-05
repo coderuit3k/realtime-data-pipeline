@@ -128,6 +128,16 @@ def test_search_knowledge_base_reranks_the_hybrid_candidates(monkeypatch):
     assert [d["title"] for d in result] == ["b"]
 
 
+def test_search_knowledge_base_returns_nothing_when_rerank_finds_nothing_relevant(monkeypatch):
+    candidates = [{"title": "a", "url": "u1", "text": "ta", "source": "news", "score": 0.5}]
+    monkeypatch.setattr(agent, "embed_text", lambda text: [0.1])
+    monkeypatch.setattr(agent.qdrant_store, "hybrid_search", lambda q, v, n: candidates)
+    monkeypatch.setattr(agent, "rerank", lambda q, docs, top_n: [])
+    monkeypatch.setattr(agent.config, "RAG_RERANK", True)
+
+    assert agent.search_knowledge_base("q", top_k=5) == []
+
+
 def test_search_knowledge_base_skips_rerank_when_disabled(monkeypatch):
     candidates = [
         {"title": str(i), "url": "", "text": "", "source": "", "score": 0} for i in range(4)
@@ -154,7 +164,8 @@ def test_run_tool_search_knowledge_base_returns_summary_and_raw(monkeypatch):
 
     assert summary[0]["title"] == "t"
     assert summary[0]["url"] == "https://example.com"
-    assert len(summary[0]["snippet"]) == 300
+    # The model gets the whole passage the reranker scored, not a 300-character prefix.
+    assert summary[0]["snippet"] == "x" * 400
     assert raw == matches
 
 

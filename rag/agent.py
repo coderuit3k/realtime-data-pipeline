@@ -331,7 +331,7 @@ def embed_text(text: str) -> list[float]:
     """Embed text; must use the same model and truncation as rag/build_index.py."""
     response = _bedrock().invoke_model(
         modelId=config.BEDROCK_EMBED_MODEL_ID,
-        body=json.dumps({"inputText": text[:8000]}),
+        body=json.dumps({"inputText": text}),
     )
     return json.loads(response["body"].read())["embedding"]
 
@@ -453,7 +453,7 @@ def run_tool(name: str, tool_input: dict) -> tuple[list[dict], list[dict]]:
             {
                 "title": m["title"],
                 "url": m["url"],
-                "snippet": m["text"][:300],
+                "snippet": m["text"],
                 "score": round(m["score"], 4),
             }
             for m in matches
@@ -523,7 +523,7 @@ def run_tool(name: str, tool_input: dict) -> tuple[list[dict], list[dict]]:
             logger.exception("search_web tool failed")
             return [{"error": "web search failed"}], []
         summary = [
-            {"title": r["title"], "url": r["url"], "snippet": r["text"][:300]} for r in results
+            {"title": r["title"], "url": r["url"], "snippet": r["text"]} for r in results
         ]
         return summary, results
 

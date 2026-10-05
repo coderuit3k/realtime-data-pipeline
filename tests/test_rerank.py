@@ -61,7 +61,7 @@ def test_rerank_orders_by_relevance_and_replaces_the_score(post):
     assert [d["score"] for d in result] == [0.9, 0.4]
 
 
-def test_rerank_sends_model_query_top_n_auth_and_truncated_documents(post):
+def test_rerank_sends_model_query_top_n_auth_and_lets_jina_truncate_documents(post):
     post.response = FakeResponse({"results": [{"index": 0, "relevance_score": 1.0}]})
     docs = [{"title": "long", "text": "x" * 5000}]
 
@@ -70,11 +70,55 @@ def test_rerank_sends_model_query_top_n_auth_and_truncated_documents(post):
     url, kwargs = post.calls[0]
     assert url == "https://api.jina.ai/v1/rerank"
     assert kwargs["headers"]["Authorization"] == "Bearer k"
+    # A form-encoded body (data=) is rejected by Jina and would silently fall back to RRF order.
+    assert "data" not in kwargs
     assert kwargs["json"]["query"] == "my query"
     assert kwargs["json"]["top_n"] == 1
     assert kwargs["json"]["model"] == rerank.config.JINA_RERANK_MODEL
-    assert len(kwargs["json"]["documents"][0]) == rerank.MAX_DOC_CHARS
+    # Truncation is Jina's job (tokens, via max_doc_length), so the full text is sent.
+    assert kwargs["json"]["documents"] == ["x" * 5000]
+    assert kwargs["json"]["max_doc_length"] == rerank.MAX_DOC_TOKENS
+    assert kwargs["json"]["return_documents"] is False
     assert kwargs["timeout"] == rerank.RERANK_TIMEOUT_SECONDS
+
+
+def test_rerank_drops_results_below_the_minimum_score_and_keeps_the_order(post):
+    post.response = FakeResponse(
+        {
+            "results": [
+                {"index": 2, "relevance_score": rerank.RERANK_MIN_SCORE + 0.3},
+                {"index": 0, "relevance_score": rerank.RERANK_MIN_SCORE + 0.1},
+                {"index": 1, "relevance_score": rerank.RERANK_MIN_SCORE - 0.1},
+            ]
+        }
+    )
+
+    result = rerank.rerank("q", DOCS, top_n=3)
+
+    assert [d["title"] for d in result] == ["c", "a"]
+
+
+def test_rerank_keeps_a_result_exactly_at_the_minimum_score(post):
+    at_threshold = {"index": 1, "relevance_score": rerank.RERANK_MIN_SCORE}
+    post.response = FakeResponse({"results": [at_threshold]})
+
+    result = rerank.rerank("q", DOCS, top_n=1)
+
+    assert [d["title"] for d in result] == ["b"]
+
+
+def test_rerank_returns_nothing_when_no_result_reaches_the_minimum_score(post):
+    """Jina answered fine and nothing is relevant: do not fall back to the unranked RRF docs."""
+    post.response = FakeResponse(
+        {
+            "results": [
+                {"index": 0, "relevance_score": rerank.RERANK_MIN_SCORE - 0.05},
+                {"index": 1, "relevance_score": -0.2},
+            ]
+        }
+    )
+
+    assert rerank.rerank("q", DOCS, top_n=2) == []
 
 
 def test_rerank_does_not_call_jina_for_an_empty_list(post):
