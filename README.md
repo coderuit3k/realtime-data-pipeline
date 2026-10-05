@@ -6,6 +6,34 @@ queryable with Athena, and adds an agentic RAG assistant on top.
 
 **Live demo:** <https://realtime-data-pipeline.vercel.app/>
 
+### Questions to try
+
+The RAG Assistant page (or the `rag_agent` Lambda) takes free-form questions in
+any language. These work well with the data the pipeline collects. The tool
+column is what the agent usually reaches for; it chooses tools on its own, so
+the trace can differ.
+
+| Question | Typical tool |
+|---|---|
+| What are people discussing about AI safety and regulation? | `search_knowledge_base` |
+| Any interesting AI agent or developer tools mentioned recently? | `search_knowledge_base` |
+| What are people saying about PostgreSQL on Hacker News? | `search_knowledge_base` |
+| Summarize the latest news about the semiconductor industry. | `search_knowledge_base` |
+| Are there recent repositories related to LangChain or LlamaIndex? | `search_knowledge_base` |
+| What are the current prices of Bitcoin, Ethereum and Solana? | `get_crypto_prices` |
+| Which of the three coins moved the most in the last 24 hours? | `get_crypto_prices` |
+| If I had bought 10 SOL 24 hours ago, how much has my position changed in percent? | `get_crypto_prices` |
+| Which tracked location is the hottest right now, and which is the most humid? | `get_weather` |
+| What are the current conditions in Bien Hoa, and is it raining there right now? | `get_weather` |
+| Which Rust projects were trending on GitHub recently? | `search_knowledge_base` + `query_athena` |
+| Which Hacker News stories got the highest scores in the last 24 hours? | `query_athena` |
+| Which five Hacker News authors posted the most stories in the past week? | `query_athena` |
+| What was Bitcoin's average price per day over the last week? | `query_athena` |
+| Which topics are trending on both Hacker News and GitHub today? | `query_athena` + `search_knowledge_base` |
+| Has the crypto market moved a lot today, and is Hacker News discussing it? | `get_crypto_prices` + `search_knowledge_base` |
+| Who won the most recent football World Cup? | `search_web` |
+| Quel est le prix du Bitcoin aujourd'hui ? | `get_crypto_prices` (answers in French) |
+
 ## Architecture
 
 ```mermaid
@@ -48,7 +76,7 @@ flowchart TD
 | `infra/` | Terraform for everything above. See [`infra/README.md`](infra/README.md). |
 | `infra-bootstrap/` | One-time Terraform for the GitHub OIDC role CI/CD uses (no static keys). See [`infra-bootstrap/README.md`](infra-bootstrap/README.md). |
 | `.github/workflows/` | `ci.yml`: lint, tests, `terraform validate`. `deploy.yml`: `terraform plan`, then a manually approved `apply` on push to `main`. |
-| `web/` | Next.js app (dashboard, RAG assistant, explorer, ops, trends, ...). |
+| `web/` | Next.js app (dashboard, RAG assistant, explorer, ops, trends, cicd, weather). |
 | `scripts/` | `build_lambdas.sh` packages the Lambdas; `telegram_*.sh` are the OpenClaw push automations (see [OpenClaw](#openclaw-ops-agent)). |
 
 ## Local development
@@ -92,24 +120,24 @@ fails the run.
 
 | Lambda | Sequential (before) | Concurrent (after) | Faster |
 |---|---|---|---|
-| `hackernews_ingestion` (50 requests) | 5.1 s typical, 7.0 s slow runs | 1.8 s typical | ~3x |
-| `weather_ingestion` (12 requests) | 6.2 s typical, 11.8 s slow runs | 0.7 s typical | ~9x |
+| `hackernews_ingestion` (50 requests) | 5.1s typical, 7.0s slow runs | 1.8s typical | ~3x |
+| `weather_ingestion` (12 requests) | 6.2s typical, 11.8s slow runs | 0.7s typical | ~9x |
 
 "Typical" is the median (p50); "slow runs" is p95. Before = CloudWatch, the
 144 scheduled runs of the 3 days up to 2026-10-01. After = 5 manual runs of
 each function right after the deploy. A back-to-back test on one machine
-against the live APIs points the same way (Hacker News 60-77 s -> 3-4 s,
-weather 20-26 s -> 1.4-2.1 s), with bigger ratios only because that machine
+against the live APIs points the same way (Hacker News 60-77s -> 3-4s,
+weather 20-26s -> 1.4-2.1s), with bigger ratios only because that machine
 had a slow network.
 
 **Conclusion.** Fetching at the same time makes weather about 9x faster and
 Hacker News about 3x faster, with identical results and no extra cost
 (Lambda bills by run time, so shorter is cheaper). Weather's worst run
-before was 30.7 s against a 60 s timeout; after, 2.0 s.
+before was 30.7s against a 60s timeout; after, 2.0s.
 
 **Why.** One after another, the total is the *sum* of every request (for
-weather: 12 requests x ~0.5 s = ~6 s). At the same time, the total is about
-the *slowest single* request (~0.7 s). Hacker News gains less because it has
+weather: 12 requests x ~0.5s = ~6 s). At the same time, the total is about
+the *slowest single* request (~0.7s). Hacker News gains less because it has
 work that cannot be parallelised: it must first fetch the list of story ids,
 and at the end it writes to S3; one slow story also holds up the whole run.
 
@@ -147,8 +175,7 @@ the whole index into memory.
   - `search_knowledge_base`: hybrid search in Qdrant (meaning + keywords, merged
     with Reciprocal Rank Fusion), then a Jina rerank of the top 30 down to 5.
   - `get_crypto_prices`, `get_weather`: exact, current data read from the curated zone.
-  - `query_athena`: read-only SQL for aggregates (averages, counts, time
-    windows), with the same SELECT-only guard as the web Data Explorer.
+  - `query_athena`: read-only SQL for aggregates (averages, counts, time windows).
   - `search_web` (Tavily): fallback for everything else.
 
   The loop ends when the model answers in plain text, or after `MAX_ITERATIONS`
@@ -165,10 +192,16 @@ straight to `search_web`, with no hardcoded domain check.
 aws lambda invoke --function-name realtime-data-pipeline-dev-rag-build-index \
   --cli-read-timeout 300 /tmp/out.json && cat /tmp/out.json
 
-# 2. Ask a question
+# 2. Ask an in-domain question
 aws lambda invoke --function-name realtime-data-pipeline-dev-rag-agent \
   --cli-binary-format raw-in-base64-out \
   --payload '{"question": "What is trending in AI right now?"}' \
+  --cli-read-timeout 90 /tmp/agent-answer.json && cat /tmp/agent-answer.json
+
+# 3. Ask an out-domain question
+aws lambda invoke --function-name realtime-data-pipeline-dev-rag-agent \
+  --cli-binary-format raw-in-base64-out \
+  --payload '{"question": "What is a banh mi recipe?"}' \
   --cli-read-timeout 90 /tmp/agent-answer.json && cat /tmp/agent-answer.json
 ```
 
@@ -184,35 +217,7 @@ combined GitHub trending repos with Hacker News topics and returned a table.
 The right-hand panel shows the tool calls it made (knowledge base search plus
 Athena queries).
 
-![RAG Assistant answering a question that combines GitHub trending and Hacker News](docs/images/rag-assistant-example.png)
-
-### Questions to try
-
-The RAG Assistant page (or the `rag_agent` Lambda) takes free-form questions in
-any language. These work well with the data the pipeline collects. The tool
-column is what the agent usually reaches for; it chooses tools on its own, so
-the trace can differ.
-
-| Question | Typical tool |
-|---|---|
-| What are people discussing about AI safety and regulation? | `search_knowledge_base` |
-| Any interesting AI agent or developer tools mentioned recently? | `search_knowledge_base` |
-| What are people saying about PostgreSQL on Hacker News? | `search_knowledge_base` |
-| Summarize the latest news about the semiconductor industry. | `search_knowledge_base` |
-| Are there recent repositories related to LangChain or LlamaIndex? | `search_knowledge_base` |
-| What are the current prices of Bitcoin, Ethereum and Solana? | `get_crypto_prices` |
-| Which of the three coins moved the most in the last 24 hours? | `get_crypto_prices` |
-| If I had bought 10 SOL 24 hours ago, how much has my position changed in percent? | `get_crypto_prices` |
-| Which tracked location is the hottest right now, and which is the most humid? | `get_weather` |
-| What are the current conditions in Bien Hoa, and is it raining there right now? | `get_weather` |
-| Which Rust projects were trending on GitHub recently? | `search_knowledge_base` + `query_athena` |
-| Which Hacker News stories got the highest scores in the last 24 hours? | `query_athena` |
-| Which five Hacker News authors posted the most stories in the past week? | `query_athena` |
-| What was Bitcoin's average price per day over the last week? | `query_athena` |
-| Which topics are trending on both Hacker News and GitHub today? | `query_athena` + `search_knowledge_base` |
-| Has the crypto market moved a lot today, and is Hacker News discussing it? | `get_crypto_prices` + `search_knowledge_base` |
-| Who won the most recent football World Cup? | `search_web` |
-| Quel est le prix du Bitcoin aujourd'hui ? | `get_crypto_prices` (answers in French) |
+![RAG Assistant answering a question](docs/images/rag-assistant-example.png)
 
 Know the limits before judging an answer:
 
@@ -223,9 +228,8 @@ Know the limits before judging an answer:
 - **Time** ("today", "this week", "this month") is resolved against the current
   UTC date, and history only goes back to when ingestion started, so an early
   "since the start of the month" answer can be incomplete.
-- **Read-only:** `query_athena` accepts a single `SELECT`, so a request such as
-  `DROP TABLE hackernews_stories;` cannot run. The private Gmail table has no
-  tool, so questions about emails cannot be answered.
+- **Read-only:** `query_athena` accepts a single `SELECT`, so a request related to delete or update data cannot run.
+- **Privacy**: The private Gmail table has no tool, so questions about emails cannot be answered.
 - **Repeats:** an identical question can be served from the answer cache (the
   response then has `"cached": true`).
 
@@ -238,10 +242,11 @@ latest numbers are in [`eval/README.md`](eval/README.md).
 
 ### Retrieval upgrade (hybrid search + rerank)
 
-**What changed.** The agent's knowledge-base search used to load a 27 MB `index.json` from S3
-and compare vectors in Lambda memory. It now searches Qdrant Cloud with two retrievers (Titan
+**What changed.** 
+Instead of loading a 27 MB `index.json` from S3
+and compare vectors in Lambda memory, it now uses hybrid search from Qdrant Cloud (Titan
 meaning-based and BM25 keyword-based), merges them with Reciprocal Rank Fusion, and a Jina
-reranker picks the final 5.
+reranker picks the final 5. ([`Qdrant Cloud`](<https://qdrant.tech/cloud/>) [`Jina`](<https://jina.ai/>))
 
 **Result** (12 questions, same agent and model, same 1,158 documents in all three stages):
 
@@ -251,17 +256,22 @@ reranker picks the final 5.
 | 2. Hybrid + RRF | 0.681 | 0.611 | 0.462 | 1,338 ms |
 | 3. Hybrid + RRF + rerank | 0.705 | 0.666 | 0.300 | 2,505 ms |
 
-**Conclusion.** Hybrid search raised context precision (0.385 to 0.462) and rerank raised
+**Conclusion.** 
+Hybrid search raised context precision (0.385 to 0.462) and rerank raised
 faithfulness (0.676 to 0.705), but neither stage beat the old index on every metric: answer
 relevancy fell in both, context precision fell with rerank, and search got slower.
 
-**Why.** Keyword search finds exact names the meaning-based search blurs, and the merge keeps
-what either retriever ranks high, which is why stage 2 retrieved more relevant passages. The
-reranker reads question and passage together, but in this run it also made the agent answer
+**Why.**
+- Keyword search finds exact names the meaning-based search blurs, and the merge keeps
+what either retriever ranks high, which is why stage 2 retrieved more relevant passages.
+- The reranker reads question and passage together, but in this run it also made the agent answer
 the out-of-domain pho question without sources, which the context-precision judge scores as 0
 even though not answering is the right behaviour. Search is slower because it is now a network
 call to Qdrant (about 1.3 s from a laptop, Titan query embedding included) and rerank adds a second one
-to Jina (about 1.2 s more). The real gain is scale: the old index could not load past about
+to Jina (about 1.2 s more).
+
+**Benefit.**
+The real gain is scale: the old index could not load past about
 1.4k documents in a 512 MB Lambda, while Qdrant now holds all 34,977 documents and adds new
 ones incrementally. Rerank costs roughly $0.0004 per search (about 30 passages x 250 tokens at
 $0.05 per million tokens, an estimate), within Jina's free allowance.
