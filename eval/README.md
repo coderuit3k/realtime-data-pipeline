@@ -34,7 +34,15 @@ context with:
 - **Context precision**: how much of what was retrieved was relevant?
 
 Scores print to the terminal and are written per question to
-`eval/results.csv` (gitignored, it is a run artifact).
+`eval/results.csv` (gitignored, it is a run artifact). Besides the scores it has a
+`grounded` column and a `tool_calls` column (JSON: each tool the agent ran, its input,
+how many sources it returned and whether it failed).
+
+The retrieved contexts the judge sees are the cited passages **plus the rows that
+`query_athena`, `get_crypto_prices` and `get_weather` returned** (capped at 6,000
+characters each). Those tools return rows, not passages, so before this the judge had no
+evidence for an answer built from them and scored its faithfulness low. Runs from before
+that change are not comparable with later ones.
 
 ## Reading the results
 
@@ -46,9 +54,16 @@ healthy run has high faithfulness and relevancy on both kinds, and
 `grounded: true` on almost every question, because the web fallback means
 there is nearly always something to cite.
 
-**Latest run (2026-09-23):** faithfulness 0.7271, answer relevancy 0.8870,
-context precision 0.5511. Expect the same ballpark, not identical values: the
-judge LLM and the agent's tool choices both vary.
+**Latest run (2026-10-05, 12 questions):** faithfulness 0.6457, answer relevancy
+0.7105, context precision 0.4083. Expect the same ballpark, not identical
+values: the judge LLM and the agent's tool choices both vary, and two runs of the
+same code differed by about 0.18 in faithfulness.
+
+Set `ATHENA_WORKGROUP`, `ATHENA_DATABASE` and `CURATED_BUCKET` before running
+(`terraform output -raw curated_bucket_name` gives the bucket; the other two are in
+the real-agent command in the root `CLAUDE.md`). Without the Athena pair every
+`query_athena` call fails and the agent has to work around it; without the bucket the
+crypto and weather tools crash the run. The script now stops at once if any is empty.
 
 **Cost and time:** each metric makes several Bedrock calls per question
 (faithfulness splits the answer into statements and checks each). Budget about
