@@ -63,7 +63,6 @@ export default function SettingsPage() {
     <div className="p-6 lg:p-9 flex flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="font-heading text-3xl font-semibold tracking-tight text-textPrimary">Settings</h1>
-        <p className="text-[13px] text-textMuted">Cấu hình nguồn dữ liệu, secrets &amp; lịch vận hành</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -112,7 +111,6 @@ export default function SettingsPage() {
               );
             })}
           </div>
-          <p className="text-[11.5px] text-textMuted">Chỉnh sửa nguồn dữ liệu qua common/config.py + redeploy.</p>
         </SectionCard>
 
         <SectionCard title="Secrets Manager" meta={`${data.secrets.length} secret`} icon={<CardIcon d={["M5 11h14v10H5z", "M8 11V7a4 4 0 0 1 8 0v4"]} />}>
@@ -126,7 +124,6 @@ export default function SettingsPage() {
               </div>
             ))}
           </div>
-          <p className="text-[11.5px] text-textMuted">Giá trị được set qua AWS CLI, Terraform không quản lý value.</p>
         </SectionCard>
       </div>
     </div>

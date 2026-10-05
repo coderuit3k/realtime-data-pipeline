@@ -294,11 +294,6 @@ export default function LandingPage() {
             <h1 className="font-heading text-[30px] font-bold leading-[1.15] tracking-tight text-textPrimary sm:text-[38px]">
               Pipeline dữ liệu real‑time, serverless, chạy thật trên AWS
             </h1>
-            <p className="max-w-xl text-[14.5px] leading-relaxed text-textSecondary">
-              {DATA_SOURCE_COUNT} nguồn dị chủng đổ về S3 → Glue/Athena, cộng một pipeline Agentic RAG thật trên Bedrock —
-              tự quyết định gọi tool truy xuất dữ liệu đã ingest hoặc tìm trên web. Toàn bộ hạ tầng bằng Terraform,
-              deploy qua GitHub Actions với gate phê duyệt production.
-            </p>
             <div className="mt-1 flex flex-wrap gap-3">
               <Link
                 href="/dashboard"
@@ -344,7 +339,7 @@ export default function LandingPage() {
                 <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
               </svg>
             }
-            title={`${DATA_SOURCE_COUNT} nguồn dữ liệu dị chủng`}
+            title={`${DATA_SOURCE_COUNT} nguồn dữ liệu`}
           />
           <FeatureCard
             icon={
@@ -364,7 +359,7 @@ export default function LandingPage() {
                 <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
               </svg>
             }
-            title="Agentic RAG thật"
+            title="Agentic RAG"
           />
           <FeatureCard
             icon={
@@ -375,7 +370,7 @@ export default function LandingPage() {
                 <path d="M18 9a9 9 0 0 1-9 9" />
               </svg>
             }
-            title="IaC + CI/CD thật"
+            title="IaC + CI/CD"
           />
         </section>
 

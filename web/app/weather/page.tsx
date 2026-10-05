@@ -154,9 +154,6 @@ export default function WeatherPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h1 className="font-heading text-3xl font-semibold tracking-tight text-textPrimary">Thời tiết miền Nam</h1>
-          <p className="text-[13px] text-textMuted">
-            {data.locations.length} tỉnh/thành · Open-Meteo, không cần API key · làm mới mỗi 30 phút
-          </p>
         </div>
         {mostRecentObservedAt && (
           <span className="rounded-full bg-accent/10 px-3 py-1.5 text-[12px] text-accentBright">

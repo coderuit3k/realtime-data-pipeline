@@ -98,9 +98,6 @@ export default function ExplorerPage() {
     <div className="p-6 lg:p-9 flex flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="font-heading text-3xl font-semibold tracking-tight text-textPrimary">Data Explorer</h1>
-        <p className="text-[13px] text-textMuted">
-          Chạy SQL chỉ-đọc trên lakehouse bằng Athena{samples ? ` · ${samples.database}` : ""}.
-        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[290px_1fr] gap-4 items-start">

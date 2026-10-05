@@ -154,7 +154,6 @@ export default function DashboardPage() {
     <div className="p-6 lg:p-9 flex flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="font-heading text-3xl font-semibold tracking-tight text-textPrimary">Live Metrics & Ops</h1>
-        <p className="text-[13px] text-textMuted">Sức khoẻ pipeline, khối lượng dữ liệu và chi phí đang chạy thật trên AWS.</p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -191,7 +190,7 @@ export default function DashboardPage() {
 
       <SectionCard
         title="Realtime Ingestion Streams"
-        meta={`${SOURCES.length} nguồn dị chủng`}
+        meta={`${SOURCES.length} nguồn dữ liệu`}
         icon={<CardIcon d="M13 2 3 14h8l-1 8 10-12h-8l1-8z" />}
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">

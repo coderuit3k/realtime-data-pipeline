@@ -92,9 +92,6 @@ export default function CatalogPage() {
     <div className="p-6 lg:p-9 flex flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="font-heading text-3xl font-semibold tracking-tight text-textPrimary">Architecture & Lakehouse</h1>
-        <p className="text-[13px] text-textMuted tabular-nums">
-          Kiến trúc pipeline, trạng thái CI/CD, chi phí hạ tầng, và {tables.length} bảng trong Glue Data Catalog
-        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

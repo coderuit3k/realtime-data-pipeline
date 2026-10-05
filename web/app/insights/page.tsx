@@ -162,9 +162,6 @@ export default function InsightsPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="font-heading text-3xl font-semibold tracking-tight text-textPrimary">Trending Insights</h1>
-          <p className="text-[13px] text-textMuted">
-            Công nghệ, tin tức và thị trường đang nói gì {range === "today" ? "hôm nay" : "trong 7 ngày qua"}.
-          </p>
         </div>
         <div className="flex gap-1 rounded-full border border-border bg-surface/60 p-1" role="group" aria-label="Khoảng thời gian">
           {(["today", "7d"] as const).map((r) => (

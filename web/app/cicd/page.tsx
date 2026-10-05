@@ -89,9 +89,6 @@ export default function CicdPage() {
     <div className="p-6 lg:p-9 flex flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="font-heading text-3xl font-semibold tracking-tight text-textPrimary">CI/CD Pipeline</h1>
-        <p className="text-[13px] text-textMuted">
-          GitHub Actions · OIDC · gate phê duyệt thủ công trước <span className="text-textSecondary">terraform apply</span> production
-        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

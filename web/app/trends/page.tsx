@@ -99,9 +99,6 @@ export default function TrendsPage() {
     <div className="p-6 lg:p-9 flex flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="font-heading text-3xl font-semibold tracking-tight text-textPrimary">Trend Events</h1>
-        <p className="text-[13px] text-textMuted">
-          Từ khoá xuất hiện đồng thời trên GitHub, Hacker News và tin tức trong lần quét hằng ngày.
-        </p>
       </div>
 
       {events.length === 0 ? (
