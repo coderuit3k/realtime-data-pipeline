@@ -246,7 +246,9 @@ latest numbers are in [`eval/README.md`](eval/README.md).
 Instead of loading a 27 MB `index.json` from S3
 and compare vectors in Lambda memory, it now uses hybrid search from Qdrant Cloud (Titan
 meaning-based and BM25 keyword-based), merges them with Reciprocal Rank Fusion, and a Jina
-reranker picks the final 5. ([`Qdrant Cloud`](<https://qdrant.tech/cloud/>), [`Jina`](<https://jina.ai/>), [`Hybrid Search`](<https://qdrant.tech/course/essentials/day-3/hybrid-search-demo/>)
+reranker picks the final 5. 
+
+**Source:** [`Qdrant Cloud`](<https://qdrant.tech/cloud/>), [`Jina`](<https://jina.ai/>), [`Hybrid Search`](<https://qdrant.tech/course/essentials/day-3/hybrid-search-demo/>).
 
 **Result** (12 questions, same agent and model, same 1,158 documents in all three stages):
 
