@@ -246,7 +246,7 @@ latest numbers are in [`eval/README.md`](eval/README.md).
 Instead of loading a 27 MB `index.json` from S3
 and compare vectors in Lambda memory, it now uses hybrid search from Qdrant Cloud (Titan
 meaning-based and BM25 keyword-based), merges them with Reciprocal Rank Fusion, and a Jina
-reranker picks the final 5. ([`Qdrant Cloud`](<https://qdrant.tech/cloud/>) [`Jina`](<https://jina.ai/>))
+reranker picks the final 5. ([`Qdrant Cloud`](<https://qdrant.tech/cloud/>), [`Jina`](<https://jina.ai/>), [`Hybrid Search`](<https://qdrant.tech/course/essentials/day-3/hybrid-search-demo/>)
 
 **Result** (12 questions, same agent and model, same 1,158 documents in all three stages):
 
@@ -276,8 +276,34 @@ The real gain is scale: the old index could not load past about
 ones incrementally. Rerank costs roughly $0.0004 per search (about 30 passages x 250 tokens at
 $0.05 per million tokens, an estimate), within Jina's free allowance.
 
-**Caveat.** 12 questions and an LLM judge that varies between runs: indicative, not a
-benchmark. Latency was measured from a laptop, not from inside AWS.
+## Rerank minimum score
+
+**What changed.** The reranker used to return its top 5 passages no matter how weak they were.
+It now drops any passage whose Jina score is below 0.15 (returning nothing when none qualify),
+Jina truncates long documents itself (`max_doc_length`), and the agent reads the whole passage
+instead of its first 300 characters.
+
+**Result** (same 12 questions, same agent and model):
+
+| | Before (rerank, no cutoff) | After (cutoff 0.15) |
+|---|---|---|
+| Faithfulness | 0.705 | 0.646 |
+| Answer relevancy | 0.666 | 0.710 |
+| Context precision | 0.300 | 0.408 |
+| Passages the agent got, per question | 7.5 | 4.2 |
+
+**Conclusion.** 
+The cutoff cut the passages per question from 7.5 to 4.2 and context precision
+rose in both runs I made (0.300 to 0.408, and 0.507 in a first run with a broken Athena
+setting); faithfulness fell (0.705 to 0.646), but run-to-run swings are larger than that.
+
+**Why.** 
+- Fewer weak passages reach the judge, which is what the cutoff is for: the PostgreSQL
+question went from 5 passages to 1.
+- The other metrics move for reasons unrelated to the change:
+the out-of-domain pho question flips between refusing (scored 0 on everything) and answering
+from the web (scored high) from one run to the next, and the judge gave the same single
+passage a precision of 1.0 in one run and 0.0 in the next.
 
 ## OpenClaw ops agent
 
