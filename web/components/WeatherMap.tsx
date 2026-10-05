@@ -1,15 +1,10 @@
 import type { WeatherLocation } from "@/lib/types";
 import { projectLatLng, WEATHER_BOUNDS } from "@/lib/mapProjection";
 import { temperatureBand } from "@/lib/weatherMeta";
+import { BAND_COLOR } from "@/lib/weatherGeo";
 
 const VIEW_BOX = { width: 600, height: 600 };
 const PADDING = 40;
-
-export const BAND_COLOR: Record<"cool" | "moderate" | "hot", string> = {
-  cool: "#38BDF8",
-  moderate: "#FBBF24",
-  hot: "#FB7185",
-};
 
 // Decorative land shape from the mockup, not a real coastline (the project
 // has no Vietnam GeoJSON). Only the pin positions are geographically real.
@@ -22,7 +17,7 @@ type WeatherMapProps = {
   onSelect: (location: string) => void;
 };
 
-/** Square pin map of the readings; pins are keyboard-focusable and the selected one is drawn on top. */
+/** SVG fallback map (used when there is no Mapbox token or it fails to load); square pin map of the readings; pins are keyboard-focusable and the selected one is drawn on top. */
 export function WeatherMap({ locations, selected, onSelect }: WeatherMapProps) {
   // SVG has no z-index: draw the selected pin last so its halo and label sit on top.
   const ordered = [...locations.filter((l) => l.location !== selected), ...locations.filter((l) => l.location === selected)];

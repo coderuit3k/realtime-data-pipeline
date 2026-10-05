@@ -5,9 +5,14 @@ import type { WeatherResponse, WeatherHistoryResponse } from "@/lib/types";
 import { temperatureBand, VIETNAM_UTC_OFFSET_HOURS } from "@/lib/weatherMeta";
 import { KpiCard } from "@/components/KpiCard";
 import { CardIcon, SectionCard } from "@/components/SectionCard";
-import { BAND_COLOR, WeatherMap } from "@/components/WeatherMap";
+import { MapboxWeatherMap } from "@/components/MapboxWeatherMap";
+import { WeatherMap } from "@/components/WeatherMap";
+import { BAND_COLOR, resolveMapboxToken } from "@/lib/weatherGeo";
 
 const DEFAULT_LOCATION = "Da Lat";
+
+// Inlined at build time (the literal `process.env.NEXT_PUBLIC_*` reference is required); a public pk. token only.
+const MAPBOX_TOKEN = resolveMapboxToken(process.env.NEXT_PUBLIC_MAPBOX_TOKEN);
 
 const BAND_LEGEND = [
   { band: "cool", label: "Mát (<22°C)" },
@@ -80,6 +85,8 @@ export default function WeatherPage() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string>(DEFAULT_LOCATION);
   const [history, setHistory] = useState<WeatherHistoryResponse | null>(null);
+  // Set when Mapbox cannot load (bad token or style), so the SVG map takes over.
+  const [mapFailed, setMapFailed] = useState(false);
   // Guards against out-of-order history responses when clicking pins quickly.
   const latestSelectedRef = useRef<string>(DEFAULT_LOCATION);
 
@@ -187,7 +194,17 @@ export default function WeatherPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-4 items-start">
         <SectionCard title="Bản đồ nhiệt độ" icon={<CardIcon d={["M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z", "M12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"]} />}>
-          <WeatherMap locations={data.locations} selected={selectedReading?.location ?? selected} onSelect={setSelected} />
+          {MAPBOX_TOKEN && !mapFailed ? (
+            <MapboxWeatherMap
+              locations={data.locations}
+              selected={selectedReading?.location ?? selected}
+              onSelect={setSelected}
+              token={MAPBOX_TOKEN}
+              onFail={() => setMapFailed(true)}
+            />
+          ) : (
+            <WeatherMap locations={data.locations} selected={selectedReading?.location ?? selected} onSelect={setSelected} />
+          )}
           <ul className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[12px] text-textSecondary" aria-label="Chú giải nhiệt độ">
             {BAND_LEGEND.map((b) => (
               <li key={b.band} className="flex items-center gap-2">

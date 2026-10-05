@@ -214,6 +214,7 @@ Set these in Vercel (placeholders and comments in `web/.env.example`):
 | `RAG_AGENT_FUNCTION_NAME` | Name of the `rag_agent` Lambda |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis, for assistant rate limiting |
 | `NEWS_SECRET_NAME`, `TAVILY_SECRET_NAME`, `QDRANT_SECRET_NAME`, `JINA_SECRET_NAME` | Secret names (`terraform output news_secret_name` etc.), for the Settings page's metadata-only "configured" check; an unset one shows as "không kiểm tra được" |
+| `NEXT_PUBLIC_MAPBOX_TOKEN` | Mapbox **public** (`pk.`) token for the Weather map, restricted to the site URLs in the Mapbox account. Inlined at build time, so redeploy after changing it. Optional: without it the page uses the SVG map |
 | `DEPLOY_ENVIRONMENT` | Terraform `environment` (e.g. `dev`), shown in the sidebar footer |
 | `RAW_BUCKET`, `CURATED_BUCKET` | Bucket names, for the Ops page |
 
