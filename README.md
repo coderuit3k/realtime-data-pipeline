@@ -136,7 +136,7 @@ Hacker News about 3x faster, with identical results and no extra cost
 before was 30.7s against a 60s timeout; after, 2.0s.
 
 **Why.** One after another, the total is the *sum* of every request (for
-weather: 12 requests x ~0.5s = ~6 s). At the same time, the total is about
+weather: 12 requests x ~0.5s = ~6s). At the same time, the total is about
 the *slowest single* request (~0.7s). Hacker News gains less because it has
 work that cannot be parallelised: it must first fetch the list of story ids,
 and at the end it writes to S3; one slow story also holds up the whole run.
@@ -148,8 +148,7 @@ p95 yet. It will be added once enough scheduled runs have accumulated.
 
 `infra/glue.tf` registers a Glue database (`<project>_curated`) with five
 tables (`hackernews_stories`, `news_articles`, `weather_observations`,
-`crypto_prices`, `github_repos`) using Athena partition projection, so no
-crawler or `MSCK REPAIR TABLE` is needed. Query them in the Athena console
+`crypto_prices`, `github_repos`) using Athena partition projection. Query them in the Athena console
 under workgroup `<project>-analytics`. [`sql/sample_queries.sql`](sql/sample_queries.sql)
 has ready-to-run examples, e.g. Hacker News vs News API keywords, crypto
 mentions vs same-day price change, GitHub vs Hacker News keywords.
@@ -162,13 +161,7 @@ the whole index into memory.
 
 - **`rag/build_index.py`** (every 6 hours): embeds every record from the three
   text sources (`hackernews_stories`, `news_articles`, `github_repos`) with
-  Titan (`amazon.titan-embed-text-v2:0`) and upserts it into Qdrant together
-  with a BM25 sparse vector that Qdrant computes. Weather and crypto are
-  numeric and not worth embedding; the agent reads them with its own tools.
-  It is incremental: it skips documents whose text hash and embedding model
-  are unchanged, and it stops before the Lambda time limit and continues on
-  the next run. Each run also keeps the free cluster from being
-  suspended for inactivity.
+  Titan (`amazon.titan-embed-text-v2:0`) and upserts it into Qdrant. Weather and crypto are numeric and not worth embedding; the agent reads them with its own tools. It is incremental: it skips documents whose text hash and embedding model.
 - **`rag/agent.py`** (on-demand): a tool-calling agent on Bedrock's Converse
   API. On each turn the model decides whether to call a tool, with what input,
   whether to search again, or to answer. Tools:
@@ -176,7 +169,7 @@ the whole index into memory.
     with Reciprocal Rank Fusion), then a Jina rerank of the top 30 down to 5.
   - `get_crypto_prices`, `get_weather`: exact, current data read from the curated zone.
   - `query_athena`: read-only SQL for aggregates (averages, counts, time windows).
-  - `search_web` (Tavily): fallback for everything else.
+  - `search_web` (Tavily): search out-domain questions on Internet, fallback for everything else.
 
   The loop ends when the model answers in plain text, or after `MAX_ITERATIONS`
   (6), when one last call asks for a best-effort answer with tools withdrawn.
@@ -244,9 +237,7 @@ latest numbers are in [`eval/README.md`](eval/README.md).
 
 **What changed.** 
 Instead of loading a 27 MB `index.json` from S3
-and compare vectors in Lambda memory, it now uses hybrid search from Qdrant Cloud (Titan
-meaning-based and BM25 keyword-based), merges them with Reciprocal Rank Fusion, and a Jina
-reranker picks the final 5. 
+and compare vectors in Lambda memory, it now uses hybrid search from Qdrant Cloud (Titan meaning-based and BM25 keyword-based), merges them with Reciprocal Rank Fusion, and a Jina reranker picks the final 5. 
 
 **Source:** [`Qdrant Cloud`](<https://qdrant.tech/cloud/>), [`Jina`](<https://jina.ai/>), [`Hybrid Search`](<https://qdrant.tech/course/essentials/day-3/hybrid-search-demo/>).
 
@@ -260,23 +251,16 @@ reranker picks the final 5.
 
 **Conclusion.** 
 Hybrid search raised context precision (0.385 to 0.462) and rerank raised
-faithfulness (0.676 to 0.705), but neither stage beat the old index on every metric: answer
-relevancy fell in both, context precision fell with rerank, and search got slower.
+faithfulness (0.676 to 0.705), but neither stage beat the old index on every metric: answer relevancy fell in both, context precision fell with rerank, and search got slower.
 
 **Why.**
-- Keyword search finds exact names the meaning-based search blurs, and the merge keeps
-what either retriever ranks high, which is why stage 2 retrieved more relevant passages.
-- The reranker reads question and passage together, but in this run it also made the agent answer
-the out-of-domain pho question without sources, which the context-precision judge scores as 0
-even though not answering is the right behaviour. Search is slower because it is now a network
-call to Qdrant (about 1.3 s from a laptop, Titan query embedding included) and rerank adds a second one
-to Jina (about 1.2 s more).
+- Keyword search finds exact names the meaning-based search blurs, and the merge keeps what either retriever ranks high, which is why stage 2 retrieved more relevant passages.
+- The reranker reads question and passage together, but in this run it also made the agent answer the out-of-domain pho question without sources, which the context-precision judge scores as 0 even though not answering is the right behaviour. Search is slower because it is now a network
+call to Qdrant (about 1.3 s from a laptop, Titan query embedding included) and rerank adds a second one to Jina (about 1.2 s more).
 
 **Benefit.**
 The real gain is scale: the old index could not load past about
-1.4k documents in a 512 MB Lambda, while Qdrant now holds all 34,977 documents and adds new
-ones incrementally. Rerank costs roughly $0.0004 per search (about 30 passages x 250 tokens at
-$0.05 per million tokens, an estimate), within Jina's free allowance.
+1.4k documents in a 512 MB Lambda, while Qdrant now holds all 34,977 documents and adds new ones incrementally. Rerank costs roughly $0.0004 per search (about 30 passages x 250 tokens at $0.05 per million tokens, an estimate), within Jina's free allowance.
 
 ## Rerank minimum score
 
@@ -296,16 +280,12 @@ instead of its first 300 characters.
 
 **Conclusion.** 
 The cutoff cut the passages per question from 7.5 to 4.2 and context precision
-rose in both runs I made (0.300 to 0.408, and 0.507 in a first run with a broken Athena
-setting); faithfulness fell (0.705 to 0.646), but run-to-run swings are larger than that.
+rose in both runs I made (0.300 to 0.408, and 0.507 in a first run with a broken Athena setting); faithfulness fell (0.705 to 0.646), but run-to-run swings are larger than that.
 
 **Why.** 
-- Fewer weak passages reach the judge, which is what the cutoff is for: the PostgreSQL
-question went from 5 passages to 1.
+- Fewer weak passages reach the judge, which is what the cutoff is for: the PostgreSQL question went from 5 passages to 1.
 - The other metrics move for reasons unrelated to the change:
-the out-of-domain pho question flips between refusing (scored 0 on everything) and answering
-from the web (scored high) from one run to the next, and the judge gave the same single
-passage a precision of 1.0 in one run and 0.0 in the next.
+the out-of-domain pho question flips between refusing (scored 0 on everything) and answering from the web (scored high) from one run to the next, and the judge gave the same single passage a precision of 1.0 in one run and 0.0 in the next.
 
 ## OpenClaw ops agent
 
