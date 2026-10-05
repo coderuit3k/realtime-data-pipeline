@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 import requests
 
@@ -158,3 +160,32 @@ def test_rerank_handles_documents_with_missing_text(post):
 
     assert post.calls[0][1]["json"]["documents"] == ["", ""]
     assert result[0]["title"] == "none"
+
+
+def test_rerank_logs_the_scores_the_kept_count_and_the_threshold(post, caplog):
+    post.response = FakeResponse(
+        {
+            "results": [
+                {"index": 2, "relevance_score": rerank.RERANK_MIN_SCORE + 0.25},
+                {"index": 0, "relevance_score": rerank.RERANK_MIN_SCORE - 0.05},
+            ]
+        }
+    )
+
+    with caplog.at_level(logging.INFO, logger="common.rerank"):
+        rerank.rerank("pho recipe", DOCS, top_n=2)
+
+    line = " ".join(record.getMessage() for record in caplog.records)
+    assert f"scores={[0.4, 0.1]}" in line
+    assert "kept=1/2" in line
+    assert f"min_score={rerank.RERANK_MIN_SCORE}" in line
+    assert "pho recipe" in line
+
+
+def test_rerank_logs_even_when_nothing_reaches_the_threshold(post, caplog):
+    post.response = FakeResponse({"results": [{"index": 0, "relevance_score": -0.1}]})
+
+    with caplog.at_level(logging.INFO, logger="common.rerank"):
+        assert rerank.rerank("q", DOCS, top_n=1) == []
+
+    assert "kept=0/1" in " ".join(record.getMessage() for record in caplog.records)

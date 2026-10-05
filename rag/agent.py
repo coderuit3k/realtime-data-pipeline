@@ -57,7 +57,8 @@ TOOLS = [
                 "stories and news articles it has ingested. Best for questions "
                 "about tech, AI, startups, or recent news topics the pipeline "
                 "actually covers. Returns titles, URLs, snippets, and a "
-                "similarity score per result."
+                "relevance score per result. May return no results when nothing "
+                "ingested is relevant enough to the query."
             ),
             "inputSchema": {
                 "json": {

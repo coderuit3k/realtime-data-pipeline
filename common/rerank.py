@@ -58,4 +58,14 @@ def rerank(query: str, docs: list[dict], top_n: int) -> list[dict]:
 
     if not ranked:
         return fallback  # an empty result list from Jina is a bad response, not "nothing relevant"
-    return [d for d in ranked if d["score"] >= RERANK_MIN_SCORE]
+    kept = [d for d in ranked if d["score"] >= RERANK_MIN_SCORE]
+    # One line per call so RERANK_MIN_SCORE can be tuned from real traffic in CloudWatch.
+    logger.info(
+        "Jina rerank scores=%s kept=%d/%d min_score=%s query=%r",
+        [round(d["score"], 4) for d in ranked],
+        len(kept),
+        len(ranked),
+        RERANK_MIN_SCORE,
+        query[:80],
+    )
+    return kept

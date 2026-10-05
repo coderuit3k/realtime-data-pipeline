@@ -782,6 +782,13 @@ def test_lambda_handler_does_not_cache_an_answer_produced_after_a_tool_failure(m
     assert agent.question_hash("Degraded question?") not in table.items
 
 
+def test_search_knowledge_base_description_says_it_may_return_no_results():
+    spec = next(
+        t["toolSpec"] for t in agent.TOOLS if t["toolSpec"]["name"] == "search_knowledge_base"
+    )
+    assert "no results" in spec["description"].lower()
+
+
 def _athena_tool_description():
     spec = next(t["toolSpec"] for t in agent.TOOLS if t["toolSpec"]["name"] == "query_athena")
     return spec["description"]
