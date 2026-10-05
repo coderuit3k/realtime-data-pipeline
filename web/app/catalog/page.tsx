@@ -158,9 +158,7 @@ export default function CatalogPage() {
             <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {[
                 ["Nguồn API", current.sourceApi],
-                ["Lambda ingestion", current.ingestionLambda],
                 ["Tần suất", current.cadence],
-                ["Vị trí", current.location],
               ].map(([label, value]) => (
                 <div key={label} className="min-w-0 rounded-lg bg-bg/70 px-3 py-2.5">
                   <dt className="text-[11.5px] text-textMuted">{label}</dt>
