@@ -1,17 +1,17 @@
 """Lambda: ingests the latest Gmail messages and archives the raw .eml to Cloudflare R2.
 
-Only metadata (subject, sender, short snippet) goes to the raw S3 zone; the full
-message lives in R2.
+Mail is read over IMAP with an app password (OAuth refresh tokens kept expiring). Only metadata
+(subject, sender, short snippet) goes to the raw S3 zone; the full message lives in R2.
 """
 
-import base64
+import imaplib
 import logging
+import re
 from datetime import datetime, timezone
 from email import message_from_bytes
 from email.header import decode_header
 
 import boto3
-import requests
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
@@ -22,8 +22,9 @@ from common.secrets import get_secret
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-GMAIL_TOKEN_URL = "https://oauth2.googleapis.com/token"
-GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1/users/me"
+IMAP_HOST = "imap.gmail.com"
+IMAP_TIMEOUT_SECONDS = 30
+INTERNALDATE_FORMAT = "%d-%b-%Y %H:%M:%S %z"
 
 
 def _safe_decode(raw_bytes: bytes, charset: str | None) -> str:
@@ -59,22 +60,6 @@ def _extract_snippet(parsed_email, max_len: int = 200) -> str:
     return ""
 
 
-def get_access_token(creds: dict) -> str:
-    """Exchange the stored OAuth refresh token for a short-lived access token."""
-    response = requests.post(
-        GMAIL_TOKEN_URL,
-        data={
-            "client_id": creds["client_id"],
-            "client_secret": creds["client_secret"],
-            "refresh_token": creds["refresh_token"],
-            "grant_type": "refresh_token",
-        },
-        timeout=10,
-    )
-    response.raise_for_status()
-    return response.json()["access_token"]
-
-
 def archive_to_r2(client, bucket: str, message_id: str, raw_bytes: bytes) -> None:
     """Upload the raw message unless an earlier run already archived it."""
     key = f"messages/{message_id}.eml"
@@ -87,53 +72,61 @@ def archive_to_r2(client, bucket: str, message_id: str, raw_bytes: bytes) -> Non
     client.put_object(Bucket=bucket, Key=key, Body=raw_bytes, ContentType="message/rfc822")
 
 
-def normalize_message(message_id: str, raw_response: dict) -> tuple[bytes, dict]:
-    """Return (raw .eml bytes, raw gmail record) for a format=raw API response."""
-    # The payload may lack base64 padding; surplus "=" is ignored by the decoder.
-    raw_bytes = base64.urlsafe_b64decode(raw_response["raw"] + "==")
+def normalize_message(
+    message_id: str, raw_bytes: bytes, received_at: datetime | None
+) -> tuple[bytes, dict]:
+    """Return (raw .eml bytes, raw gmail record) for one message's RFC 822 source."""
     parsed = message_from_bytes(raw_bytes)
-
-    internal_date_ms = int(raw_response.get("internalDate", "0"))
-    received_at = (
-        datetime.fromtimestamp(internal_date_ms / 1000, tz=timezone.utc).isoformat()
-        if internal_date_ms
-        else None
-    )
-
     record = {
         "message_id": message_id,
         "source": "gmail",
         "subject": _decode_header_value(parsed.get("Subject")),
         "from_address": _decode_header_value(parsed.get("From")),
         "snippet": _extract_snippet(parsed),
-        "received_at": received_at,
+        "received_at": received_at.astimezone(timezone.utc).isoformat() if received_at else None,
         "ingested_at": datetime.now(timezone.utc).isoformat(),
     }
     return raw_bytes, record
 
 
-def fetch_message_ids(access_token: str, limit: int) -> list[str]:
-    """Ids of the newest `limit` messages in the mailbox."""
-    response = requests.get(
-        f"{GMAIL_API_BASE}/messages",
-        params={"maxResults": limit},
-        headers={"Authorization": f"Bearer {access_token}"},
-        timeout=10,
-    )
-    response.raise_for_status()
-    return [m["id"] for m in response.json().get("messages", [])]
+def connect_imap(creds: dict):
+    """Log in with the app password and open the inbox read-only (reading never marks mail seen)."""
+    conn = imaplib.IMAP4_SSL(IMAP_HOST, timeout=IMAP_TIMEOUT_SECONDS)
+    conn.login(creds["imap_user"], creds["imap_password"])
+    conn.select("INBOX", readonly=True)
+    return conn
 
 
-def fetch_raw_message(access_token: str, message_id: str) -> dict:
-    """Fetch one message in format=raw (the full RFC 822 source, base64url-encoded)."""
-    response = requests.get(
-        f"{GMAIL_API_BASE}/messages/{message_id}",
-        params={"format": "raw"},
-        headers={"Authorization": f"Bearer {access_token}"},
-        timeout=10,
-    )
-    response.raise_for_status()
-    return response.json()
+def fetch_message_ids(conn, limit: int) -> list[bytes]:
+    """Sequence numbers of the newest `limit` messages in the inbox, newest first."""
+    _, data = conn.search(None, "ALL")
+    numbers = data[0].split()
+    return list(reversed(numbers[-limit:])) if limit > 0 else []
+
+
+def fetch_raw_message(conn, number: bytes) -> dict:
+    """One message's Gmail API id, full RFC 822 source and arrival time.
+
+    X-GM-MSGID is Gmail's message id; its hex form is the id the Gmail API used, so ids (and the
+    R2 keys built from them) stay the same as before IMAP.
+    """
+    _, data = conn.fetch(number, "(X-GM-MSGID INTERNALDATE BODY.PEEK[])")
+    raw = data[0][1]
+    # The attributes may sit before or after the body literal, so search every non-body part.
+    head_text = b" ".join(
+        item[0] if isinstance(item, tuple) else item for item in data
+    ).decode("ascii", errors="replace")
+    gm_id = int(re.search(r"X-GM-MSGID (\d+)", head_text).group(1))
+    date = re.search(r'INTERNALDATE "([^"]+)"', head_text)
+    return {
+        "id": format(gm_id, "x"),
+        "raw": raw,
+        "received_at": datetime.strptime(date.group(1), INTERNALDATE_FORMAT).astimezone(
+            timezone.utc
+        )
+        if date
+        else None,
+    }
 
 
 def get_r2_client(creds: dict):
@@ -163,22 +156,30 @@ def fetch_and_archive_messages() -> list[dict]:
     keeps its record -- losing the archive copy shouldn't drop the metadata.
     """
     creds = get_secret(config.GMAIL_SECRET_NAME)
-    access_token = get_access_token(creds)
     r2_client = get_r2_client(creds)
+    conn = connect_imap(creds)
 
     records = []
-    for message_id in fetch_message_ids(access_token, config.GMAIL_MESSAGE_LIMIT):
+    try:
+        for number in fetch_message_ids(conn, config.GMAIL_MESSAGE_LIMIT):
+            try:
+                message = fetch_raw_message(conn, number)
+                raw_bytes, record = normalize_message(
+                    message["id"], message["raw"], message["received_at"]
+                )
+            except Exception:
+                logger.exception("Failed to fetch/normalize message %s -- skipping", number)
+                continue
+            try:
+                archive_to_r2(r2_client, config.GMAIL_R2_BUCKET_NAME, message["id"], raw_bytes)
+            except Exception:
+                logger.exception("R2 archive failed for message %s -- continuing", message["id"])
+            records.append(record)
+    finally:
         try:
-            raw_response = fetch_raw_message(access_token, message_id)
-            raw_bytes, record = normalize_message(message_id, raw_response)
+            conn.logout()
         except Exception:
-            logger.exception("Failed to fetch/normalize message %s -- skipping", message_id)
-            continue
-        try:
-            archive_to_r2(r2_client, config.GMAIL_R2_BUCKET_NAME, message_id, raw_bytes)
-        except Exception:
-            logger.exception("R2 archive failed for message %s -- continuing", message_id)
-        records.append(record)
+            logger.warning("IMAP logout failed", exc_info=True)
     return records
 
 

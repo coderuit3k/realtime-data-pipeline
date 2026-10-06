@@ -15,10 +15,10 @@ resource "aws_secretsmanager_secret" "tavily_api" {
   name = "${local.name_prefix}/tavily-api"
 }
 
-# Gmail ingestion: one secret bundling Gmail OAuth2 credentials AND the R2
-# credentials used to archive raw messages (see infra/README.md's real
-# setup steps -- both are real values the user creates and sets via
-# `aws secretsmanager put-secret-value`, never Terraform-managed).
+# Gmail ingestion: one secret bundling the Gmail IMAP login (imap_user, imap_password = a Google
+# app password, needs 2-step verification) AND the R2 credentials used to archive raw messages
+# (r2_account_id, r2_access_key_id, r2_secret_access_key). Both are real values the user creates
+# and sets via `aws secretsmanager put-secret-value`, never Terraform-managed.
 resource "aws_secretsmanager_secret" "gmail_ingestion" {
   name = "${local.name_prefix}/gmail-ingestion"
 }

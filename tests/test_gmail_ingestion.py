@@ -1,4 +1,4 @@
-import base64
+from datetime import datetime, timezone
 from email.header import Header
 from email.message import EmailMessage
 from unittest.mock import MagicMock, patch
@@ -8,21 +8,19 @@ from botocore.exceptions import ClientError
 from ingestion.gmail_ingestion import (
     _decode_header_value,
     archive_to_r2,
+    connect_imap,
     fetch_and_archive_messages,
     fetch_message_ids,
     fetch_raw_message,
-    get_access_token,
     lambda_handler,
     normalize_message,
 )
 
+RECEIVED = datetime(2023, 11, 14, 22, 13, 20, tzinfo=timezone.utc)
 
-def _raw_response(msg: EmailMessage, internal_date_ms: int = 1700000000000) -> dict:
-    raw_bytes = msg.as_bytes()
-    return {
-        "raw": base64.urlsafe_b64encode(raw_bytes).decode("ascii").rstrip("="),
-        "internalDate": str(internal_date_ms),
-    }
+
+def _normalize(message_id, msg, received_at=RECEIVED):
+    return normalize_message(message_id, msg.as_bytes(), received_at)
 
 
 def test_normalize_message_maps_plain_fields():
@@ -31,7 +29,7 @@ def test_normalize_message_maps_plain_fields():
     msg["From"] = "news@example.com"
     msg.set_content("Hello, this is the body text.")
 
-    raw_bytes, record = normalize_message("msg-1", _raw_response(msg))
+    raw_bytes, record = _normalize("msg-1", msg)
 
     assert record["message_id"] == "msg-1"
     assert record["source"] == "gmail"
@@ -49,7 +47,7 @@ def test_normalize_message_decodes_rfc2047_encoded_subject():
     msg["From"] = "a@example.com"
     msg.set_content("body")
 
-    _, record = normalize_message("msg-2", _raw_response(msg))
+    _, record = _normalize("msg-2", msg)
 
     assert record["subject"] == "Xin chào bạn"
 
@@ -74,7 +72,7 @@ def test_normalize_message_snippet_is_empty_when_no_text_plain_part():
     msg["From"] = "a@example.com"
     msg.set_content("<p>hi</p>", subtype="html")
 
-    _, record = normalize_message("msg-3", _raw_response(msg))
+    _, record = _normalize("msg-3", msg)
 
     assert record["snippet"] == ""
 
@@ -85,31 +83,9 @@ def test_normalize_message_truncates_long_snippet_to_200_chars():
     msg["From"] = "a@example.com"
     msg.set_content("x" * 500)
 
-    _, record = normalize_message("msg-4", _raw_response(msg))
+    _, record = _normalize("msg-4", msg)
 
     assert len(record["snippet"]) == 200
-
-
-@patch("ingestion.gmail_ingestion.requests.post")
-def test_get_access_token_sends_refresh_token_grant(mock_post):
-    mock_response = MagicMock()
-    mock_response.json.return_value = {"access_token": "real-token-123"}
-    mock_post.return_value = mock_response
-
-    token = get_access_token({
-        "client_id": "cid",
-        "client_secret": "csecret",
-        "refresh_token": "rtoken",
-    })
-
-    assert token == "real-token-123"
-    _, kwargs = mock_post.call_args
-    assert kwargs["data"] == {
-        "client_id": "cid",
-        "client_secret": "csecret",
-        "refresh_token": "rtoken",
-        "grant_type": "refresh_token",
-    }
 
 
 @patch("ingestion.gmail_ingestion.boto3.client")
@@ -169,106 +145,186 @@ def test_archive_to_r2_reraises_non_404_errors():
         pass
 
 
-@patch("ingestion.gmail_ingestion.requests.get")
-def test_fetch_message_ids_returns_ids_from_response(mock_get):
-    mock_response = MagicMock()
-    mock_response.json.return_value = {"messages": [{"id": "m1"}, {"id": "m2"}]}
-    mock_get.return_value = mock_response
+class FakeImap:
+    """Just enough of imaplib.IMAP4_SSL: a mailbox of {sequence number: (gmail id, date, raw)}."""
 
-    ids = fetch_message_ids("token-x", 2)
+    def __init__(self, mailbox):
+        self.mailbox = mailbox
+        self.selected = None
+        self.fetches = []
+        self.logged_out = False
 
-    assert ids == ["m1", "m2"]
-    _, kwargs = mock_get.call_args
-    assert kwargs["params"] == {"maxResults": 2}
-    assert kwargs["headers"]["Authorization"] == "Bearer token-x"
+    def search(self, charset, criterion):
+        assert criterion == "ALL"
+        return "OK", [b" ".join(str(n).encode() for n in sorted(self.mailbox))]
+
+    def select(self, mailbox, readonly=False):
+        self.selected = (mailbox, readonly)
+        return "OK", [b"3"]
+
+    def fetch(self, number, parts):
+        self.fetches.append((number, parts))
+        gm_id, date, raw = self.mailbox[int(number)]
+        head = (
+            f'{int(number)} (X-GM-MSGID {gm_id} INTERNALDATE "{date}" BODY[] {{{len(raw)}}}'
+        ).encode()
+        return "OK", [(head, raw), b")"]
+
+    def logout(self):
+        self.logged_out = True
+        return "BYE", [b""]
 
 
-@patch("ingestion.gmail_ingestion.requests.get")
-def test_fetch_raw_message_requests_raw_format(mock_get):
-    mock_response = MagicMock()
-    mock_response.json.return_value = {"id": "m1", "raw": "abc", "internalDate": "1700000000000"}
-    mock_get.return_value = mock_response
+def _mailbox():
+    return {
+        1: (1, "01-Jan-2026 00:00:00 +0000", b"Subject: old\r\n\r\nold"),
+        2: (255, "14-Nov-2023 22:13:20 +0000", b"Subject: mid\r\n\r\nmid"),
+        3: (4096, "14-Nov-2023 15:13:20 -0700", b"Subject: new\r\n\r\nnew"),
+    }
 
-    result = fetch_raw_message("token-x", "m1")
 
-    assert result["raw"] == "abc"
-    _, kwargs = mock_get.call_args
-    assert kwargs["params"] == {"format": "raw"}
+def test_fetch_message_ids_returns_the_newest_first_limited():
+    assert fetch_message_ids(FakeImap(_mailbox()), 2) == [b"3", b"2"]
+
+
+def test_fetch_message_ids_of_an_empty_mailbox_is_empty():
+    assert fetch_message_ids(FakeImap({}), 5) == []
+
+
+def test_fetch_raw_message_returns_the_gmail_api_id_the_bytes_and_a_utc_date():
+    imap = FakeImap(_mailbox())
+
+    message = fetch_raw_message(imap, b"3")
+
+    # The Gmail API id is the hex of X-GM-MSGID, so ids stay the same as before IMAP.
+    assert message["id"] == "1000"
+    assert message["raw"] == b"Subject: new\r\n\r\nnew"
+    assert message["received_at"] == datetime(2023, 11, 14, 22, 13, 20, tzinfo=timezone.utc)
+
+
+def test_fetch_raw_message_finds_attributes_the_server_sends_after_the_body():
+    class TrailingAttributes(FakeImap):
+        def fetch(self, number, parts):
+            raw = b"Subject: x\r\n\r\nx"
+            head = f"3 (BODY[] {{{len(raw)}}}".encode()
+            tail = b' X-GM-MSGID 255 INTERNALDATE "14-Nov-2023 22:13:20 +0000")'
+            return "OK", [(head, raw), tail]
+
+    message = fetch_raw_message(TrailingAttributes({}), b"3")
+
+    assert message["id"] == "ff"
+    assert message["raw"] == b"Subject: x\r\n\r\nx"
+    assert message["received_at"] == datetime(2023, 11, 14, 22, 13, 20, tzinfo=timezone.utc)
+
+
+def test_fetch_raw_message_does_not_mark_mail_as_read():
+    imap = FakeImap(_mailbox())
+
+    fetch_raw_message(imap, b"2")
+
+    assert "BODY.PEEK[]" in imap.fetches[0][1]
+
+
+@patch("ingestion.gmail_ingestion.imaplib.IMAP4_SSL")
+def test_connect_imap_logs_in_and_opens_the_inbox_read_only(mock_imap_cls):
+    conn = connect_imap({"imap_user": "me@gmail.com", "imap_password": "app-pass"})
+
+    mock_imap_cls.assert_called_once()
+    assert mock_imap_cls.call_args.args[0] == "imap.gmail.com"
+    conn.login.assert_called_once_with("me@gmail.com", "app-pass")
+    conn.select.assert_called_once_with("INBOX", readonly=True)
+
+
+CREDS = {
+    "imap_user": "me@gmail.com", "imap_password": "pw",
+    "r2_account_id": "acc", "r2_access_key_id": "ak", "r2_secret_access_key": "sk",
+}
+
+
+def _mail(subject):
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = "a@example.com"
+    msg.set_content("body")
+    return msg.as_bytes()
+
+
+def _imap_with(raws):
+    return FakeImap({i: (int(i, 16), "14-Nov-2023 22:13:20 +0000", raw) for i, raw in raws.items()})
 
 
 @patch("ingestion.gmail_ingestion.archive_to_r2")
 @patch("ingestion.gmail_ingestion.get_r2_client")
-@patch("ingestion.gmail_ingestion.fetch_raw_message")
-@patch("ingestion.gmail_ingestion.fetch_message_ids")
-@patch("ingestion.gmail_ingestion.get_access_token")
+@patch("ingestion.gmail_ingestion.connect_imap")
 @patch("ingestion.gmail_ingestion.get_secret")
 def test_fetch_and_archive_messages_continues_when_one_archive_fails(
-    mock_get_secret,
-    mock_get_access_token,
-    mock_fetch_ids,
-    mock_fetch_raw,
-    mock_get_r2_client,
-    mock_archive,
+    mock_get_secret, mock_connect, mock_get_r2_client, mock_archive
 ):
-    mock_get_secret.return_value = {
-        "client_id": "cid", "client_secret": "cs", "refresh_token": "rt",
-        "r2_account_id": "acc", "r2_access_key_id": "ak", "r2_secret_access_key": "sk",
-    }
-    mock_get_access_token.return_value = "token-x"
-    mock_fetch_ids.return_value = ["m1", "m2"]
-
-    def fake_raw(token, message_id):
-        msg = EmailMessage()
-        msg["Subject"] = f"Subject {message_id}"
-        msg["From"] = "a@example.com"
-        msg.set_content("body")
-        return _raw_response(msg)
-
-    mock_fetch_raw.side_effect = fake_raw
+    mock_get_secret.return_value = CREDS
+    mock_connect.return_value = FakeImapByHex({"a": _mail("A"), "b": _mail("B")})
     mock_archive.side_effect = [Exception("R2 down"), None]  # first message's archive fails
 
     records = fetch_and_archive_messages()
 
-    assert [r["message_id"] for r in records] == ["m1", "m2"]
+    assert sorted(r["message_id"] for r in records) == ["a", "b"]
     assert mock_archive.call_count == 2
 
 
 @patch("ingestion.gmail_ingestion.archive_to_r2")
 @patch("ingestion.gmail_ingestion.get_r2_client")
-@patch("ingestion.gmail_ingestion.fetch_raw_message")
-@patch("ingestion.gmail_ingestion.fetch_message_ids")
-@patch("ingestion.gmail_ingestion.get_access_token")
+@patch("ingestion.gmail_ingestion.connect_imap")
 @patch("ingestion.gmail_ingestion.get_secret")
 def test_fetch_and_archive_messages_skips_message_that_fails_to_fetch(
-    mock_get_secret,
-    mock_get_access_token,
-    mock_fetch_ids,
-    mock_fetch_raw,
-    mock_get_r2_client,
-    mock_archive,
+    mock_get_secret, mock_connect, mock_get_r2_client, mock_archive
 ):
-    mock_get_secret.return_value = {
-        "client_id": "cid", "client_secret": "cs", "refresh_token": "rt",
-        "r2_account_id": "acc", "r2_access_key_id": "ak", "r2_secret_access_key": "sk",
-    }
-    mock_get_access_token.return_value = "token-x"
-    mock_fetch_ids.return_value = ["bad-id", "m2"]
+    mock_get_secret.return_value = CREDS
+    imap = FakeImapByHex({"a": _mail("A"), "b": _mail("B")})
+    real_fetch = imap.fetch
 
-    def fake_raw(token, message_id):
-        if message_id == "bad-id":
-            raise RuntimeError("404 from Gmail -- message deleted between list and get")
-        msg = EmailMessage()
-        msg["Subject"] = f"Subject {message_id}"
-        msg["From"] = "a@example.com"
-        msg.set_content("body")
-        return _raw_response(msg)
+    def flaky_fetch(number, parts):
+        if int(number) == 2:  # the newest message disappears between search and fetch
+            raise RuntimeError("message deleted")
+        return real_fetch(number, parts)
 
-    mock_fetch_raw.side_effect = fake_raw
+    imap.fetch = flaky_fetch
+    mock_connect.return_value = imap
 
     records = fetch_and_archive_messages()
 
-    assert [r["message_id"] for r in records] == ["m2"]
+    assert [r["message_id"] for r in records] == ["a"]
     mock_archive.assert_called_once()
+
+
+@patch("ingestion.gmail_ingestion.archive_to_r2")
+@patch("ingestion.gmail_ingestion.get_r2_client")
+@patch("ingestion.gmail_ingestion.connect_imap")
+@patch("ingestion.gmail_ingestion.get_secret")
+def test_fetch_and_archive_messages_always_logs_out(
+    mock_get_secret, mock_connect, mock_get_r2_client, mock_archive
+):
+    mock_get_secret.return_value = CREDS
+    imap = FakeImapByHex({"a": _mail("A")})
+    imap.search = MagicMock(side_effect=RuntimeError("search failed"))
+    mock_connect.return_value = imap
+
+    try:
+        fetch_and_archive_messages()
+    except RuntimeError:
+        pass
+
+    assert imap.logged_out
+
+
+class FakeImapByHex(FakeImap):
+    """A FakeImap whose messages are keyed by their Gmail API (hex) id, numbered 1..n."""
+
+    def __init__(self, raws_by_hex):
+        super().__init__(
+            {
+                n: (int(h, 16), "14-Nov-2023 22:13:20 +0000", raw)
+                for n, (h, raw) in enumerate(raws_by_hex.items(), start=1)
+            }
+        )
 
 
 @patch("ingestion.gmail_ingestion.write_records")
