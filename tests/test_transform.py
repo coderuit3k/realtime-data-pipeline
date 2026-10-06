@@ -378,3 +378,69 @@ def test_write_parquet_dry_run_writes_readable_parquet(monkeypatch, tmp_path):
 
 def test_write_parquet_returns_empty_string_for_no_records():
     assert transform.write_parquet([], "hackernews") == ""
+
+
+def test_transform_records_gives_the_llm_the_natural_text_then_normalizes_the_columns(monkeypatch):
+    seen = []
+
+    def fake_llm(texts):
+        seen.extend(texts)
+        return [["k"] for _ in texts]
+
+    monkeypatch.setattr(transform, "extract_keywords_llm", fake_llm)
+    records = [
+        {"story_id": "s1", "title": "The <b>Rust</b> Compiler!", "text": "Fast &amp; safe 🔥"}
+    ]
+
+    result = transform.transform_records("hackernews", records)
+
+    assert seen == ["The <b>Rust</b> Compiler! Fast &amp; safe 🔥"]
+    assert result[0]["title"] == "rust compiler"
+    assert result[0]["text"] == "fast safe"
+    assert result[0]["keywords"] == ["k"]
+
+
+def test_transform_records_normalizes_news_title_and_description(monkeypatch):
+    monkeypatch.setattr(transform, "extract_keywords_llm", lambda texts: [[] for _ in texts])
+    records = [{"article_id": "a1", "title": "The Fed Cuts", "description": "Rates fall."}]
+
+    result = transform.transform_records("news", records)
+
+    assert result[0]["title"] == "fed cuts"
+    assert result[0]["description"] == "rates fall"
+
+
+def test_transform_records_normalizes_github_description_but_not_full_name(monkeypatch):
+    monkeypatch.setattr(transform, "extract_keywords_llm", lambda texts: [[] for _ in texts])
+    records = [{"repo_id": "1", "full_name": "Org/Repo", "description": "A <i>Fast</i> Tool"}]
+
+    result = transform.transform_records("github", records)
+
+    assert result[0]["full_name"] == "Org/Repo"
+    assert result[0]["description"] == "fast tool"
+
+
+def test_transform_records_leaves_gmail_text_alone(monkeypatch):
+    monkeypatch.setattr(transform, "extract_keywords_llm", lambda texts: [[] for _ in texts])
+    records = [
+        {
+            "message_id": "m1",
+            "subject": "The Plan",
+            "from_address": "A@B.com",
+            "snippet": "hi &amp; bye",
+        }
+    ]
+
+    result = transform.transform_records("gmail", records)
+
+    assert result[0]["subject"] == "The Plan"
+    assert result[0]["snippet"] == "hi &amp; bye"
+
+
+def test_normalize_text_columns_turns_an_all_stopword_title_into_an_empty_string():
+    records = [{"story_id": "s1", "title": "a", "text": "the"}]
+
+    result = transform.normalize_text_columns(records, "hackernews")
+
+    assert result[0]["title"] == ""
+    assert result[0]["text"] == ""

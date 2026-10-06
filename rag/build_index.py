@@ -16,6 +16,7 @@ from botocore.config import Config
 
 from common import config, qdrant_store
 from common.http import map_concurrently
+from common.text_normalize import normalize_text
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -56,32 +57,39 @@ def embed_text(text: str) -> list[float]:
 
 
 def build_document(record: dict, source: str) -> dict:
-    """Map a curated record to the index's common {id, source, title, url, text} shape."""
+    """Map a curated record to the index's common {id, source, title, url, text} shape.
+
+    Text is normalized here as well as in the transform Lambda (normalize_text is idempotent), so
+    the indexed text is normalized even for curated files written before that change.
+    """
     if source == "hackernews":
-        text = f"{record.get('title') or ''} {record.get('text') or ''}".strip()
+        title = normalize_text(record.get("title"))
+        text = f"{title} {normalize_text(record.get('text'))}".strip()
         return {
             "id": record["story_id"],
             "source": "hackernews",
-            "title": record.get("title") or "",
+            "title": title,
             "url": record.get("url") or record.get("permalink") or "",
             "text": text,
         }
 
     if source == "github":
-        text = f"{record.get('full_name') or ''} {record.get('description') or ''}".strip()
+        full_name = record.get("full_name") or ""
+        text = f"{normalize_text(full_name)} {normalize_text(record.get('description'))}".strip()
         return {
             "id": record["repo_id"],
             "source": "github",
-            "title": record.get("full_name") or "",
+            "title": full_name,
             "url": record.get("url") or "",
             "text": text,
         }
 
-    text = f"{record.get('title') or ''} {record.get('description') or ''}".strip()
+    title = normalize_text(record.get("title"))
+    text = f"{title} {normalize_text(record.get('description'))}".strip()
     return {
         "id": record["article_id"],
         "source": "news",
-        "title": record.get("title") or "",
+        "title": title,
         "url": record.get("url") or "",
         "text": text,
     }

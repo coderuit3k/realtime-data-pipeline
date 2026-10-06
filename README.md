@@ -75,7 +75,7 @@ flowchart TD
 | `infra/` | Terraform for everything above. See [`infra/README.md`](infra/README.md). |
 | `infra-bootstrap/` | One-time Terraform for the GitHub OIDC role CI/CD uses (no static keys). See [`infra-bootstrap/README.md`](infra-bootstrap/README.md). |
 | `.github/workflows/` | `ci.yml`: lint, tests, `terraform validate`. `deploy.yml`: `terraform plan`, then a manually approved `apply` on push to `main`. |
-| `web/` | Next.js app (dashboard, RAG assistant, explorer, ops, trends, cicd, weather). |
+| `web/` | Next.js app (dashboard, RAG assistant, explorer, ops, trends, cicd, weather, catalog, insights, settings). |
 | `scripts/` | `build_lambdas.sh` packages the Lambdas; `telegram_*.sh` are the OpenClaw push automations (see [OpenClaw](#openclaw-ops-agent)). |
 
 ## Local development
@@ -234,18 +234,19 @@ merges them with Reciprocal Rank Fusion, and a Jina reranker picks the final 5.
 
 | Stage | Faithfulness | Answer relevancy | Context precision | Search p50 |
 |---|---|---|---|---|
-| 1. Cosine on `index.json` (before) | 0.676 | 0.729 | 0.385 | 672 ms (+ 12.3 s index load) |
+| 1. Cosine on `index.json` | 0.676 | 0.729 | 0.385 | 672 ms (+ 12.3 s index load) |
 | 2. Hybrid + RRF | 0.681 | 0.611 | 0.462 | 1,338 ms |
 | 3. Hybrid + RRF + rerank | 0.705 | 0.666 | 0.300 | 2,505 ms |
 
 **Conclusion.** 
-Hybrid search raised context precision (0.385 to 0.462) and rerank raised
-faithfulness (0.676 to 0.705), but neither stage beat the old index on every metric: answer relevancy fell in both, context precision fell with rerank, and search got slower.
+- Good: Hybrid search raised context precision (0.385 to 0.462) and rerank raised
+faithfulness (0.676 to 0.705).
+- Bad: Neither stage beat the old index on every metric: answer relevancy fell in both, context precision fell with rerank, and search got slower.
 
 **Why.**
 - Keyword search finds exact names the meaning-based search blurs, and the merge keeps what either retriever ranks high, which is why stage 2 retrieved more relevant passages.
-- The reranker reads question and passage together, but in this run it also made the agent answer the out-of-domain pho question without sources, which the context-precision judge scores as 0 even though not answering is the right behaviour. Search is slower because it is now a network
-call to Qdrant (about 1.3 s from a laptop, Titan query embedding included) and rerank adds a second one to Jina (about 1.2 s more).
+- The reranker reads question and passage together, but in this run it also made the agent answer the out-of-domain pho question without sources, which the context-precision judge scores as 0 even though not answering is the right behaviour. 
+- Search is slower because it is now a network call to Qdrant (about 1.3 s from a laptop, Titan query embedding included) and rerank adds a second one to Jina (about 1.2 s more).
 
 **Benefits.**
 The real gain is scale: the old index could not load past about
@@ -254,7 +255,8 @@ Rerank costs roughly $0.0004 per search (about 30 passages x 250 tokens at $0.05
 
 ## Rerank minimum score
 
-**What changed.** The reranker used to return its top 5 passages no matter how weak they were.
+**What changed.** 
+- The reranker used to return its top 5 passages no matter how weak they were.
 It now drops any passage whose Jina score is below 0.15 (returning nothing when none qualify),
 Jina truncates long documents itself (`max_doc_length`).
 
@@ -267,14 +269,37 @@ Jina truncates long documents itself (`max_doc_length`).
 | Context precision | 0.300 | 0.408 |
 | Passages the agent got, per question | 7.5 | 4.2 |
 
-**Conclusion.** 
-The cutoff cut the passages per question from 7.5 to 4.2 and context precision
-rose in both runs I made (0.300 to 0.408, and 0.507 in a first run with a broken Athena setting); faithfulness fell (0.705 to 0.646), but run-to-run swings are larger than that.
+**Conclusion.**
+- Faithfullness failed from 0.705 (before cutoff) to 0.646 (after cutoff), 
+- Answer relevancy raised from 0.666 (before cutoff) to 0.71 (after cutoff)
+- Context precision raised from 0.3 (before cutoff) to 0.408 (after cutoff).
 
 **Why.** 
-- Fewer weak passages reach the judge, which is what the cutoff is for: the PostgreSQL question went from 5 passages to 1.
+- Fewer weak passages reach the judge, which is what the cutoff is for.
 - The other metrics move for reasons unrelated to the change:
 the out-of-domain 'pho' question flips between refusing (scored 0 on everything) and answering from the web (scored high) from one run to the next, and the judge gave the same single passage a precision of 1.0 in one run and 0.0 in the next.
+
+## Query normalization and the lower cutoff
+
+**What changed.** Text is now stored and indexed normalized (lowercase, no HTML, emoji, punctuation or stopwords; negations kept). The search query goes through the same normalization before embedding and BM25 (Jina still gets the original question), and the cutoff dropped from 0.15 to 0.08, because relevant passages over normalized text scored 0.09-0.44 and 0.15 cut some of them.
+
+**Result** (42 questions: 34 on-topic, 8 off-topic; each passage judged relevant or not by Haiku; same normalized index):
+
+| | Raw query + cutoff 0.15 | Normalized query + cutoff 0.08 |
+|---|---|---|
+| On-topic: passages kept per question | 3.29 | 4.74 |
+| On-topic: relevant passages kept | 2.59 | 3.56 |
+| On-topic: share of kept passages that are relevant | 0.79 | 0.75 |
+| On-topic questions with no relevant passage | 2 of 34 | 0 of 34 |
+| Off-topic: irrelevant passages kept per question | 0.12 | 1.12 |
+| Off-topic questions answered with no passage | 5 of 8 | 2 of 8 |
+
+**Conclusion.** The lower cutoff finds about 1 more relevant passage per on-topic question and never leaves one empty-handed, but it lets irrelevant passages through on off-topic questions.
+
+**Why.**
+- At the same cutoff (0.08), normalizing the query or not made no real difference (A better on 7 questions, B on 4, 23 ties, sign test p = 0.55). The gain above comes from the cutoff, not from the query normalization; the query normalization is kept because it was not worse (and slightly better on the short keyword queries the agent actually sends: 0.80 vs 0.72 precision).
+- A lower cutoff keeps more passages, so more relevant ones survive (recall up) while a few weak ones come along (precision about the same on-topic, much worse off-topic). Off-topic questions are the cost: the system prompt, not the cutoff, has to make the agent refuse them.
+- Caveats: this measures the retrieved passages, not the final answer (no RAGAS run for the raw-query + 0.15 pair); only 8 off-topic questions; the judge is a model with its own noise. The RAGAS runs on the normalized index (cutoff 0.15 vs 0.08) gave faithfulness 0.697 vs 0.769, answer relevancy 0.670 vs 0.772, context precision 0.396 vs 0.406, with run-to-run noise of about 0.1.
 
 ## OpenClaw ops agent
 

@@ -166,8 +166,8 @@ def test_rerank_logs_the_scores_the_kept_count_and_the_threshold(post, caplog):
     post.response = FakeResponse(
         {
             "results": [
-                {"index": 2, "relevance_score": rerank.RERANK_MIN_SCORE + 0.25},
-                {"index": 0, "relevance_score": rerank.RERANK_MIN_SCORE - 0.05},
+                {"index": 2, "relevance_score": 0.4},
+                {"index": 0, "relevance_score": -0.1},
             ]
         }
     )
@@ -176,7 +176,7 @@ def test_rerank_logs_the_scores_the_kept_count_and_the_threshold(post, caplog):
         rerank.rerank("pho recipe", DOCS, top_n=2)
 
     line = " ".join(record.getMessage() for record in caplog.records)
-    assert f"scores={[0.4, 0.1]}" in line
+    assert f"scores={[0.4, -0.1]}" in line
     assert "kept=1/2" in line
     assert f"min_score={rerank.RERANK_MIN_SCORE}" in line
     assert "pho recipe" in line

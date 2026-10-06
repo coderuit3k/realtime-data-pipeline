@@ -11,8 +11,8 @@ from rag.build_index import build_document, dedup_documents, partition_changed
 def test_build_document_hackernews_maps_fields():
     record = {
         "story_id": "s1",
-        "title": "Some story",
-        "text": "some body",
+        "title": "Rust story",
+        "text": "fast body",
         "url": "https://example.com",
         "permalink": "https://news.ycombinator.com/item?id=s1",
     }
@@ -22,7 +22,7 @@ def test_build_document_hackernews_maps_fields():
     assert doc["id"] == "s1"
     assert doc["source"] == "hackernews"
     assert doc["url"] == "https://example.com"
-    assert doc["text"] == "Some story some body"
+    assert doc["text"] == "rust story fast body"
 
 
 def test_build_document_hackernews_falls_back_to_permalink():
@@ -36,8 +36,8 @@ def test_build_document_hackernews_falls_back_to_permalink():
 def test_build_document_news_maps_fields():
     record = {
         "article_id": "a1",
-        "title": "Some article",
-        "description": "some description",
+        "title": "Rust article",
+        "description": "fast description",
         "url": "https://example.com/a",
     }
 
@@ -45,7 +45,7 @@ def test_build_document_news_maps_fields():
 
     assert doc["id"] == "a1"
     assert doc["source"] == "news"
-    assert doc["text"] == "Some article some description"
+    assert doc["text"] == "rust article fast description"
 
 
 def test_build_document_github_maps_fields():
@@ -61,7 +61,7 @@ def test_build_document_github_maps_fields():
     assert doc["id"] == "123"
     assert doc["source"] == "github"
     assert doc["title"] == "org/repo"
-    assert doc["text"] == "org/repo a fast tool"
+    assert doc["text"] == "org/repo fast tool"
 
 
 def test_dedup_documents_keeps_first_occurrence():
@@ -305,3 +305,37 @@ def test_dedup_documents_keeps_the_same_id_from_different_sources():
     result = dedup_documents(docs)
 
     assert [d["v"] for d in result] == ["a", "b"]
+
+
+def test_build_document_hackernews_normalizes_title_and_text():
+    record = {
+        "story_id": "s1",
+        "title": "Ask HN: R&amp;D budgets",
+        "text": "we pay for ci &#x2F; cd<p>and runners",
+        "url": "",
+    }
+
+    doc = build_document(record, "hackernews")
+
+    assert doc["title"] == "ask hn r&d budgets"
+    assert doc["text"] == "ask hn r&d budgets pay ci cd runners"
+
+
+def test_build_document_news_and_github_normalize_their_text():
+    news = build_document(
+        {"article_id": "a1", "title": "Tech", "description": "5 &amp; counting<p>stories"}, "news"
+    )
+    github = build_document(
+        {"repo_id": "1", "full_name": "o/r", "description": "a &lt;fast&gt; <b>tool</b>"}, "github"
+    )
+
+    assert news["text"] == "tech 5 counting stories"
+    assert github["title"] == "o/r"
+    assert github["text"] == "o/r fast tool"
+
+
+def test_build_document_with_an_all_stopword_title_has_no_stray_spaces():
+    doc = build_document({"story_id": "s1", "title": "a", "text": "rust body"}, "hackernews")
+
+    assert doc["title"] == ""
+    assert doc["text"] == "rust body"

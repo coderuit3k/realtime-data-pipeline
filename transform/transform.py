@@ -17,34 +17,14 @@ import boto3
 import pandas as pd
 
 from common import config
+from common.text_normalize import ENGLISH_STOPWORDS as STOPWORDS
+from common.text_normalize import normalize_text
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 _s3_client = None
 _bedrock_client = None
-
-STOPWORDS = {
-    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
-    "of", "is", "are", "was", "were", "this", "that", "these", "those",
-    "with", "it", "its", "as", "be", "been", "being", "by", "from",
-    "has", "have", "had", "having", "not", "no", "nor", "will", "would",
-    "can", "could", "shall", "should", "may", "might", "must", "do",
-    "does", "did", "doing", "than", "then", "there", "here", "when",
-    "where", "which", "while", "who", "whom", "whose", "why", "how",
-    "what", "about", "above", "after", "again", "against", "all", "am",
-    "any", "because", "before", "below", "between", "both", "each",
-    "few", "further", "he", "her", "hers", "him", "himself", "his",
-    "into", "just", "me", "more", "most", "my", "myself", "once",
-    "only", "other", "our", "ours", "out", "over", "own", "same", "she",
-    "so", "some", "such", "that", "their", "theirs", "them",
-    "themselves", "they", "through", "too", "under", "until", "up",
-    "very", "we", "you", "your", "yours", "yourself", "yourselves",
-    "i", "if", "off", "down", "during", "second", "third", "first",
-    "many", "much", "one", "two", "three", "also", "still", "even",
-    "now", "get", "gets", "got", "like", "make", "makes", "made",
-    "new", "way", "back", "using", "used", "use", "says", "said",
-}
 
 
 def _client():
@@ -218,14 +198,31 @@ def clean_gmail_record(record: dict) -> dict:
     return cleaned
 
 
+# Free-text columns that are stored normalized (see common/text_normalize.py). full_name is an
+# identifier used in joins, and gmail is private and not indexed, so neither is touched.
+NORMALIZED_COLUMNS = {
+    "hackernews": ("title", "text"),
+    "news": ("title", "description"),
+    "github": ("description",),
+}
+
+
+def normalize_text_columns(records: list[dict], source: str) -> list[dict]:
+    """Normalize the source's free-text columns in place; keywords must already be attached."""
+    for record in records:
+        for column in NORMALIZED_COLUMNS.get(source, ()):
+            record[column] = normalize_text(record.get(column))
+    return records
+
+
 def transform_records(source: str, records: list[dict]) -> list[dict]:
     """Clean, dedup on the source's id field, and tag keywords; raises on an unknown source."""
     if source == "hackernews":
         cleaned = dedup_records([clean_hackernews_record(r) for r in records], "story_id")
-        return attach_keywords(cleaned, source)
+        return normalize_text_columns(attach_keywords(cleaned, source), source)
     elif source == "news":
         cleaned = dedup_records([clean_news_record(r) for r in records], "article_id")
-        return attach_keywords(cleaned, source)
+        return normalize_text_columns(attach_keywords(cleaned, source), source)
     elif source == "weather":
         # Numeric readings have no text to extract from; an empty "keywords" column
         # keeps write_parquet source-agnostic.
@@ -240,7 +237,7 @@ def transform_records(source: str, records: list[dict]) -> list[dict]:
         return cleaned
     elif source == "github":
         cleaned = dedup_records([clean_github_record(r) for r in records], "repo_id")
-        return attach_keywords(cleaned, source)
+        return normalize_text_columns(attach_keywords(cleaned, source), source)
     elif source == "gmail":
         cleaned = dedup_records([clean_gmail_record(r) for r in records], "message_id")
         return attach_keywords(cleaned, source)
