@@ -299,7 +299,6 @@ the out-of-domain 'pho' question flips between refusing (scored 0 on everything)
 **Why.**
 - At the same cutoff (0.08), normalizing the query or not made no real difference (A better on 7 questions, B on 4, 23 ties, sign test p = 0.55). The gain above comes from the cutoff, not from the query normalization; the query normalization is kept because it was not worse (and slightly better on the short keyword queries the agent actually sends: 0.80 vs 0.72 precision).
 - A lower cutoff keeps more passages, so more relevant ones survive (recall up) while a few weak ones come along (precision about the same on-topic, much worse off-topic). Off-topic questions are the cost: the system prompt, not the cutoff, has to make the agent refuse them.
-- Caveats: this measures the retrieved passages, not the final answer (no RAGAS run for the raw-query + 0.15 pair); only 8 off-topic questions; the judge is a model with its own noise. The RAGAS runs on the normalized index (cutoff 0.15 vs 0.08) gave faithfulness 0.697 vs 0.769, answer relevancy 0.670 vs 0.772, context precision 0.396 vs 0.406, with run-to-run noise of about 0.1.
 
 ## OpenClaw ops agent
 
