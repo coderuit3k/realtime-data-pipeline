@@ -279,6 +279,37 @@ Jina truncates long documents itself (`max_doc_length`).
 - The other metrics move for reasons unrelated to the change:
 the out-of-domain 'pho' question flips between refusing (scored 0 on everything) and answering from the web (scored high) from one run to the next, and the judge gave the same single passage a precision of 1.0 in one run and 0.0 in the next.
 
+## Query normalization and the lower cutoff
+
+**What changed.** Stored text is normalized (lowercase, no HTML, emoji, punctuation or stopwords; negations kept). We tried two search setups over that index: the raw question with cutoff 0.15, and the question normalized the same way (for embedding and BM25; Jina still gets the original) with cutoff 0.08, because relevant passages over normalized text scored 0.09-0.44 and 0.15 cut some of them.
+
+**Result, answers** (RAGAS, same 12 questions, same agent and model, mean of 2 runs; per-run values in brackets):
+
+| | Raw query + cutoff 0.15 | Normalized query + cutoff 0.08 |
+|---|---|---|
+| Faithfulness | 0.801 (0.775, 0.827) | 0.769 (0.798, 0.739) |
+| Answer relevancy | 0.714 (0.712, 0.716) | 0.772 (0.786, 0.757) |
+| Context precision | 0.533 (0.459, 0.606) | 0.406 (0.417, 0.396) |
+| Passages the agent got, per question | 6.5 | 6.5 |
+
+**Result, retrieved passages** (42 questions, 34 on-topic and 8 off-topic, each passage judged relevant or not by Haiku):
+
+| | Raw query + cutoff 0.15 | Normalized query + cutoff 0.08 |
+|---|---|---|
+| On-topic: relevant passages kept per question | 2.59 | 3.56 |
+| On-topic: share of kept passages that are relevant | 0.79 | 0.75 |
+| On-topic questions with no relevant passage | 2 of 34 | 0 of 34 |
+| Off-topic: irrelevant passages kept per question | 0.12 | 1.12 |
+
+**Conclusion.** The two setups are about equal on answer quality, so we kept the simpler one: raw query, cutoff 0.15.
+
+**Why.**
+- Only answer relevancy separates the two (0.77 vs 0.71, and both runs of one setup are above both runs of the other). Faithfulness differs by 0.03 and context precision by 0.13, but one setup's two runs differ by 0.15 on precision, so those are inside the noise.
+- The lower cutoff does what it was meant to: about 1 more relevant passage per on-topic question and no question left empty. The agent receives the same number of passages either way (6.5, which includes Athena rows), so the extra relevant passages do not show up as a better answer.
+- The price is on off-topic questions, where cutoff 0.08 lets about 1 irrelevant passage through per question (0.12 at 0.15). That is the likely reason context precision does not improve.
+- At the same cutoff (0.08), normalizing the query or not made no real difference in retrieval (normalized better on 7 questions, raw on 4, 23 ties, sign test p = 0.55), so the query normalization was not worth keeping.
+- Caveats: only 12 questions and 2 runs per setup; the judge is a model with its own noise; only 8 off-topic questions in the retrieval check. A difference smaller than about 0.1 should not be trusted.
+
 ## OpenClaw ops agent
 
 [OpenClaw](https://github.com/openclaw/openclaw) is a self-hosted personal AI
