@@ -21,7 +21,9 @@ const ZONES = [
 
 /**
  * Raw vs. curated S3 bucket sizes as one split bar. With no data yet the bar
- * falls back to a dimmed 50/50 split so the layout stays stable.
+ * falls back to a dimmed 50/50 split so the layout stays stable. It fills its
+ * card's height (the card stretches to match the log panel beside it) by
+ * letting the bar grow (up to a cap) and spreading what is left, so no big blank band remains.
  */
 export function LakehouseStorageChart({
   rawStorage,
@@ -39,7 +41,7 @@ export function LakehouseStorageChart({
   const stats = { raw: rawStorage, curated: curatedStorage };
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-1 flex-col justify-between gap-3">
       <div className="flex items-baseline gap-2">
         <span className="text-3xl font-semibold tabular-nums text-textPrimary">
           {hasData ? formatBytes(total) : "—"}
@@ -47,7 +49,7 @@ export function LakehouseStorageChart({
         <span className="text-[11px] text-textMuted">tổng dung lượng lakehouse</span>
       </div>
 
-      <div className="h-6 rounded-full bg-border overflow-hidden flex" role="img" aria-label="Tỉ lệ dung lượng S3 raw so với S3 curated">
+      <div className="min-h-6 max-h-24 flex-1 rounded-full bg-border overflow-hidden flex" role="img" aria-label="Tỉ lệ dung lượng S3 raw so với S3 curated">
         <div
           className="h-full bg-accent transition-[width]"
           style={{ width: `${rawPct}%`, opacity: hasData ? 1 : 0.3 }}

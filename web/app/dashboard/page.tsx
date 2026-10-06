@@ -208,7 +208,6 @@ export default function DashboardPage() {
                 </span>
                 <LiveBadge status={health?.status ?? "idle"} />
                 <span className="mt-1 text-2xl font-semibold tabular-nums text-textPrimary">{records}</span>
-                <span className="-mt-1.5 text-[11.5px] text-textMuted">bản ghi hôm nay</span>
                 <div className="h-1 rounded-full bg-white/[0.05]">
                   <div
                     className="bar-grow h-full rounded-full bg-accent/70"
@@ -228,18 +227,6 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <SectionCard title="Lakehouse Storage" icon={<CardIcon d={["M3 5a9 3 0 1 0 18 0 9 3 0 1 0-18 0", "M3 5v14a9 3 0 0 0 18 0V5", "M3 12a9 3 0 0 0 18 0"]} />}>
           <LakehouseStorageChart rawStorage={data.rawStorage} curatedStorage={data.curatedStorage} />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-border pt-4">
-            <div className="flex flex-col gap-1">
-              <span className="text-[11.5px] text-textSecondary">Athena avg query time (24h)</span>
-              <span className="text-sm font-semibold tabular-nums text-textPrimary">
-                {data.athenaAvgQueryMs === null ? "chưa có query trong 24h" : `${data.athenaAvgQueryMs}ms`}
-              </span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-[11.5px] text-textSecondary">Partition projection</span>
-              <span className="text-[11.5px] text-textMuted">year/month/day, integer projection (Glue Catalog, infra/glue.tf)</span>
-            </div>
-          </div>
         </SectionCard>
 
         <LogPanel logs={data.recentLogs} />
