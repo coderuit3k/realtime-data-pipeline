@@ -46,13 +46,27 @@ that change are not comparable with later ones.
 
 ## Reading the results
 
-`questions.json` mixes in-domain questions with out-of-domain ones (a recipe,
-a sports result, the weather in Paris, since `get_weather` only covers the
-Vietnamese locations the pipeline ingests). The agent picks a tool, or none,
-from the tool descriptions alone and falls back to `search_web` (Tavily). A
-healthy run has high faithfulness and relevancy on both kinds, and
-`grounded: true` on almost every question, because the web fallback means
-there is nearly always something to cite.
+`questions.json` has 100 questions, each with a `category` (only `question` is read by
+the script):
+
+| category | count | what it checks |
+|---|---|---|
+| `kb` | 30 | topics from Hacker News and the news (semantic search + rerank) |
+| `athena` | 18 | counts, averages, rankings and time windows over the curated tables |
+| `weather` | 8 | the 12 Southern Vietnam locations (current and a 3-day average) |
+| `crypto` | 7 | Bitcoin, Ethereum, Solana (and Dogecoin, which has no tool) |
+| `cross` | 8 | questions that need more than one source |
+| `vi` | 8 | Vietnamese questions of the kinds above |
+| `ood` | 12 | out of domain: a recipe, a sports result, other cities and coins (web fallback) |
+| `edge` | 9 | private mail (no tool), destructive SQL, prompt injection, vague or made-up topics |
+
+The first 12 entries are the original question set, so older runs (12 questions) can
+still be compared with the first 12 results of a new run; do not reorder or edit them.
+The agent picks a tool, or none, from the tool descriptions alone and falls back to
+`search_web` (Tavily). A healthy run has high faithfulness and relevancy on both kinds, and
+`grounded: true` on almost every question, because the web fallback means there is nearly
+always something to cite. The `edge` questions are expected to be refused or answered with
+"I can't": judge them by reading the answers, not by the scores.
 
 **Latest run (2026-10-05, 12 questions):** faithfulness 0.6457, answer relevancy
 0.7105, context precision 0.4083. Expect the same ballpark, not identical
@@ -66,9 +80,10 @@ the real-agent command in the root `CLAUDE.md`). Without the Athena pair every
 crypto and weather tools crash the run. The script now stops at once if any is empty.
 
 **Cost and time:** each metric makes several Bedrock calls per question
-(faithfulness splits the answer into statements and checks each). Budget about
-10 minutes and a few cents for the default 6 questions. Keep the set small and
-don't run it on every commit.
+(faithfulness splits the answer into statements and checks each). The 12 original questions
+took about 11-13 minutes per run, so budget well over an hour for all 100, plus the
+Bedrock and Tavily calls. Don't run it on every commit; to run a subset, point
+`load_questions` at a filtered copy of the file.
 
 ## Why `RunConfig(max_workers=2)`
 
