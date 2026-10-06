@@ -821,9 +821,7 @@ def test_query_athena_description_explains_windows_that_cross_a_month_boundary()
     assert "concat(year, month, day) BETWEEN '20260928' AND '20261004'" in text
 
 
-def test_search_knowledge_base_searches_the_normalized_question_but_reranks_the_original(
-    monkeypatch,
-):
+def test_search_knowledge_base_sends_the_question_as_asked_to_every_stage(monkeypatch):
     seen = {}
 
     def fake_embed(text):
@@ -846,26 +844,10 @@ def test_search_knowledge_base_searches_the_normalized_question_but_reranks_the_
     agent.search_knowledge_base("What are the Rust Projects?", top_k=3)
 
     assert seen == {
-        "embedded": "rust projects",
-        "bm25": "rust projects",
+        "embedded": "What are the Rust Projects?",
+        "bm25": "What are the Rust Projects?",
         "reranked": "What are the Rust Projects?",
     }
-
-
-def test_search_knowledge_base_falls_back_to_the_original_when_normalizing_empties_it(monkeypatch):
-    seen = {}
-
-    def fake_embed(text):
-        seen["embedded"] = text
-        return [0.1]
-
-    monkeypatch.setattr(agent, "embed_text", fake_embed)
-    monkeypatch.setattr(agent.qdrant_store, "hybrid_search", lambda q, v, n: [])
-    monkeypatch.setattr(agent.config, "RAG_RERANK", False)
-
-    agent.search_knowledge_base("what is it?", top_k=3)
-
-    assert seen["embedded"] == "what is it?"
 
 
 def test_query_athena_description_says_text_columns_are_lowercase_without_punctuation():

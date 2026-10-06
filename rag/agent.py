@@ -20,7 +20,6 @@ from common import athena, config, qdrant_store
 from common.rerank import rerank
 from common.secrets import get_secret
 from common.sql_guard import validate_read_only_select
-from common.text_normalize import normalize_text
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -394,13 +393,7 @@ def search_knowledge_base(query: str, top_k: int) -> list[dict]:
 
     RAG_RERANK=false returns the RRF top results directly, which is how that stage is measured.
     """
-    # Documents are stored normalized, so the question is normalized the same way for the dense
-    # and BM25 legs; the reranker reads the user's own wording. A question made only of stopwords
-    # normalizes to "" and falls back to itself.
-    search_query = normalize_text(query) or query
-    candidates = qdrant_store.hybrid_search(
-        search_query, embed_text(search_query), config.RAG_CANDIDATES
-    )
+    candidates = qdrant_store.hybrid_search(query, embed_text(query), config.RAG_CANDIDATES)
     if not config.RAG_RERANK:
         return candidates[:top_k]
     return rerank(query, candidates, top_k)

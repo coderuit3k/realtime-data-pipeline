@@ -79,69 +79,12 @@ def test_normalize_frame_ignores_a_source_it_does_not_normalize():
     assert changed == 0
 
 
-def test_backup_key_sits_outside_every_source_partition():
-    key = "source=hackernews/year=2026/month=10/day=05/x.parquet"
-
-    backup = nc.backup_key(key)
-
-    assert backup == f"_backup_pre_normalization/{key}"
-    assert not backup.startswith("source=")
-
-
-def test_missing_backups_lists_the_files_with_no_copy():
-    keys = ["source=news/a.parquet", "source=news/b.parquet"]
-    backed_up = {nc.backup_key("source=news/a.parquet")}
-
-    assert nc.missing_backups(keys, backed_up) == ["source=news/b.parquet"]
-
-
-def test_missing_backups_is_empty_when_every_file_is_backed_up():
-    keys = ["source=news/a.parquet"]
-
-    assert nc.missing_backups(keys, {nc.backup_key("source=news/a.parquet")}) == []
-
-
-class _FakeS3:
-    """Just enough of the boto3 client for run(): listings, and a record of writes."""
-
-    def __init__(self, keys):
-        self.keys = keys
-        self.uploads = []
-
-    def get_paginator(self, name):
-        outer = self
-
-        class Paginator:
-            def paginate(self, Bucket, Prefix):
-                matching = [k for k in outer.keys if k.startswith(Prefix)]
-                return [{"Contents": [{"Key": k} for k in matching]}]
-
-        return Paginator()
-
-    def upload_file(self, *args, **kwargs):
-        self.uploads.append(args)
-
-
-def test_run_apply_refuses_to_write_when_a_file_has_no_backup():
-    s3 = _FakeS3(["source=hackernews/year=2026/month=10/day=05/x.parquet"])
-
-    try:
-        nc.run(s3, "bucket", apply=True)
-    except RuntimeError as error:
-        assert "backup" in str(error)
-    else:
-        raise AssertionError("run --apply must refuse without a backup")
-
-    assert s3.uploads == []
-
-
 class _MemoryS3:
-    """An in-memory stand-in for the boto3 S3 client: listings, reads, copies and writes."""
+    """An in-memory stand-in for the boto3 S3 client: listings, reads and writes."""
 
     def __init__(self, objects):
         self.objects = dict(objects)
         self.writes = []
-        self.copies = []
 
     def get_paginator(self, name):
         outer = self
@@ -157,10 +100,6 @@ class _MemoryS3:
         from io import BytesIO
 
         return {"Body": BytesIO(self.objects[Key])}
-
-    def copy_object(self, Bucket, Key, CopySource):
-        self.copies.append(Key)
-        self.objects[Key] = self.objects[CopySource["Key"]]
 
     def upload_fileobj(self, Fileobj, Bucket, Key):
         self.writes.append(Key)
@@ -197,15 +136,6 @@ def _bucket():
     return _MemoryS3(objects)
 
 
-def test_backup_copies_every_curated_file_outside_the_source_partitions():
-    s3 = _bucket()
-
-    nc.backup(s3, "bucket", workers=4)
-
-    for key in HN_KEYS + [NEWS_KEY]:
-        assert s3.objects[nc.backup_key(key)] == s3.objects[key]
-
-
 def test_run_dry_run_writes_nothing(capsys):
     s3 = _bucket()
     before = dict(s3.objects)
@@ -218,7 +148,6 @@ def test_run_dry_run_writes_nothing(capsys):
 
 def test_run_apply_rewrites_only_files_that_change_and_keeps_the_schema(capsys):
     s3 = _bucket()
-    nc.backup(s3, "bucket", workers=4)
     news_before = s3.objects[NEWS_KEY]
 
     nc.run(s3, "bucket", apply=True, workers=4)
@@ -236,47 +165,19 @@ def test_run_apply_rewrites_only_files_that_change_and_keeps_the_schema(capsys):
 
 def test_run_apply_is_idempotent(capsys):
     s3 = _bucket()
-    nc.backup(s3, "bucket", workers=4)
     nc.run(s3, "bucket", apply=True, workers=4)
     capsys.readouterr()
-    def live():
-        return {k: v for k, v in s3.objects.items() if not k.startswith(nc.BACKUP_PREFIX)}
-
-    after_first = live()
+    after_first = dict(s3.objects)
 
     nc.run(s3, "bucket", apply=True, workers=4)
 
     assert "rewrote 0 files" in capsys.readouterr().out
-    assert live() == after_first
+    assert s3.objects == after_first
 
 
 def test_run_gives_the_same_result_with_one_worker_or_many():
     one, many = _bucket(), _bucket()
     for s3, workers in ((one, 1), (many, 8)):
-        nc.backup(s3, "bucket", workers=workers)
         nc.run(s3, "bucket", apply=True, workers=workers)
 
     assert one.objects == many.objects
-
-
-def test_backup_skips_files_that_already_have_a_copy_so_it_is_cheap_to_re_run():
-    s3 = _bucket()
-    nc.backup(s3, "bucket", workers=4)
-    first_round = len(s3.copies)
-
-    nc.backup(s3, "bucket", workers=4)
-
-    assert first_round == len(HN_KEYS) + 1
-    assert len(s3.copies) == first_round
-
-
-def test_backup_copies_a_file_added_after_the_first_backup():
-    s3 = _bucket()
-    nc.backup(s3, "bucket", workers=4)
-    new_key = "source=hackernews/year=2026/month=10/day=06/new.parquet"
-    s3.objects[new_key] = s3.objects[HN_KEYS[0]]
-
-    nc.backup(s3, "bucket", workers=4)
-
-    assert s3.copies[-1] == nc.backup_key(new_key)
-    assert len(s3.copies) == len(HN_KEYS) + 2

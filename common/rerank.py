@@ -15,14 +15,11 @@ JINA_RERANK_URL = "https://api.jina.ai/v1/rerank"
 MAX_DOC_TOKENS = 3000
 RERANK_TIMEOUT_SECONDS = 5
 # Results scoring below this are dropped. Jina's relevance_score is not a 0-1 probability (it can
-# be negative) and only means something relative to the inputs it was calibrated on. The first
-# value (0.15) came from six full-sentence questions over the un-normalized index. The agent
-# actually sends short keyword queries over normalized text, which score lower (median top-1
-# 0.24 over 34 real calls; relevant passages 0.09-0.44, clearly off-topic ones <= 0.075), and
-# 0.15 cut relevant passages ("bitcoin etfs", "postgresql"). Normalization, query wording and
-# which candidates retrieval returns all move these scores and were not separated, so re-check
-# this against the "Jina rerank scores=" log lines whenever any of them changes.
-RERANK_MIN_SCORE = 0.08
+# be negative) and only means something relative to the inputs it was calibrated on, so re-check
+# this against the "Jina rerank scores=" log lines whenever the index text or the queries change.
+# 0.15 came from six full-sentence questions; a RAGAS run on the normalized index found no clear
+# difference between 0.15 and 0.08 (see the README), so the original value stays.
+RERANK_MIN_SCORE = 0.15
 
 
 def rerank(query: str, docs: list[dict], top_n: int) -> list[dict]:

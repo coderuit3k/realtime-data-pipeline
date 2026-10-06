@@ -279,27 +279,6 @@ Jina truncates long documents itself (`max_doc_length`).
 - The other metrics move for reasons unrelated to the change:
 the out-of-domain 'pho' question flips between refusing (scored 0 on everything) and answering from the web (scored high) from one run to the next, and the judge gave the same single passage a precision of 1.0 in one run and 0.0 in the next.
 
-## Query normalization and the lower cutoff
-
-**What changed.** Text is now stored and indexed normalized (lowercase, no HTML, emoji, punctuation or stopwords; negations kept). The search query goes through the same normalization before embedding and BM25 (Jina still gets the original question), and the cutoff dropped from 0.15 to 0.08, because relevant passages over normalized text scored 0.09-0.44 and 0.15 cut some of them.
-
-**Result** (42 questions: 34 on-topic, 8 off-topic; each passage judged relevant or not by Haiku; same normalized index):
-
-| | Raw query + cutoff 0.15 | Normalized query + cutoff 0.08 |
-|---|---|---|
-| On-topic: passages kept per question | 3.29 | 4.74 |
-| On-topic: relevant passages kept | 2.59 | 3.56 |
-| On-topic: share of kept passages that are relevant | 0.79 | 0.75 |
-| On-topic questions with no relevant passage | 2 of 34 | 0 of 34 |
-| Off-topic: irrelevant passages kept per question | 0.12 | 1.12 |
-| Off-topic questions answered with no passage | 5 of 8 | 2 of 8 |
-
-**Conclusion.** The lower cutoff finds about 1 more relevant passage per on-topic question and never leaves one empty-handed, but it lets irrelevant passages through on off-topic questions.
-
-**Why.**
-- At the same cutoff (0.08), normalizing the query or not made no real difference (A better on 7 questions, B on 4, 23 ties, sign test p = 0.55). The gain above comes from the cutoff, not from the query normalization; the query normalization is kept because it was not worse (and slightly better on the short keyword queries the agent actually sends: 0.80 vs 0.72 precision).
-- A lower cutoff keeps more passages, so more relevant ones survive (recall up) while a few weak ones come along (precision about the same on-topic, much worse off-topic). Off-topic questions are the cost: the system prompt, not the cutoff, has to make the agent refuse them.
-
 ## OpenClaw ops agent
 
 [OpenClaw](https://github.com/openclaw/openclaw) is a self-hosted personal AI
