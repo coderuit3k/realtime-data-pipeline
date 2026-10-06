@@ -9,9 +9,8 @@ queryable with Athena, and adds an agentic RAG assistant on top.
 ### Questions to try
 
 The RAG Assistant page (or the `rag_agent` Lambda) takes free-form questions in
-any language. These work well with the data the pipeline collects. The tool
-column is what the agent usually reaches for; it chooses tools on its own, so
-the trace can differ.
+any language. The tool column is what the agent usually reaches for; it chooses
+tools on its own, so the trace can differ.
 
 | Question | Typical tool |
 |---|---|
@@ -68,7 +67,7 @@ flowchart TD
 
 | Folder | What it does |
 |---|---|
-| `ingestion/` | One Lambda per source (Hacker News, NewsAPI, Open-Meteo for Vietnamese cities, CoinGecko for BTC/ETH/SOL, GitHub Search as a "trending" proxy: repos created in the last 7 days, by stars). Writes newline-delimited JSON to the raw zone. Only NewsAPI needs a key. |
+| `ingestion/` | One Lambda per source (Hacker News, NewsAPI, Open-Meteo for Vietnamese cities, CoinGecko for BTC/ETH/SOL, GitHub Search as a "trending" proxy. |
 | `transform/` | Triggered by new raw objects: cleans, dedups, extracts keywords, writes Parquet to the curated zone. |
 | `rag/` | On-demand agentic RAG over the curated zone (see [Agentic RAG](#agentic-rag)). |
 | `trends/` | `trend_scan` (daily): finds keywords trending at the same time on GitHub, Hacker News and News API (distinct stories/articles/repos per keyword) and writes Trend Events, shown on the web app's `/trends` page. |
@@ -107,7 +106,7 @@ API, so it needs no credentials.
    create the GitHub OIDC deploy role.
 3. Push to `main` (or run `deploy.yml` manually) to plan and apply
    [`infra/`](infra/README.md).
-4. Set the News API and Tavily keys in Secrets Manager (see `infra/README.md`).
+4. Set the News API, Tavily, Qdrant Cloud and Jina keys in Secrets Manager (see `infra/README.md`).
 
 ## Ingestion performance
 
@@ -118,7 +117,7 @@ fails the run.
 
 **Result** (time of one run on the real Lambda):
 
-| Lambda | Sequential (before) | Concurrent (after) | Faster |
+| Lambda | Sequential | Concurrent | Faster |
 |---|---|---|---|
 | `hackernews_ingestion` (50 requests) | 5.1s typical, 7.0s slow runs | 1.8s typical | ~3x |
 | `weather_ingestion` (12 requests) | 6.2s typical, 11.8s slow runs | 0.7s typical | ~9x |
@@ -141,9 +140,6 @@ the *slowest single* request (~0.7s). Hacker News gains less because it has
 work that cannot be parallelised: it must first fetch the list of story ids,
 and at the end it writes to S3; one slow story also holds up the whole run.
 
-**Caveat.** The "after" numbers are only 5 runs per function, so there is no
-p95 yet. It will be added once enough scheduled runs have accumulated.
-
 ## Sample analytics
 
 `infra/glue.tf` registers a Glue database (`<project>_curated`) with five
@@ -161,12 +157,13 @@ the whole index into memory.
 
 - **`rag/build_index.py`** (every 6 hours): embeds every record from the three
   text sources (`hackernews_stories`, `news_articles`, `github_repos`) with
-  Titan (`amazon.titan-embed-text-v2:0`) and upserts it into Qdrant. Weather and crypto are numeric and not worth embedding; the agent reads them with its own tools. It is incremental: it skips documents whose text hash and embedding model.
+  Titan (`amazon.titan-embed-text-v2:0`) and upserts it into Qdrant.
+  Weather and crypto are numeric and not worth embedding; the agent reads them with its own tools.
+  It is incremental: it skips documents whose text hash and embedding model.
 - **`rag/agent.py`** (on-demand): a tool-calling agent on Bedrock's Converse
   API. On each turn the model decides whether to call a tool, with what input,
   whether to search again, or to answer. Tools:
-  - `search_knowledge_base`: hybrid search in Qdrant (meaning + keywords, merged
-    with Reciprocal Rank Fusion), then a Jina rerank of the top 30 down to 5.
+  - `search_knowledge_base`: hybrid search + RRF in Qdrant, then a Jina rerank of the top 30 down to 5.
   - `get_crypto_prices`, `get_weather`: exact, current data read from the curated zone.
   - `query_athena`: read-only SQL for aggregates (averages, counts, time windows).
   - `search_web` (Tavily): search out-domain questions on Internet, fallback for everything else.
@@ -198,11 +195,6 @@ aws lambda invoke --function-name realtime-data-pipeline-dev-rag-agent \
   --cli-read-timeout 90 /tmp/agent-answer.json && cat /tmp/agent-answer.json
 ```
 
-Anthropic models on Bedrock need one extra one-time step beyond "Model
-access": submit the **use case details form** (Bedrock console -> Model
-catalog -> the model -> "Submit use case details") and wait up to ~15 minutes.
-Titan does not need it.
-
 ### Example
 
 A cross-source question asked on the web app's RAG Assistant page. The agent
@@ -212,7 +204,7 @@ Athena queries).
 
 ![RAG Assistant answering a question](docs/images/rag-assistant-example.png)
 
-Know the limits before judging an answer:
+### Limitation:
 
 - **Weather** is the current observation at 12 locations (11 in southern
   Vietnam plus Da Lat), not a forecast.
@@ -236,8 +228,9 @@ latest numbers are in [`eval/README.md`](eval/README.md).
 ### Retrieval upgrade (hybrid search + rerank)
 
 **What changed.** 
-Instead of loading a 27 MB `index.json` from S3
-and compare vectors in Lambda memory, it now uses hybrid search from Qdrant Cloud (Titan meaning-based and BM25 keyword-based), merges them with Reciprocal Rank Fusion, and a Jina reranker picks the final 5. 
+Instead of loading a 27 MB `index.json` from S3 and compare vectors in Lambda memory,
+it now uses hybrid search from Qdrant Cloud (Titan meaning-based and BM25 keyword-based), 
+merges them with Reciprocal Rank Fusion, and a Jina reranker picks the final 5. 
 
 **Source:** [`Qdrant Cloud`](<https://qdrant.tech/cloud/>), [`Jina`](<https://jina.ai/>), [`Hybrid Search`](<https://qdrant.tech/course/essentials/day-3/hybrid-search-demo/>).
 
@@ -285,7 +278,7 @@ rose in both runs I made (0.300 to 0.408, and 0.507 in a first run with a broken
 **Why.** 
 - Fewer weak passages reach the judge, which is what the cutoff is for: the PostgreSQL question went from 5 passages to 1.
 - The other metrics move for reasons unrelated to the change:
-the out-of-domain pho question flips between refusing (scored 0 on everything) and answering from the web (scored high) from one run to the next, and the judge gave the same single passage a precision of 1.0 in one run and 0.0 in the next.
+the out-of-domain 'pho' question flips between refusing (scored 0 on everything) and answering from the web (scored high) from one run to the next, and the judge gave the same single passage a precision of 1.0 in one run and 0.0 in the next.
 
 ## OpenClaw ops agent
 
