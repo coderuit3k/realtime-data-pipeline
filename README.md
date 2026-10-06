@@ -251,7 +251,7 @@ faithfulness (0.676 to 0.705), but neither stage beat the old index on every met
 - The reranker reads question and passage together, but in this run it also made the agent answer the out-of-domain pho question without sources, which the context-precision judge scores as 0 even though not answering is the right behaviour. Search is slower because it is now a network
 call to Qdrant (about 1.3 s from a laptop, Titan query embedding included) and rerank adds a second one to Jina (about 1.2 s more).
 
-**Benefit.**
+**Benefits.**
 The real gain is scale: the old index could not load past about
 1.4k documents in a 512 MB Lambda, while Qdrant now holds all 34,977 documents and adds new ones incrementally. Rerank costs roughly $0.0004 per search (about 30 passages x 250 tokens at $0.05 per million tokens, an estimate), within Jina's free allowance.
 
