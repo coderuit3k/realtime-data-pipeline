@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import requests
 
 from common import config
+from common.http import get_with_retry
 from common.s3_writer import write_records
 
 logger = logging.getLogger()
@@ -54,7 +55,7 @@ def fetch_prices() -> list[dict]:
         "include_24hr_change": "true",
         "include_last_updated_at": "true",
     }
-    response = requests.get(COINGECKO_API_URL, params=params, timeout=10)
+    response = get_with_retry(requests, COINGECKO_API_URL, params=params, timeout=10)
     response.raise_for_status()
     payload = response.json()
     return [

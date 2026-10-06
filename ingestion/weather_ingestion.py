@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import requests
 
 from common import config
-from common.http import make_session, map_concurrently
+from common.http import get_with_retry, make_session, map_concurrently
 from common.s3_writer import write_records
 
 logger = logging.getLogger()
@@ -53,7 +53,7 @@ def fetch_location(session: requests.Session, location: dict) -> dict:
         "current": CURRENT_FIELDS,
         "timezone": "Asia/Bangkok",
     }
-    response = session.get(WEATHER_API_URL, params=params, timeout=10)
+    response = get_with_retry(session, WEATHER_API_URL, params=params, timeout=10)
     response.raise_for_status()
     return normalize_current(location, response.json())
 

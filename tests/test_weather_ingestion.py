@@ -55,6 +55,9 @@ def test_lambda_handler_writes_records_keyed_by_weather_id(mock_fetch_weather, m
 
 
 class _FakeResponse:
+    status_code = 200
+    headers: dict = {}
+
     def __init__(self, data):
         self._data = data
 
@@ -110,3 +113,53 @@ def test_fetch_weather_reuses_one_session_for_every_location(monkeypatch):
     weather_ingestion.fetch_weather()
 
     assert len(created) == 1
+
+
+class _Reply:
+    def __init__(self, status, payload=None):
+        self.status_code = status
+        self._payload = payload or {}
+        self.headers = {}
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise weather_ingestion.requests.HTTPError(str(self.status_code), response=self)
+
+    def json(self):
+        return self._payload
+
+
+class _Session:
+    def __init__(self, *script):
+        self.script = list(script)
+        self.calls = 0
+
+    def get(self, url, **kwargs):
+        self.calls += 1
+        return self.script.pop(0)
+
+
+LOCATION = {"name": "Can Tho", "latitude": 10.0, "longitude": 105.0}
+
+
+def test_fetch_location_retries_a_rate_limited_request(monkeypatch):
+    monkeypatch.setattr("common.http.time.sleep", lambda s: None)
+    session = _Session(_Reply(429), _Reply(200, {"current": {"temperature_2m": 30.0}}))
+
+    record = weather_ingestion.fetch_location(session, LOCATION)
+
+    assert session.calls == 2
+    assert record["temperature_c"] == 30.0
+
+
+def test_fetch_location_still_fails_when_every_attempt_is_rate_limited(monkeypatch):
+    monkeypatch.setattr("common.http.time.sleep", lambda s: None)
+    session = _Session(_Reply(429), _Reply(429), _Reply(429))
+
+    try:
+        weather_ingestion.fetch_location(session, LOCATION)
+    except weather_ingestion.requests.HTTPError:
+        pass
+    else:
+        raise AssertionError("expected the final 429 to fail the run")
+    assert session.calls == 3
