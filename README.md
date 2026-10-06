@@ -119,15 +119,11 @@ fails the run.
 
 | Lambda | Sequential | Concurrent | Faster |
 |---|---|---|---|
-| `hackernews_ingestion` (50 requests) | 5.1s typical, 7.0s slow runs | 1.8s typical | ~3x |
-| `weather_ingestion` (12 requests) | 6.2s typical, 11.8s slow runs | 0.7s typical | ~9x |
+| `hackernews_ingestion` (50 requests) | 5.1s p50, 7.0s p95 | 1.8s p50 | ~3x |
+| `weather_ingestion` (12 requests) | 6.2s p50, 11.8s p95 | 0.7s p50 | ~9x |
 
-"Typical" is the median (p50); "slow runs" is p95. Before = CloudWatch, the
-144 scheduled runs of the 3 days up to 2026-10-01. After = 5 manual runs of
-each function right after the deploy. A back-to-back test on one machine
-against the live APIs points the same way (Hacker News 60-77s -> 3-4s,
-weather 20-26s -> 1.4-2.1s), with bigger ratios only because that machine
-had a slow network.
+- Sequential = CloudWatch, the 144 scheduled runs of the 3 days up to 2026-10-01. 
+- Concurrent = 5 manual runs of each function right after the deploy. 
 
 **Conclusion.** Fetching at the same time makes weather about 9x faster and
 Hacker News about 3x faster, with identical results and no extra cost
@@ -253,14 +249,14 @@ call to Qdrant (about 1.3 s from a laptop, Titan query embedding included) and r
 
 **Benefits.**
 The real gain is scale: the old index could not load past about
-1.4k documents in a 512 MB Lambda, while Qdrant now holds all 34,977 documents and adds new ones incrementally. Rerank costs roughly $0.0004 per search (about 30 passages x 250 tokens at $0.05 per million tokens, an estimate), within Jina's free allowance.
+1.4k documents in a 512 MB Lambda, while Qdrant now holds all 34,977 documents and adds new ones incrementally. 
+Rerank costs roughly $0.0004 per search (about 30 passages x 250 tokens at $0.05 per million tokens, an estimate), within Jina's free allowance.
 
 ## Rerank minimum score
 
 **What changed.** The reranker used to return its top 5 passages no matter how weak they were.
 It now drops any passage whose Jina score is below 0.15 (returning nothing when none qualify),
-Jina truncates long documents itself (`max_doc_length`), and the agent reads the whole passage
-instead of its first 300 characters.
+Jina truncates long documents itself (`max_doc_length`).
 
 **Result** (same 12 questions, same agent and model):
 
