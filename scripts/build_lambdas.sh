@@ -63,6 +63,7 @@ package_with_requests gmail_ingestion ingestion/gmail_ingestion.py
 package_no_deps transform transform/transform.py
 package_with_qdrant rag_build_index rag/build_index.py
 package_no_deps trend_scan trends/trend_scan.py
+package_no_deps gmail_stats trends/gmail_stats.py
 package_with_qdrant rag_agent rag/agent.py
 
 # `cp -r common` copies the repo's local __pycache__ (built by the dev machine's own

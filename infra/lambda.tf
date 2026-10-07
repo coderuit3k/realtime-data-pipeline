@@ -169,6 +169,7 @@ resource "aws_lambda_function" "transform" {
     variables = {
       CURATED_BUCKET        = aws_s3_bucket.curated.bucket
       BEDROCK_TEXT_MODEL_ID = var.bedrock_text_model_id
+      GMAIL_LABELS_TABLE    = aws_dynamodb_table.gmail_labels.name
     }
   }
 }

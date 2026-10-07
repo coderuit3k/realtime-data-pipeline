@@ -139,6 +139,12 @@ variable "trend_scan_schedule" {
   default     = "cron(0 23 * * ? *)"
 }
 
+variable "gmail_stats_schedule" {
+  description = "EventBridge schedule expression for the gmail_stats Lambda (aggregates the Gmail labels for the web dashboard)"
+  type        = string
+  default     = "rate(6 hours)"
+}
+
 variable "rag_build_index_schedule" {
   description = "EventBridge schedule expression for the rag_build_index Lambda (every 6 hours by default, at 00/06/12/18 UTC). Each run is incremental: it embeds only new or changed documents and stops before the Lambda time limit, so a longer gap just means a bigger run."
   type        = string

@@ -54,6 +54,9 @@ GMAIL_SECRET_NAME = os.environ.get(
 )
 GMAIL_MESSAGE_LIMIT = int(os.environ.get("GMAIL_MESSAGE_LIMIT", "50"))
 GMAIL_R2_BUCKET_NAME = os.environ.get("GMAIL_R2_BUCKET_NAME", "")
+# DynamoDB table caching each Gmail message's classifier labels by message_id, so the same email
+# (re-ingested every run) is only classified once. Empty disables the cache (local runs, tests).
+GMAIL_LABELS_TABLE = os.environ.get("GMAIL_LABELS_TABLE", "")
 
 # True (or RAW_BUCKET unset) writes records under ./local_output instead of S3,
 # so the handlers run locally without any AWS resources.

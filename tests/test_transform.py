@@ -1,6 +1,9 @@
+import io
 import json
+from datetime import date
 
 import pandas as pd
+import pyarrow.parquet as pq
 
 from common import config
 from transform import transform
@@ -228,6 +231,7 @@ def test_clean_gmail_record_strips_fields():
 def test_transform_records_dedups_gmail_by_message_id_and_attaches_keywords(monkeypatch):
     fake_llm = lambda texts: [["digest", "news"] for _ in texts]  # noqa: E731
     monkeypatch.setattr(transform, "extract_keywords_llm", fake_llm)
+    monkeypatch.setattr(transform, "attach_email_labels", lambda records: records)
     records = [
         {"message_id": "m1", "subject": "Digest", "from_address": "a@b.com", "snippet": ""},
         {"message_id": "m1", "subject": "Digest", "from_address": "a@b.com", "snippet": ""},
@@ -422,6 +426,7 @@ def test_transform_records_normalizes_github_description_but_not_full_name(monke
 
 def test_transform_records_leaves_gmail_text_alone(monkeypatch):
     monkeypatch.setattr(transform, "extract_keywords_llm", lambda texts: [[] for _ in texts])
+    monkeypatch.setattr(transform, "attach_email_labels", lambda records: records)
     records = [
         {
             "message_id": "m1",
@@ -444,3 +449,187 @@ def test_normalize_text_columns_turns_an_all_stopword_title_into_an_empty_string
 
     assert result[0]["title"] == ""
     assert result[0]["text"] == ""
+
+
+LABEL = {
+    "category": "recruiting", "urgency": "high", "needs_reply": True,
+    "deadline": "2026-10-10", "job_stage": "interview", "company": "Acme",
+}
+EMAIL = {"message_id": "m1", "subject": "Interview", "from_address": "hr@acme.com", "snippet": "Hi"}
+
+
+def _stub_labelling(monkeypatch, cached=None, classified=None, classify_error=None):
+    """Replace the cache and the Bedrock call; returns the lists the test inspects."""
+    calls = {"classified": [], "stored": []}
+    monkeypatch.setattr(transform.email_label_cache, "get_cached_labels", lambda ids: cached or {})
+
+    def fake_classify(emails, today):
+        calls["classified"].append([e["subject"] for e in emails])
+        if classify_error:
+            raise classify_error
+        return classified(emails) if classified else [LABEL for _ in emails]
+
+    monkeypatch.setattr(transform, "classify_emails_llm", fake_classify)
+    monkeypatch.setattr(
+        transform.email_label_cache, "put_labels", lambda labels: calls["stored"].append(labels)
+    )
+    return calls
+
+
+def test_attach_email_labels_classifies_a_new_email_and_caches_the_result(monkeypatch):
+    calls = _stub_labelling(monkeypatch)
+
+    result = transform.attach_email_labels([dict(EMAIL)])
+
+    assert calls["classified"] == [["Interview"]]
+    assert calls["stored"] == [{"m1": LABEL}]
+    for field, value in LABEL.items():
+        assert result[0][field] == value
+
+
+def test_attach_email_labels_skips_bedrock_for_an_email_already_cached(monkeypatch):
+    calls = _stub_labelling(monkeypatch, cached={"m1": LABEL})
+
+    result = transform.attach_email_labels([dict(EMAIL)])
+
+    assert calls["classified"] == []
+    assert calls["stored"] == []
+    assert result[0]["category"] == "recruiting"
+
+
+def test_attach_email_labels_sends_only_the_misses_in_one_call(monkeypatch):
+    calls = _stub_labelling(monkeypatch, cached={"m1": LABEL})
+    records = [
+        dict(EMAIL),
+        {**EMAIL, "message_id": "m2", "subject": "B"},
+        {**EMAIL, "message_id": "m3", "subject": "C"},
+    ]
+
+    result = transform.attach_email_labels(records)
+
+    assert calls["classified"] == [["B", "C"]]
+    assert [r["category"] for r in result] == ["recruiting"] * 3
+
+
+def test_attach_email_labels_leaves_labels_empty_when_bedrock_fails(monkeypatch):
+    calls = _stub_labelling(monkeypatch, classify_error=RuntimeError("bedrock down"))
+
+    result = transform.attach_email_labels([dict(EMAIL)])
+
+    assert calls["stored"] == []  # failures are not cached, so the next run retries
+    for field in transform.email_labels.LABEL_FIELDS:
+        assert result[0][field] is None
+
+
+def test_attach_email_labels_leaves_a_skipped_item_empty_and_uncached(monkeypatch):
+    calls = _stub_labelling(monkeypatch, classified=lambda emails: [None for _ in emails])
+
+    result = transform.attach_email_labels([dict(EMAIL)])
+
+    assert calls["stored"] == []
+    assert result[0]["category"] is None
+
+
+def test_attach_email_labels_survives_a_cache_read_failure(monkeypatch):
+    calls = _stub_labelling(monkeypatch)
+
+    def broken(ids):
+        raise RuntimeError("dynamodb down")
+
+    monkeypatch.setattr(transform.email_label_cache, "get_cached_labels", broken)
+
+    result = transform.attach_email_labels([dict(EMAIL)])
+
+    assert calls["classified"] == [["Interview"]]
+    assert result[0]["category"] == "recruiting"
+
+
+def test_attach_email_labels_survives_a_cache_write_failure(monkeypatch):
+    _stub_labelling(monkeypatch)
+
+    def broken(labels):
+        raise RuntimeError("dynamodb down")
+
+    monkeypatch.setattr(transform.email_label_cache, "put_labels", broken)
+
+    assert transform.attach_email_labels([dict(EMAIL)])[0]["category"] == "recruiting"
+
+
+def test_attach_email_labels_of_nothing_makes_no_calls(monkeypatch):
+    calls = _stub_labelling(monkeypatch)
+
+    assert transform.attach_email_labels([]) == []
+    assert calls["classified"] == []
+
+
+def test_classify_emails_llm_sends_one_prompt_and_parses_the_reply(monkeypatch):
+    sent = {}
+
+    class FakeBedrock:
+        def invoke_model(self, modelId, body):  # noqa: N803 - boto3 API
+            sent["body"] = json.loads(body)
+            sent["model"] = modelId
+            reply = json.dumps([{"i": 1, **LABEL}])
+            return {"body": io.BytesIO(json.dumps({"content": [{"text": reply}]}).encode())}
+
+    monkeypatch.setattr(transform, "_bedrock", lambda: FakeBedrock())
+
+    labels = transform.classify_emails_llm([dict(EMAIL)], date(2026, 10, 6))
+
+    assert sent["model"] == transform.config.BEDROCK_TEXT_MODEL_ID
+    assert len(sent["body"]["messages"]) == 1
+    assert "Interview" in sent["body"]["messages"][0]["content"]
+    assert labels[0]["category"] == "recruiting"
+
+
+def test_transform_records_attaches_labels_for_gmail(monkeypatch):
+    monkeypatch.setattr(transform, "extract_keywords_llm", lambda texts: [["k"] for _ in texts])
+    _stub_labelling(monkeypatch)
+
+    result = transform.transform_records("gmail", [dict(EMAIL), dict(EMAIL)])
+
+    assert len(result) == 1
+    assert result[0]["category"] == "recruiting"
+    assert result[0]["keywords"] == ["k"]
+
+
+def test_transform_records_does_not_label_other_sources(monkeypatch):
+    monkeypatch.setattr(transform, "extract_keywords_llm", lambda texts: [["k"] for _ in texts])
+
+    def must_not_run(*args, **kwargs):
+        raise AssertionError("labels are gmail only")
+
+    monkeypatch.setattr(transform, "attach_email_labels", must_not_run)
+
+    transform.transform_records("hackernews", [{"story_id": "s1", "title": "T", "text": ""}])
+
+
+def _written_parquet(tmp_path, monkeypatch, records):
+    monkeypatch.setattr(transform.config, "DRY_RUN", True)
+    monkeypatch.chdir(tmp_path)
+    key = transform.write_parquet(records, "gmail")
+    return tmp_path / "local_output_curated" / key
+
+
+def test_write_parquet_pins_label_column_types_even_when_every_label_is_null(tmp_path, monkeypatch):
+    empty = {f: None for f in transform.email_labels.LABEL_FIELDS}
+    records = [{"message_id": "m1", "keywords": ["a"], **empty}]
+    path = _written_parquet(tmp_path, monkeypatch, records)
+
+    schema = pq.read_schema(path)
+
+    for column in ("category", "urgency", "deadline", "job_stage", "company"):
+        assert "string" in str(schema.field(column).type)
+    assert str(schema.field("needs_reply").type) == "bool"
+
+
+def test_write_parquet_keeps_label_values(tmp_path, monkeypatch):
+    records = [
+        {"message_id": "m1", "keywords": ["a"], **LABEL},
+        {"message_id": "m2", "keywords": [], **{f: None for f in LABEL}},
+    ]
+
+    table = pq.read_table(_written_parquet(tmp_path, monkeypatch, records)).to_pydict()
+
+    assert table["needs_reply"] == [True, None]
+    assert table["category"] == ["recruiting", None]

@@ -1,4 +1,5 @@
 import { AthenaClient } from "@aws-sdk/client-athena";
+import { S3Client } from "@aws-sdk/client-s3";
 import { LambdaClient } from "@aws-sdk/client-lambda";
 import { CloudWatchClient } from "@aws-sdk/client-cloudwatch";
 import { GlueClient } from "@aws-sdk/client-glue";
@@ -64,4 +65,10 @@ let costExplorerClient: CostExplorerClient | undefined;
 export function getCostExplorerClient(): CostExplorerClient {
   if (!costExplorerClient) costExplorerClient = new CostExplorerClient({ region: "us-east-1" });
   return costExplorerClient;
+}
+
+let s3Client: S3Client | undefined;
+export function getS3Client(): S3Client {
+  if (!s3Client) s3Client = new S3Client({ region: requiredEnv("AWS_REGION") });
+  return s3Client;
 }

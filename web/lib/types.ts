@@ -208,3 +208,13 @@ export type TrendEvent = {
 };
 
 export type TrendsResponse = { events: TrendEvent[] };
+
+export type GmailStats = {
+  generatedAt: string;
+  windowDays: number;
+  totals: { emails: number; needsReply: number; urgent: number; withDeadline: number; unclassified: number };
+  byCategory: Record<"newsletter" | "notification" | "personal" | "recruiting" | "other", number>;
+  perDay: { date: string; total: number }[];
+};
+
+export type GmailStatsResponse = { stats: GmailStats | null };

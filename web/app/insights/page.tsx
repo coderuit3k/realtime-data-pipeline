@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { InsightsResponse } from "@/lib/types";
+import type { GmailStats, GmailStatsResponse, InsightsResponse } from "@/lib/types";
 import { weatherIconGroup, WEATHER_ICON_PATHS } from "@/lib/weatherIcons";
 import { cryptoTicker } from "@/lib/cryptoIcons";
 import { KpiCard } from "@/components/KpiCard";
@@ -9,6 +9,7 @@ import { CardIcon, SectionCard } from "@/components/SectionCard";
 import { SpotlightCard } from "@/components/SpotlightCard";
 import { RankRow } from "@/components/RankRow";
 import { StackedBar } from "@/components/StackedBar";
+import { GmailStatsCard } from "@/components/GmailStatsCard";
 
 /** Maps a WMO weather code to one of a few icon groups. */
 function WeatherIcon({ code }: { code: number }) {
@@ -73,6 +74,9 @@ export default function InsightsPage() {
   const [range, setRange] = useState<Range>("today");
   const [data, setData] = useState<InsightsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [gmailStats, setGmailStats] = useState<GmailStats | null>(null);
+  const [gmailLoading, setGmailLoading] = useState(true);
+  const [gmailError, setGmailError] = useState(false);
   // Guards against out-of-order responses when the range is toggled quickly.
   const latestRangeRef = useRef<Range>("today");
 
@@ -95,6 +99,18 @@ export default function InsightsPage() {
     load(range);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
+
+  // Independent of the main data so a Gmail failure never blocks the rest of the page.
+  useEffect(() => {
+    fetch("/api/gmail-stats")
+      .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
+      .then(({ ok, body }) => {
+        if (!ok) throw new Error("gmail stats failed");
+        setGmailStats((body as GmailStatsResponse).stats);
+      })
+      .catch(() => setGmailError(true))
+      .finally(() => setGmailLoading(false));
+  }, []);
 
   if (error) {
     return (
@@ -394,6 +410,8 @@ export default function InsightsPage() {
             ))}
           </div>
         </SectionCard>
+
+        <GmailStatsCard stats={gmailStats} loading={gmailLoading} error={gmailError} />
       </div>
     </div>
   );

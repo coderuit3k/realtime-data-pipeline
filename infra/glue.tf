@@ -98,6 +98,12 @@ locals {
     { name = "received_at", type = "string", comment = "Time Gmail recorded receiving the message (internalDate), ISO 8601 UTC." },
     { name = "ingested_at", type = "string", comment = "Time this record was fetched by the ingestion Lambda, ISO 8601 UTC." },
     { name = "keywords", type = "string", comment = "Comma-separated topical keywords extracted from subject/snippet by the transform step (LLM via Bedrock, falls back to regex on failure)." },
+    { name = "category", type = "string", comment = "Classifier label: newsletter, notification, personal, recruiting or other. NULL when the email has not been classified (rows ingested before labelling, or a Bedrock failure)." },
+    { name = "urgency", type = "string", comment = "Classifier label: high, normal or low. NULL when unclassified." },
+    { name = "needs_reply", type = "boolean", comment = "Classifier label: true when the sender expects an answer. NULL when unclassified." },
+    { name = "deadline", type = "string", comment = "Due date stated in the email as YYYY-MM-DD, empty string when none, NULL when unclassified." },
+    { name = "job_stage", type = "string", comment = "Only for category recruiting: applied, acknowledged, interview, offer or rejected; empty string otherwise, NULL when unclassified." },
+    { name = "company", type = "string", comment = "Only for category recruiting: the hiring company name; empty string otherwise, NULL when unclassified." },
   ]
 
   # Shared partition projection config -- only the source-specific location

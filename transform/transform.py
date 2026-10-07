@@ -10,13 +10,13 @@ import os
 import re
 import uuid
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from urllib.parse import unquote_plus
 
 import boto3
 import pandas as pd
 
-from common import config
+from common import config, email_label_cache, email_labels
 from common.text_normalize import ENGLISH_STOPWORDS as STOPWORDS
 from common.text_normalize import normalize_text
 
@@ -138,6 +138,68 @@ def attach_keywords(records: list[dict], source: str) -> list[dict]:
     return records
 
 
+def classify_emails_llm(emails: list[dict], today: date) -> list[dict | None]:
+    """Label a batch of emails with one Bedrock call; raises if the call or the parse fails.
+
+    An item the model skipped comes back as None, never as a guessed label.
+    """
+    if not emails:
+        return []
+    response = _bedrock().invoke_model(
+        modelId=config.BEDROCK_TEXT_MODEL_ID,
+        body=json.dumps(
+            {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 4000,
+                "messages": [
+                    {"role": "user", "content": email_labels.build_label_prompt(emails, today)}
+                ],
+            }
+        ),
+    )
+    body = json.loads(response["body"].read())
+    return email_labels.parse_label_response(body["content"][0]["text"], len(emails))
+
+
+def attach_email_labels(records: list[dict], today: date | None = None) -> list[dict]:
+    """Set the six label keys on every record; never raises.
+
+    The same email arrives in every ingestion run, so labels are read from the DynamoDB cache and
+    only the emails missing there go to Bedrock. A failed lookup, call or write degrades to NULL
+    labels for the affected emails (not cached, so the next run retries) and never fails the batch.
+    """
+    if not records:
+        return records
+    today = today or datetime.now(timezone.utc).date()
+    message_ids = [r["message_id"] for r in records]
+
+    try:
+        cached = email_label_cache.get_cached_labels(message_ids)
+    except Exception:
+        logger.exception("Gmail label cache read failed, classifying every email")
+        cached = {}
+
+    missing = [r for r in records if r["message_id"] not in cached]
+    fresh: dict[str, dict] = {}
+    if missing:
+        try:
+            labels = classify_emails_llm(missing, today)
+            fresh = {r["message_id"]: label for r, label in zip(missing, labels) if label}
+        except Exception:
+            logger.exception("Gmail classification failed, leaving labels empty")
+    if fresh:
+        try:
+            email_label_cache.put_labels(fresh)
+        except Exception:
+            logger.exception("Gmail label cache write failed")
+
+    for record in records:
+        label = cached.get(record["message_id"]) or fresh.get(record["message_id"]) or {}
+        for field in email_labels.LABEL_FIELDS:
+            record[field] = label.get(field)
+    return records
+
+
 def dedup_records(records: list[dict], id_field: str) -> list[dict]:
     """Drop records whose id_field repeats, keeping the first occurrence."""
     seen = set()
@@ -240,7 +302,7 @@ def transform_records(source: str, records: list[dict]) -> list[dict]:
         return normalize_text_columns(attach_keywords(cleaned, source), source)
     elif source == "gmail":
         cleaned = dedup_records([clean_gmail_record(r) for r in records], "message_id")
-        return attach_keywords(cleaned, source)
+        return attach_email_labels(attach_keywords(cleaned, source))
     else:
         raise ValueError(f"Unknown source: {source}")
 
@@ -314,6 +376,13 @@ def write_parquet(records: list[dict], source: str) -> str:
     # Stored as a comma-joined string because the Glue/Athena schema declares
     # keywords as a string column, not an array.
     df["keywords"] = df["keywords"].apply(lambda kw: ",".join(kw) if isinstance(kw, list) else kw)
+    # Label columns get explicit types: an all-NULL column would otherwise be written as a
+    # typeless column, and Athena would see the schema flip between files.
+    for column in ("category", "urgency", "deadline", "job_stage", "company"):
+        if column in df.columns:
+            df[column] = df[column].astype("string")
+    if "needs_reply" in df.columns:
+        df["needs_reply"] = df["needs_reply"].astype("boolean")
 
     key = build_curated_key(source, datetime.now(timezone.utc))
     # /tmp is the only writable path in Lambda.

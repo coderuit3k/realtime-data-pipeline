@@ -81,6 +81,12 @@ data "aws_iam_policy_document" "transform_permissions" {
       "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/*",
     ]
   }
+
+  statement {
+    sid       = "GmailLabelCache"
+    actions   = ["dynamodb:BatchGetItem", "dynamodb:BatchWriteItem"]
+    resources = [aws_dynamodb_table.gmail_labels.arn]
+  }
 }
 
 resource "aws_iam_role_policy" "transform_permissions" {
