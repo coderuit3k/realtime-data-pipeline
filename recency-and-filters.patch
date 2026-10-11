@@ -1,0 +1,858 @@
+diff --git a/common/config.py b/common/config.py
+index c99a3f2..f9b17cd 100644
+--- a/common/config.py
++++ b/common/config.py
+@@ -91,6 +91,12 @@ RAG_CANDIDATES = int(os.environ.get("RAG_CANDIDATES", "30"))
+ # false skips the Jina call, so hybrid + RRF alone can be measured with the same code.
+ RAG_RERANK = os.environ.get("RAG_RERANK", "true").lower() == "true"
+ 
++# Recency boost for search_knowledge_base: each candidate's RRF score is multiplied by
++# 1 + RAG_RECENCY_WEIGHT * 2**(-age_days / RAG_RECENCY_HALF_LIFE_DAYS) before the rerank,
++# so fresh documents outrank stale ones on time-sensitive questions. 0 disables the boost.
++RAG_RECENCY_HALF_LIFE_DAYS = float(os.environ.get("RAG_RECENCY_HALF_LIFE_DAYS", "14"))
++RAG_RECENCY_WEIGHT = float(os.environ.get("RAG_RECENCY_WEIGHT", "0.5"))
++
+ # Tavily web search: the agent's fallback when the knowledge base has nothing
+ # relevant.
+ TAVILY_SECRET_NAME = os.environ.get("TAVILY_SECRET_NAME", "realtime-data-pipeline-dev/tavily-api")
+diff --git a/common/qdrant_store.py b/common/qdrant_store.py
+index 07439b8..f497e23 100644
+--- a/common/qdrant_store.py
++++ b/common/qdrant_store.py
+@@ -7,6 +7,7 @@ computed by the caller) and `sparse` (BM25, computed by Qdrant Cloud Inference f
+ import hashlib
+ import logging
+ import uuid
++from datetime import datetime, timezone
+ 
+ from qdrant_client import QdrantClient, models
+ 
+@@ -21,6 +22,8 @@ SPARSE_VECTOR = "sparse"
+ DENSE_SIZE = 1024
+ BM25_MODEL = "qdrant/bm25"
+ SCROLL_PAGE_SIZE = 1000
++# Sources with embedded documents; search filters only accept these.
++KB_SOURCES = ("hackernews", "news", "github")
+ # A 64-point upsert makes Qdrant Cloud Inference compute BM25 vectors, which can outlast the
+ # library's short default.
+ QDRANT_TIMEOUT_SECONDS = 60
+@@ -96,7 +99,7 @@ def existing_hashes() -> dict[str, dict]:
+ 
+ 
+ def upsert_documents(documents: list[dict], batch_size: int = 64) -> None:
+-    """Upsert documents (id, source, title, url, text, embedding) in batches."""
++    """Upsert documents (id, source, title, url, text, published_date/ts, embedding) in batches."""
+     client = _client()
+     for start in range(0, len(documents), batch_size):
+         points = [
+@@ -112,6 +115,8 @@ def upsert_documents(documents: list[dict], batch_size: int = 64) -> None:
+                     "title": d["title"],
+                     "url": d["url"],
+                     "text": d["text"],
++                    "published_date": d.get("published_date", ""),
++                    "published_ts": d.get("published_ts", 0),
+                     "text_hash": text_hash(d["text"]),
+                     "embed_model": config.BEDROCK_EMBED_MODEL_ID,
+                 },
+@@ -121,11 +126,86 @@ def upsert_documents(documents: list[dict], batch_size: int = 64) -> None:
+         client.upsert(config.QDRANT_COLLECTION, points=points)
+ 
+ 
+-def hybrid_search(query: str, query_vector: list[float], candidates: int) -> list[dict]:
++def backfill_published_dates(dates_by_point_id: dict[str, tuple[str, int]]) -> int:
++    """Set published_date/published_ts on points that lack them, without touching vectors.
++
++    New documents already carry the fields via upsert, so this only ever touches points
++    written before the fields existed. Returns the number of points updated; once every
++    point has the fields it is a read-only no-op.
++    """
++    client = _client()
++    missing: dict[str, tuple[str, int]] = {}
++    offset = None
++    while True:
++        points, offset = client.scroll(
++            collection_name=config.QDRANT_COLLECTION,
++            limit=SCROLL_PAGE_SIZE,
++            offset=offset,
++            with_payload=["published_date"],
++            with_vectors=False,
++        )
++        for point in points:
++            if point.payload.get("published_date"):
++                continue
++            dates = dates_by_point_id.get(str(point.id))
++            if dates and dates[0]:
++                missing[str(point.id)] = dates
++        if offset is None:
++            break
++    by_date: dict[tuple[str, int], list[str]] = {}
++    for point_id_, dates in missing.items():
++        by_date.setdefault(dates, []).append(point_id_)
++    updated = 0
++    for (date_str, ts), point_ids in by_date.items():
++        for start in range(0, len(point_ids), SCROLL_PAGE_SIZE):
++            batch = point_ids[start : start + SCROLL_PAGE_SIZE]
++            client.set_payload(
++                collection_name=config.QDRANT_COLLECTION,
++                payload={"published_date": date_str, "published_ts": ts},
++                points=batch,
++            )
++            updated += len(batch)
++    if updated:
++        logger.info("Backfilled published_date on %d points", updated)
++    return updated
++
++
++def build_search_filter(
++    sources: list[str] | None = None, days_back: int | None = None
++) -> models.Filter | None:
++    """Qdrant filter for search_knowledge_base's optional sources/days_back arguments.
++
++    Unknown sources are dropped and a non-positive days_back is ignored; returns None when
++    nothing valid was given so the caller can skip filtering entirely.
++    """
++    conditions = []
++    valid_sources = [s for s in (sources or []) if s in KB_SOURCES]
++    if valid_sources:
++        conditions.append(
++            models.FieldCondition(key="source", match=models.MatchAny(any=valid_sources))
++        )
++    if isinstance(days_back, int) and not isinstance(days_back, bool) and days_back >= 1:
++        since_ts = int(datetime.now(timezone.utc).timestamp()) - days_back * 86400
++        conditions.append(
++            models.FieldCondition(key="published_ts", range=models.Range(gte=since_ts))
++        )
++    if not conditions:
++        return None
++    return models.Filter(must=conditions)
++
++
++def hybrid_search(
++    query: str,
++    query_vector: list[float],
++    candidates: int,
++    query_filter: models.Filter | None = None,
++) -> list[dict]:
+     """Dense and BM25 retrieval in one call, fused with Reciprocal Rank Fusion.
+ 
+     BM25 matches exact terms only, so a question sharing no words with the documents gets an
+-    empty sparse list and the result is simply the dense ranking.
++    empty sparse list and the result is simply the dense ranking. query_filter (from
++    build_search_filter) restricts the pool before fusion, so e.g. days_back=7 ranks the
++    best of the last 7 days rather than cutting the global top-N afterwards.
+     """
+     response = _client().query_points(
+         collection_name=config.QDRANT_COLLECTION,
+@@ -138,6 +218,7 @@ def hybrid_search(query: str, query_vector: list[float], candidates: int) -> lis
+             models.Prefetch(query=query_vector, using=DENSE_VECTOR, limit=candidates),
+         ],
+         query=models.FusionQuery(fusion=models.Fusion.RRF),
++        query_filter=query_filter,
+         limit=candidates,
+         with_payload=True,
+     )
+@@ -147,6 +228,8 @@ def hybrid_search(query: str, query_vector: list[float], candidates: int) -> lis
+             "url": p.payload.get("url", ""),
+             "text": p.payload.get("text", ""),
+             "source": p.payload.get("source", ""),
++            "published_date": p.payload.get("published_date", ""),
++            "published_ts": p.payload.get("published_ts") or 0,
+             "score": p.score,
+         }
+         for p in response.points
+diff --git a/rag/agent.py b/rag/agent.py
+index d2e570f..4866101 100644
+--- a/rag/agent.py
++++ b/rag/agent.py
+@@ -54,16 +54,33 @@ TOOLS = [
+             "name": "search_knowledge_base",
+             "description": (
+                 "Search this pipeline's own curated knowledge base -- Hacker News "
+-                "stories and news articles it has ingested. Best for questions "
++                "stories, news articles and trending GitHub repos it has ingested. Best for questions "
+                 "about tech, AI, startups, or recent news topics the pipeline "
+-                "actually covers. Returns titles, URLs, snippets, and a "
+-                "relevance score per result. May return no results when nothing "
+-                "ingested is relevant enough to the query."
++                "actually covers. Returns titles, URLs, snippets, publication dates "
++                "and a relevance score per result. May return no results when nothing "
++                "ingested is relevant enough to the query. Results are gently nudged "
++                "toward recent items; pass days_back (e.g. 7) for a hard cutoff when the "
++                "question is time-bounded ('today', 'this week', 'recently', 'latest'), "
++                "and sources (e.g. ['hackernews']) to restrict which sources are searched."
+             ),
+             "inputSchema": {
+                 "json": {
+                     "type": "object",
+-                    "properties": {"query": {"type": "string", "description": "Search query"}},
++                    "properties": {
++                        "query": {"type": "string", "description": "Search query"},
++                        "sources": {
++                            "type": "array",
++                            "items": {
++                                "type": "string",
++                                "enum": ["hackernews", "news", "github"],
++                            },
++                            "description": "Optional: restrict the search to these sources",
++                        },
++                        "days_back": {
++                            "type": "integer",
++                            "description": "Optional: only items published within the last N days",
++                        },
++                    },
+                     "required": ["query"],
+                 }
+             },
+@@ -388,12 +405,50 @@ def read_latest_curated_snapshot(source: str, now: datetime | None = None) -> li
+     return []
+ 
+ 
+-def search_knowledge_base(query: str, top_k: int) -> list[dict]:
+-    """Hybrid search (Titan dense + BM25 sparse, fused with RRF in Qdrant), then a rerank.
++def _apply_recency_boost(candidates: list[dict], now: datetime | None = None) -> list[dict]:
++    """Nudge RRF-ordered candidates toward fresh documents before the rerank.
+ 
+-    RAG_RERANK=false returns the RRF top results directly, which is how that stage is measured.
++    Each score is multiplied by 1 + RAG_RECENCY_WEIGHT * 2**(-age_days / RAG_RECENCY_HALF_LIFE_DAYS).
++    Documents without a published_ts (indexed before the field existed and not yet backfilled)
++    keep their score. RAG_RECENCY_WEIGHT=0 disables the boost entirely.
+     """
+-    candidates = qdrant_store.hybrid_search(query, embed_text(query), config.RAG_CANDIDATES)
++    weight = config.RAG_RECENCY_WEIGHT
++    if not weight or not candidates:
++        return candidates
++    now_ts = (now or datetime.now(timezone.utc)).timestamp()
++    half_life = config.RAG_RECENCY_HALF_LIFE_DAYS or 1e-9
++    for candidate in candidates:
++        ts = candidate.get("published_ts") or 0
++        if not ts:
++            continue
++        age_days = (now_ts - ts) / 86400
++        if age_days < 0:
++            continue
++        candidate["score"] = candidate["score"] * (1 + weight * 0.5 ** (age_days / half_life))
++    candidates.sort(key=lambda c: c["score"], reverse=True)
++    return candidates
++
++
++def search_knowledge_base(
++    query: str,
++    top_k: int,
++    sources: list[str] | None = None,
++    days_back: int | None = None,
++    now: datetime | None = None,
++) -> list[dict]:
++    """Hybrid search (Titan dense + BM25 sparse, fused with RRF in Qdrant), recency-boosted,
++    then a rerank.
++
++    sources/days_back become a Qdrant pre-filter (best of the matching pool, not a post-hoc
++    cut of the global top-N); the recency boost re-orders the fused candidates before the
++    rerank sees them. RAG_RERANK=false returns the boosted RRF top results directly, which is
++    how that stage is measured.
++    """
++    query_filter = qdrant_store.build_search_filter(sources=sources, days_back=days_back)
++    candidates = qdrant_store.hybrid_search(
++        query, embed_text(query), config.RAG_CANDIDATES, query_filter=query_filter
++    )
++    candidates = _apply_recency_boost(candidates, now=now)
+     if not config.RAG_RERANK:
+         return candidates[:top_k]
+     return rerank(query, candidates, top_k)
+@@ -449,8 +504,14 @@ def run_tool(name: str, tool_input: dict) -> tuple[list[dict], list[dict]]:
+     query = (tool_input or {}).get("query", "")
+ 
+     if name == "search_knowledge_base":
++        tool_input = tool_input or {}
+         try:
+-            matches = search_knowledge_base(query, config.RAG_TOP_K)
++            matches = search_knowledge_base(
++                query,
++                config.RAG_TOP_K,
++                sources=tool_input.get("sources"),
++                days_back=tool_input.get("days_back"),
++            )
+         except Exception:
+             logger.exception("search_knowledge_base tool failed")
+             return [{"error": "knowledge base search failed"}], []
+@@ -460,6 +521,7 @@ def run_tool(name: str, tool_input: dict) -> tuple[list[dict], list[dict]]:
+                 "url": m["url"],
+                 "snippet": m["text"],
+                 "score": round(m["score"], 4),
++                "published_date": m.get("published_date", ""),
+             }
+             for m in matches
+         ]
+diff --git a/rag/build_index.py b/rag/build_index.py
+index 7cc5c60..b0c2ea6 100644
+--- a/rag/build_index.py
++++ b/rag/build_index.py
+@@ -8,6 +8,7 @@ agent's own tools instead of being embedded.
+ 
+ import json
+ import logging
++from datetime import datetime, timezone
+ from io import BytesIO
+ 
+ import boto3
+@@ -56,6 +57,36 @@ def embed_text(text: str) -> list[float]:
+     return json.loads(response["body"].read())["embedding"]
+ 
+ 
++def _published_date(record: dict, source: str) -> str:
++    """Best-effort YYYY-MM-DD for a curated record, "" when none is parseable.
++
++    hackernews_stories has created_at, news_articles has published_at, github_repos is best
++    represented by pushed_at (last activity); ingested_at is the fallback everywhere.
++    """
++    if source == "hackernews":
++        raw = record.get("created_at") or record.get("ingested_at")
++    elif source == "news":
++        raw = record.get("published_at") or record.get("ingested_at")
++    else:  # github
++        raw = record.get("pushed_at") or record.get("created_at") or record.get("ingested_at")
++    if not isinstance(raw, str) or len(raw) < 10:
++        return ""
++    date = raw[:10]
++    if len(date) == 10 and date[4] == "-" and date[7] == "-" and date.replace("-", "").isdigit():
++        return date
++    return ""
++
++
++def _published_ts(date_str: str) -> int:
++    """Unix timestamp for a YYYY-MM-DD string; 0 when empty/invalid (unfilterable, unboosted)."""
++    if not date_str:
++        return 0
++    try:
++        return int(datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp())
++    except ValueError:
++        return 0
++
++
+ def build_document(record: dict, source: str) -> dict:
+     """Map a curated record to the index's common {id, source, title, url, text} shape.
+ 
+@@ -65,33 +96,42 @@ def build_document(record: dict, source: str) -> dict:
+     if source == "hackernews":
+         title = normalize_text(record.get("title"))
+         text = f"{title} {normalize_text(record.get('text'))}".strip()
++        pub_date = _published_date(record, source)
+         return {
+             "id": record["story_id"],
+             "source": "hackernews",
+             "title": title,
+             "url": record.get("url") or record.get("permalink") or "",
+             "text": text,
++            "published_date": pub_date,
++            "published_ts": _published_ts(pub_date),
+         }
+ 
+     if source == "github":
+         full_name = record.get("full_name") or ""
+         text = f"{normalize_text(full_name)} {normalize_text(record.get('description'))}".strip()
++        pub_date = _published_date(record, source)
+         return {
+             "id": record["repo_id"],
+             "source": "github",
+             "title": full_name,
+             "url": record.get("url") or "",
+             "text": text,
++            "published_date": pub_date,
++            "published_ts": _published_ts(pub_date),
+         }
+ 
+     title = normalize_text(record.get("title"))
+     text = f"{title} {normalize_text(record.get('description'))}".strip()
++    pub_date = _published_date(record, source)
+     return {
+         "id": record["article_id"],
+         "source": "news",
+         "title": title,
+         "url": record.get("url") or "",
+         "text": text,
++        "published_date": pub_date,
++        "published_ts": _published_ts(pub_date),
+     }
+ 
+ 
+@@ -204,9 +244,19 @@ def lambda_handler(event, context):
+         embedded += len(chunk)
+ 
+     remaining = len(needs_embedding) - embedded
++    # Points written before published_date existed get it via set_payload (no re-embed);
++    # documents upserted above already carry it, so this is a no-op once caught up.
++    dates_by_point_id = {
++        qdrant_store.point_id(d["source"], d["id"]): (
++            d.get("published_date", ""),
++            d.get("published_ts", 0),
++        )
++        for d in documents
++    }
++    backfilled = qdrant_store.backfill_published_dates(dates_by_point_id)
+     logger.info(
+-        "Indexed %d documents (%d newly embedded, %d unchanged, %d remaining) into %s",
+-        len(documents), embedded, len(unchanged), remaining, config.QDRANT_COLLECTION,
++        "Indexed %d documents (%d newly embedded, %d unchanged, %d remaining, %d backfilled) into %s",
++        len(documents), embedded, len(unchanged), remaining, backfilled, config.QDRANT_COLLECTION,
+     )
+     return {
+         "statusCode": 200,
+@@ -214,6 +264,7 @@ def lambda_handler(event, context):
+         "newly_embedded": embedded,
+         "unchanged": len(unchanged),
+         "remaining": remaining,
++        "backfilled_dates": backfilled,
+         "collection": config.QDRANT_COLLECTION,
+     }
+ 
+diff --git a/tests/test_qdrant_store.py b/tests/test_qdrant_store.py
+index 9a57332..5f2a009 100644
+--- a/tests/test_qdrant_store.py
++++ b/tests/test_qdrant_store.py
+@@ -141,8 +141,17 @@ def test_hybrid_search_builds_two_prefetches_fused_with_rrf(monkeypatch):
+     assert by_using["sparse"].query.model == "qdrant/bm25"
+     assert call["query"] == models.FusionQuery(fusion=models.Fusion.RRF)
+     assert call["limit"] == 30
++    assert call["query_filter"] is None
+     assert result == [
+-        {"title": "T", "url": "https://x", "text": "body", "source": "github", "score": 0.5}
++        {
++            "title": "T",
++            "url": "https://x",
++            "text": "body",
++            "source": "github",
++            "published_date": "",
++            "published_ts": 0,
++            "score": 0.5,
++        }
+     ]
+ 
+ 
+diff --git a/tests/test_rag_agent.py b/tests/test_rag_agent.py
+index 08305f5..f50e734 100644
+--- a/tests/test_rag_agent.py
++++ b/tests/test_rag_agent.py
+@@ -112,8 +112,8 @@ def test_search_knowledge_base_reranks_the_hybrid_candidates(monkeypatch):
+     ]
+     seen = {}
+ 
+-    def fake_hybrid(query, vector, n):
+-        seen["args"] = (query, vector, n)
++    def fake_hybrid(query, vector, n, query_filter=None):
++        seen["args"] = (query, vector, n, query_filter)
+         return candidates
+ 
+     monkeypatch.setattr(agent, "embed_text", lambda text: [0.1])
+@@ -124,14 +124,14 @@ def test_search_knowledge_base_reranks_the_hybrid_candidates(monkeypatch):
+ 
+     result = agent.search_knowledge_base("q", top_k=1)
+ 
+-    assert seen["args"] == ("q", [0.1], 30)
++    assert seen["args"] == ("q", [0.1], 30, None)
+     assert [d["title"] for d in result] == ["b"]
+ 
+ 
+ def test_search_knowledge_base_returns_nothing_when_rerank_finds_nothing_relevant(monkeypatch):
+     candidates = [{"title": "a", "url": "u1", "text": "ta", "source": "news", "score": 0.5}]
+     monkeypatch.setattr(agent, "embed_text", lambda text: [0.1])
+-    monkeypatch.setattr(agent.qdrant_store, "hybrid_search", lambda q, v, n: candidates)
++    monkeypatch.setattr(agent.qdrant_store, "hybrid_search", lambda q, v, n, query_filter=None: candidates)
+     monkeypatch.setattr(agent, "rerank", lambda q, docs, top_n: [])
+     monkeypatch.setattr(agent.config, "RAG_RERANK", True)
+ 
+@@ -147,7 +147,7 @@ def test_search_knowledge_base_skips_rerank_when_disabled(monkeypatch):
+         raise AssertionError("rerank must not run when RAG_RERANK is false")
+ 
+     monkeypatch.setattr(agent, "embed_text", lambda text: [0.1])
+-    monkeypatch.setattr(agent.qdrant_store, "hybrid_search", lambda q, v, n: candidates)
++    monkeypatch.setattr(agent.qdrant_store, "hybrid_search", lambda q, v, n, query_filter=None: candidates)
+     monkeypatch.setattr(agent, "rerank", fail_if_called)
+     monkeypatch.setattr(agent.config, "RAG_RERANK", False)
+ 
+@@ -158,7 +158,7 @@ def test_search_knowledge_base_skips_rerank_when_disabled(monkeypatch):
+ 
+ def test_run_tool_search_knowledge_base_returns_summary_and_raw(monkeypatch):
+     matches = [{"title": "t", "url": "https://example.com", "text": "x" * 400, "score": 0.9}]
+-    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, top_k: matches)
++    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, top_k, **kwargs: matches)
+ 
+     summary, raw = agent.run_tool("search_knowledge_base", {"query": "q"})
+ 
+@@ -170,7 +170,7 @@ def test_run_tool_search_knowledge_base_returns_summary_and_raw(monkeypatch):
+ 
+ 
+ def test_run_tool_search_knowledge_base_with_no_matches_returns_empty_lists(monkeypatch):
+-    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, top_k: [])
++    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, top_k, **kwargs: [])
+ 
+     summary, raw = agent.run_tool("search_knowledge_base", {"query": "q"})
+ 
+@@ -179,7 +179,7 @@ def test_run_tool_search_knowledge_base_with_no_matches_returns_empty_lists(monk
+ 
+ 
+ def test_run_tool_search_knowledge_base_failure_becomes_an_error_result(monkeypatch):
+-    def boom(query, top_k):
++    def boom(query, top_k, **kwargs):
+         raise RuntimeError("cluster suspended")
+ 
+     monkeypatch.setattr(agent, "search_knowledge_base", boom)
+@@ -377,7 +377,7 @@ def _final_response(text: str) -> dict:
+ 
+ def test_run_agent_calls_tool_then_returns_final_answer(monkeypatch):
+     matches = [{"title": "t", "url": "https://example.com", "text": "body", "score": 0.9}]
+-    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, top_k: matches)
++    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, top_k, **kwargs: matches)
+ 
+     fake = FakeBedrock(
+         [
+@@ -737,7 +737,7 @@ def test_lambda_handler_does_not_cache_a_truncated_answer(monkeypatch):
+ 
+ 
+ def test_run_agent_flags_a_run_where_a_tool_failed(monkeypatch):
+-    def boom(query, top_k):
++    def boom(query, top_k, **kwargs):
+         raise RuntimeError("qdrant down")
+ 
+     monkeypatch.setattr(agent, "search_knowledge_base", boom)
+@@ -752,7 +752,7 @@ def test_run_agent_flags_a_run_where_a_tool_failed(monkeypatch):
+ 
+ 
+ def test_run_agent_does_not_flag_a_run_where_tools_succeeded(monkeypatch):
+-    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, top_k: [])
++    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, top_k, **kwargs: [])
+     fake = FakeBedrock(
+         [_tool_use_response("tu1", "search_knowledge_base", "Q"), _final_response("Nothing.")]
+     )
+@@ -828,7 +828,7 @@ def test_search_knowledge_base_sends_the_question_as_asked_to_every_stage(monkey
+         seen["embedded"] = text
+         return [0.1]
+ 
+-    def fake_hybrid(query, vector, n):
++    def fake_hybrid(query, vector, n, query_filter=None):
+         seen["bm25"] = query
+         return [{"title": "a", "url": "u", "text": "t", "source": "news", "score": 0.5}]
+ 
+diff --git a/tests/test_rag_build_index.py b/tests/test_rag_build_index.py
+index 6dcc01e..2dc96d4 100644
+--- a/tests/test_rag_build_index.py
++++ b/tests/test_rag_build_index.py
+@@ -189,15 +189,18 @@ def make_docs(count):
+     ]
+ 
+ 
+-def fake_store(monkeypatch, upserted):
++def fake_store(monkeypatch, upserted, backfilled):
+     monkeypatch.setattr(qdrant_store, "ensure_collection", lambda: None)
+     monkeypatch.setattr(qdrant_store, "existing_hashes", lambda: {})
+     monkeypatch.setattr(qdrant_store, "upsert_documents", lambda docs: upserted.extend(docs))
++    monkeypatch.setattr(
++        qdrant_store, "backfill_published_dates", lambda dates: backfilled.append(dates) or 0
++    )
+ 
+ 
+ def test_lambda_handler_embeds_and_upserts_new_documents(monkeypatch):
+     upserted = []
+-    fake_store(monkeypatch, upserted)
++    fake_store(monkeypatch, upserted, [])
+     monkeypatch.setattr(build_index, "build_documents", lambda: make_docs(2))
+     monkeypatch.setattr(build_index, "embed_text", lambda text: [float(len(text))])
+ 
+@@ -214,7 +217,7 @@ def test_lambda_handler_embeds_concurrently_and_keeps_each_vector_with_its_docum
+     monkeypatch,
+ ):
+     upserted = []
+-    fake_store(monkeypatch, upserted)
++    fake_store(monkeypatch, upserted, [])
+     monkeypatch.setattr(build_index, "build_documents", lambda: make_docs(8))
+     active = {"now": 0, "max": 0}
+     lock = threading.Lock()
+@@ -239,7 +242,7 @@ def test_lambda_handler_embeds_concurrently_and_keeps_each_vector_with_its_docum
+ 
+ def test_lambda_handler_stops_between_chunks_when_time_runs_out(monkeypatch):
+     upserted = []
+-    fake_store(monkeypatch, upserted)
++    fake_store(monkeypatch, upserted, [])
+     monkeypatch.setattr(build_index, "build_documents", lambda: make_docs(5))
+     monkeypatch.setattr(build_index, "embed_text", lambda text: [0.1])
+     monkeypatch.setattr(build_index, "UPSERT_BATCH", 1)  # chunks of 2 documents
+@@ -255,7 +258,7 @@ def test_lambda_handler_stops_between_chunks_when_time_runs_out(monkeypatch):
+ 
+ def test_lambda_handler_propagates_an_embedding_failure(monkeypatch):
+     upserted = []
+-    fake_store(monkeypatch, upserted)
++    fake_store(monkeypatch, upserted, [])
+     monkeypatch.setattr(build_index, "build_documents", lambda: make_docs(3))
+ 
+     def boom(text):
+@@ -270,7 +273,7 @@ def test_lambda_handler_propagates_an_embedding_failure(monkeypatch):
+ 
+ def test_lambda_handler_skips_documents_with_empty_text(monkeypatch):
+     upserted = []
+-    fake_store(monkeypatch, upserted)
++    fake_store(monkeypatch, upserted, [])
+     empty = [{"id": "1", "source": "news", "title": "t", "url": "u", "text": ""}]
+     monkeypatch.setattr(build_index, "build_documents", lambda: empty)
+     monkeypatch.setattr(build_index, "embed_text", lambda text: [0.1])
+diff --git a/tests/test_rag_recency.py b/tests/test_rag_recency.py
+new file mode 100644
+index 0000000..a61bd27
+--- /dev/null
++++ b/tests/test_rag_recency.py
+@@ -0,0 +1,258 @@
++"""Tests for search_knowledge_base recency boost and metadata filters."""
++
++from datetime import datetime, timezone
++from types import SimpleNamespace
++
++from qdrant_client import models
++
++from common import config, qdrant_store
++from rag import agent, build_index
++from rag.build_index import _published_date, _published_ts, build_document
++
++
++def _cand(title, score, ts):
++    return {
++        "title": title,
++        "url": "",
++        "text": "",
++        "source": "news",
++        "score": score,
++        "published_date": "",
++        "published_ts": ts,
++    }
++
++
++# --- build_search_filter -----------------------------------------------------
++
++
++def test_build_search_filter_returns_none_for_no_valid_arguments():
++    assert qdrant_store.build_search_filter() is None
++    assert qdrant_store.build_search_filter(sources=["nope"], days_back=0) is None
++    assert qdrant_store.build_search_filter(sources=[], days_back=-3) is None
++    assert qdrant_store.build_search_filter(days_back=True) is None
++
++
++def test_build_search_filter_combines_source_and_date():
++    f = qdrant_store.build_search_filter(sources=["news", "github", "nope"], days_back=7)
++
++    assert isinstance(f, models.Filter)
++    by_key = {c.key: c for c in f.must}
++    assert by_key["source"].match.any == ["news", "github"]
++    now_ts = datetime.now(timezone.utc).timestamp()
++    assert now_ts - 8 * 86400 < by_key["published_ts"].range.gte <= now_ts - 6 * 86400
++
++
++def test_build_search_filter_with_only_sources():
++    f = qdrant_store.build_search_filter(sources=["hackernews"])
++
++    assert isinstance(f, models.Filter)
++    assert [c.key for c in f.must] == ["source"]
++
++
++# --- backfill_published_dates -------------------------------------------------
++
++
++class _BackfillFakeClient:
++    def __init__(self, pages):
++        self._pages = list(pages)
++        self.set_payload_calls = []
++
++    def scroll(self, **kwargs):
++        return self._pages.pop(0)
++
++    def set_payload(self, **kwargs):
++        self.set_payload_calls.append(kwargs)
++
++
++def test_backfill_published_dates_sets_only_points_missing_a_date(monkeypatch):
++    missing = SimpleNamespace(id="id-1", payload={})
++    present = SimpleNamespace(id="id-2", payload={"published_date": "2026-01-01"})
++    empty = SimpleNamespace(id="id-3", payload={"published_date": ""})
++    unknown = SimpleNamespace(id="id-9", payload={})
++    fake = _BackfillFakeClient([([missing, present, empty, unknown], None)])
++    monkeypatch.setattr(qdrant_store, "_client", lambda: fake)
++
++    updated = qdrant_store.backfill_published_dates(
++        {"id-1": ("2026-10-10", 1791484800), "id-3": ("", 0)}
++    )
++
++    assert updated == 1
++    (call,) = fake.set_payload_calls
++    assert call["collection_name"] == config.QDRANT_COLLECTION
++    assert call["points"] == ["id-1"]
++    assert call["payload"] == {"published_date": "2026-10-10", "published_ts": 1791484800}
++
++
++def test_backfill_published_dates_is_a_no_op_once_caught_up(monkeypatch):
++    present = SimpleNamespace(id="id-1", payload={"published_date": "2026-10-10"})
++    fake = _BackfillFakeClient([([present], None)])
++    monkeypatch.setattr(qdrant_store, "_client", lambda: fake)
++
++    assert qdrant_store.backfill_published_dates({"id-1": ("2026-10-10", 1791484800)}) == 0
++    assert fake.set_payload_calls == []
++
++
++# --- build_document dates ------------------------------------------------------
++
++
++def test_build_document_hackernews_prefers_created_at():
++    doc = build_document(
++        {
++            "story_id": "s",
++            "title": "t",
++            "text": "x",
++            "created_at": "2026-10-05T08:00:00.123456+00:00",
++            "ingested_at": "2026-10-06T08:00:00+00:00",
++        },
++        "hackernews",
++    )
++
++    assert doc["published_date"] == "2026-10-05"
++    assert doc["published_ts"] == int(datetime(2026, 10, 5, tzinfo=timezone.utc).timestamp())
++
++
++def test_build_document_news_falls_back_to_ingested_at():
++    doc = build_document(
++        {"article_id": "a", "title": "t", "description": "x", "ingested_at": "2026-09-01T00:00:00Z"},
++        "news",
++    )
++
++    assert doc["published_date"] == "2026-09-01"
++
++
++def test_build_document_github_prefers_pushed_at():
++    doc = build_document(
++        {
++            "repo_id": "1",
++            "full_name": "o/r",
++            "pushed_at": "2026-10-02T00:00:00Z",
++            "created_at": "2026-01-01T00:00:00Z",
++        },
++        "github",
++    )
++
++    assert doc["published_date"] == "2026-10-02"
++
++
++def test_published_date_is_empty_for_missing_or_garbage_input():
++    assert _published_date({}, "news") == ""
++    assert _published_date({"published_at": None}, "news") == ""
++    assert _published_date({"published_at": "not a date"}, "news") == ""
++    assert _published_ts("") == 0
++    assert _published_ts("not a date") == 0
++
++
++# --- _apply_recency_boost -------------------------------------------------------
++
++
++def test_apply_recency_boost_prefers_fresh_documents(monkeypatch):
++    monkeypatch.setattr(agent.config, "RAG_RECENCY_WEIGHT", 1.0)
++    monkeypatch.setattr(agent.config, "RAG_RECENCY_HALF_LIFE_DAYS", 14.0)
++    now = datetime(2026, 10, 11, 12, tzinfo=timezone.utc)
++    day = 86400
++    now_ts = now.timestamp()
++    cands = [
++        _cand("old-but-relevant", 0.050, now_ts - 90 * day),
++        _cand("fresh", 0.040, now_ts - 1 * day),
++        _cand("dateless", 0.045, 0),
++        _cand("future", 0.044, now_ts + 5 * day),
++    ]
++
++    result = agent._apply_recency_boost(cands, now=now)
++
++    assert [c["title"] for c in result] == ["fresh", "old-but-relevant", "dateless", "future"]
++    assert result[0]["score"] > 0.040  # the fresh doc was boosted
++    assert result[2]["score"] == 0.045  # dateless docs keep their score
++    assert result[3]["score"] == 0.044  # future-dated docs are not boosted
++
++
++def test_apply_recency_boost_is_disabled_with_zero_weight(monkeypatch):
++    monkeypatch.setattr(agent.config, "RAG_RECENCY_WEIGHT", 0.0)
++    cands = [_cand("a", 0.05, 1000), _cand("b", 0.04, 2000)]
++
++    result = agent._apply_recency_boost(cands)
++
++    assert [c["title"] for c in result] == ["a", "b"]
++    assert result[0]["score"] == 0.05
++
++
++# --- search_knowledge_base wiring -------------------------------------------------
++
++
++def test_search_knowledge_base_builds_and_passes_the_filter(monkeypatch):
++    seen = {}
++    candidates = [_cand("a", 0.5, 0)]
++
++    def fake_hybrid(query, vector, n, query_filter=None):
++        seen["filter"] = query_filter
++        return candidates
++
++    monkeypatch.setattr(agent, "embed_text", lambda text: [0.1])
++    monkeypatch.setattr(agent.qdrant_store, "hybrid_search", fake_hybrid)
++    monkeypatch.setattr(agent, "rerank", lambda q, docs, top_n: docs[:top_n])
++    monkeypatch.setattr(agent.config, "RAG_CANDIDATES", 30)
++    monkeypatch.setattr(agent.config, "RAG_RERANK", True)
++    monkeypatch.setattr(agent.config, "RAG_RECENCY_WEIGHT", 0.0)
++
++    agent.search_knowledge_base("q", top_k=5, sources=["news"], days_back=7)
++
++    f = seen["filter"]
++    assert isinstance(f, models.Filter)
++    conds = {c.key: c for c in f.must}
++    assert conds["source"].match.any == ["news"]
++    assert conds["published_ts"].range.gte > 0
++
++
++def test_run_tool_passes_sources_and_days_back_and_includes_date_in_summary(monkeypatch):
++    seen = {}
++    matches = [
++        {"title": "t", "url": "u", "text": "x", "score": 0.9, "published_date": "2026-10-10"}
++    ]
++
++    def fake_search(query, top_k, sources=None, days_back=None, **kwargs):
++        seen.update(query=query, top_k=top_k, sources=sources, days_back=days_back)
++        return matches
++
++    monkeypatch.setattr(agent, "search_knowledge_base", fake_search)
++
++    summary, raw = agent.run_tool(
++        "search_knowledge_base", {"query": "q", "sources": ["news"], "days_back": 7}
++    )
++
++    assert seen == {
++        "query": "q",
++        "top_k": agent.config.RAG_TOP_K,
++        "sources": ["news"],
++        "days_back": 7,
++    }
++    assert summary[0]["published_date"] == "2026-10-10"
++    assert raw == matches
++
++
++def test_lambda_handler_backfills_published_dates(monkeypatch):
++    upserted, backfilled = [], []
++    monkeypatch.setattr(qdrant_store, "ensure_collection", lambda: None)
++    monkeypatch.setattr(qdrant_store, "existing_hashes", lambda: {})
++    monkeypatch.setattr(qdrant_store, "upsert_documents", lambda docs: upserted.extend(docs))
++    monkeypatch.setattr(
++        qdrant_store, "backfill_published_dates", lambda dates: backfilled.append(dates) or 0
++    )
++    docs = [
++        {
++            "id": "1",
++            "source": "news",
++            "title": "t",
++            "url": "u",
++            "text": "x",
++            "published_date": "2026-10-10",
++            "published_ts": 1791484800,
++        }
++    ]
++    monkeypatch.setattr(build_index, "build_documents", lambda: docs)
++    monkeypatch.setattr(build_index, "embed_text", lambda text: [0.1])
++
++    result = build_index.lambda_handler({}, None)
++
++    assert result["backfilled_dates"] == 0
++    (mapping,) = backfilled
++    assert mapping[qdrant_store.point_id("news", "1")] == ("2026-10-10", 1791484800)

@@ -54,16 +54,33 @@ TOOLS = [
             "name": "search_knowledge_base",
             "description": (
                 "Search this pipeline's own curated knowledge base -- Hacker News "
-                "stories and news articles it has ingested. Best for questions "
+                "stories, news articles and trending GitHub repos it has ingested. Best for questions "
                 "about tech, AI, startups, or recent news topics the pipeline "
-                "actually covers. Returns titles, URLs, snippets, and a "
-                "relevance score per result. May return no results when nothing "
-                "ingested is relevant enough to the query."
+                "actually covers. Returns titles, URLs, snippets, publication dates "
+                "and a relevance score per result. May return no results when nothing "
+                "ingested is relevant enough to the query. Results are gently nudged "
+                "toward recent items; pass days_back (e.g. 7) for a hard cutoff when the "
+                "question is time-bounded ('today', 'this week', 'recently', 'latest'), "
+                "and sources (e.g. ['hackernews']) to restrict which sources are searched."
             ),
             "inputSchema": {
                 "json": {
                     "type": "object",
-                    "properties": {"query": {"type": "string", "description": "Search query"}},
+                    "properties": {
+                        "query": {"type": "string", "description": "Search query"},
+                        "sources": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": ["hackernews", "news", "github"],
+                            },
+                            "description": "Optional: restrict the search to these sources",
+                        },
+                        "days_back": {
+                            "type": "integer",
+                            "description": "Optional: only items published within the last N days",
+                        },
+                    },
                     "required": ["query"],
                 }
             },
@@ -388,12 +405,50 @@ def read_latest_curated_snapshot(source: str, now: datetime | None = None) -> li
     return []
 
 
-def search_knowledge_base(query: str, top_k: int) -> list[dict]:
-    """Hybrid search (Titan dense + BM25 sparse, fused with RRF in Qdrant), then a rerank.
+def _apply_recency_boost(candidates: list[dict], now: datetime | None = None) -> list[dict]:
+    """Nudge RRF-ordered candidates toward fresh documents before the rerank.
 
-    RAG_RERANK=false returns the RRF top results directly, which is how that stage is measured.
+    Each score is multiplied by 1 + RAG_RECENCY_WEIGHT * 2**(-age_days / RAG_RECENCY_HALF_LIFE_DAYS).
+    Documents without a published_ts (indexed before the field existed and not yet backfilled)
+    keep their score. RAG_RECENCY_WEIGHT=0 disables the boost entirely.
     """
-    candidates = qdrant_store.hybrid_search(query, embed_text(query), config.RAG_CANDIDATES)
+    weight = config.RAG_RECENCY_WEIGHT
+    if not weight or not candidates:
+        return candidates
+    now_ts = (now or datetime.now(timezone.utc)).timestamp()
+    half_life = config.RAG_RECENCY_HALF_LIFE_DAYS or 1e-9
+    for candidate in candidates:
+        ts = candidate.get("published_ts") or 0
+        if not ts:
+            continue
+        age_days = (now_ts - ts) / 86400
+        if age_days < 0:
+            continue
+        candidate["score"] = candidate["score"] * (1 + weight * 0.5 ** (age_days / half_life))
+    candidates.sort(key=lambda c: c["score"], reverse=True)
+    return candidates
+
+
+def search_knowledge_base(
+    query: str,
+    top_k: int,
+    sources: list[str] | None = None,
+    days_back: int | None = None,
+    now: datetime | None = None,
+) -> list[dict]:
+    """Hybrid search (Titan dense + BM25 sparse, fused with RRF in Qdrant), recency-boosted,
+    then a rerank.
+
+    sources/days_back become a Qdrant pre-filter (best of the matching pool, not a post-hoc
+    cut of the global top-N); the recency boost re-orders the fused candidates before the
+    rerank sees them. RAG_RERANK=false returns the boosted RRF top results directly, which is
+    how that stage is measured.
+    """
+    query_filter = qdrant_store.build_search_filter(sources=sources, days_back=days_back)
+    candidates = qdrant_store.hybrid_search(
+        query, embed_text(query), config.RAG_CANDIDATES, query_filter=query_filter
+    )
+    candidates = _apply_recency_boost(candidates, now=now)
     if not config.RAG_RERANK:
         return candidates[:top_k]
     return rerank(query, candidates, top_k)
@@ -449,8 +504,14 @@ def run_tool(name: str, tool_input: dict) -> tuple[list[dict], list[dict]]:
     query = (tool_input or {}).get("query", "")
 
     if name == "search_knowledge_base":
+        tool_input = tool_input or {}
         try:
-            matches = search_knowledge_base(query, config.RAG_TOP_K)
+            matches = search_knowledge_base(
+                query,
+                config.RAG_TOP_K,
+                sources=tool_input.get("sources"),
+                days_back=tool_input.get("days_back"),
+            )
         except Exception:
             logger.exception("search_knowledge_base tool failed")
             return [{"error": "knowledge base search failed"}], []
@@ -460,6 +521,7 @@ def run_tool(name: str, tool_input: dict) -> tuple[list[dict], list[dict]]:
                 "url": m["url"],
                 "snippet": m["text"],
                 "score": round(m["score"], 4),
+                "published_date": m.get("published_date", ""),
             }
             for m in matches
         ]

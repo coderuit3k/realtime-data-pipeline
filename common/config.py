@@ -91,6 +91,12 @@ RAG_CANDIDATES = int(os.environ.get("RAG_CANDIDATES", "30"))
 # false skips the Jina call, so hybrid + RRF alone can be measured with the same code.
 RAG_RERANK = os.environ.get("RAG_RERANK", "true").lower() == "true"
 
+# Recency boost for search_knowledge_base: each candidate's RRF score is multiplied by
+# 1 + RAG_RECENCY_WEIGHT * 2**(-age_days / RAG_RECENCY_HALF_LIFE_DAYS) before the rerank,
+# so fresh documents outrank stale ones on time-sensitive questions. 0 disables the boost.
+RAG_RECENCY_HALF_LIFE_DAYS = float(os.environ.get("RAG_RECENCY_HALF_LIFE_DAYS", "14"))
+RAG_RECENCY_WEIGHT = float(os.environ.get("RAG_RECENCY_WEIGHT", "0.5"))
+
 # Tavily web search: the agent's fallback when the knowledge base has nothing
 # relevant.
 TAVILY_SECRET_NAME = os.environ.get("TAVILY_SECRET_NAME", "realtime-data-pipeline-dev/tavily-api")

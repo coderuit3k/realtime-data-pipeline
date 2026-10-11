@@ -112,8 +112,8 @@ def test_search_knowledge_base_reranks_the_hybrid_candidates(monkeypatch):
     ]
     seen = {}
 
-    def fake_hybrid(query, vector, n):
-        seen["args"] = (query, vector, n)
+    def fake_hybrid(query, vector, n, query_filter=None):
+        seen["args"] = (query, vector, n, query_filter)
         return candidates
 
     monkeypatch.setattr(agent, "embed_text", lambda text: [0.1])
@@ -124,14 +124,14 @@ def test_search_knowledge_base_reranks_the_hybrid_candidates(monkeypatch):
 
     result = agent.search_knowledge_base("q", top_k=1)
 
-    assert seen["args"] == ("q", [0.1], 30)
+    assert seen["args"] == ("q", [0.1], 30, None)
     assert [d["title"] for d in result] == ["b"]
 
 
 def test_search_knowledge_base_returns_nothing_when_rerank_finds_nothing_relevant(monkeypatch):
     candidates = [{"title": "a", "url": "u1", "text": "ta", "source": "news", "score": 0.5}]
     monkeypatch.setattr(agent, "embed_text", lambda text: [0.1])
-    monkeypatch.setattr(agent.qdrant_store, "hybrid_search", lambda q, v, n: candidates)
+    monkeypatch.setattr(agent.qdrant_store, "hybrid_search", lambda q, v, n, query_filter=None: candidates)
     monkeypatch.setattr(agent, "rerank", lambda q, docs, top_n: [])
     monkeypatch.setattr(agent.config, "RAG_RERANK", True)
 
@@ -147,7 +147,7 @@ def test_search_knowledge_base_skips_rerank_when_disabled(monkeypatch):
         raise AssertionError("rerank must not run when RAG_RERANK is false")
 
     monkeypatch.setattr(agent, "embed_text", lambda text: [0.1])
-    monkeypatch.setattr(agent.qdrant_store, "hybrid_search", lambda q, v, n: candidates)
+    monkeypatch.setattr(agent.qdrant_store, "hybrid_search", lambda q, v, n, query_filter=None: candidates)
     monkeypatch.setattr(agent, "rerank", fail_if_called)
     monkeypatch.setattr(agent.config, "RAG_RERANK", False)
 
@@ -158,7 +158,7 @@ def test_search_knowledge_base_skips_rerank_when_disabled(monkeypatch):
 
 def test_run_tool_search_knowledge_base_returns_summary_and_raw(monkeypatch):
     matches = [{"title": "t", "url": "https://example.com", "text": "x" * 400, "score": 0.9}]
-    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, top_k: matches)
+    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, top_k, **kwargs: matches)
 
     summary, raw = agent.run_tool("search_knowledge_base", {"query": "q"})
 
@@ -170,7 +170,7 @@ def test_run_tool_search_knowledge_base_returns_summary_and_raw(monkeypatch):
 
 
 def test_run_tool_search_knowledge_base_with_no_matches_returns_empty_lists(monkeypatch):
-    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, top_k: [])
+    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, top_k, **kwargs: [])
 
     summary, raw = agent.run_tool("search_knowledge_base", {"query": "q"})
 
@@ -179,7 +179,7 @@ def test_run_tool_search_knowledge_base_with_no_matches_returns_empty_lists(monk
 
 
 def test_run_tool_search_knowledge_base_failure_becomes_an_error_result(monkeypatch):
-    def boom(query, top_k):
+    def boom(query, top_k, **kwargs):
         raise RuntimeError("cluster suspended")
 
     monkeypatch.setattr(agent, "search_knowledge_base", boom)
@@ -377,7 +377,7 @@ def _final_response(text: str) -> dict:
 
 def test_run_agent_calls_tool_then_returns_final_answer(monkeypatch):
     matches = [{"title": "t", "url": "https://example.com", "text": "body", "score": 0.9}]
-    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, top_k: matches)
+    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, top_k, **kwargs: matches)
 
     fake = FakeBedrock(
         [
@@ -737,7 +737,7 @@ def test_lambda_handler_does_not_cache_a_truncated_answer(monkeypatch):
 
 
 def test_run_agent_flags_a_run_where_a_tool_failed(monkeypatch):
-    def boom(query, top_k):
+    def boom(query, top_k, **kwargs):
         raise RuntimeError("qdrant down")
 
     monkeypatch.setattr(agent, "search_knowledge_base", boom)
@@ -752,7 +752,7 @@ def test_run_agent_flags_a_run_where_a_tool_failed(monkeypatch):
 
 
 def test_run_agent_does_not_flag_a_run_where_tools_succeeded(monkeypatch):
-    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, top_k: [])
+    monkeypatch.setattr(agent, "search_knowledge_base", lambda query, top_k, **kwargs: [])
     fake = FakeBedrock(
         [_tool_use_response("tu1", "search_knowledge_base", "Q"), _final_response("Nothing.")]
     )
@@ -828,7 +828,7 @@ def test_search_knowledge_base_sends_the_question_as_asked_to_every_stage(monkey
         seen["embedded"] = text
         return [0.1]
 
-    def fake_hybrid(query, vector, n):
+    def fake_hybrid(query, vector, n, query_filter=None):
         seen["bm25"] = query
         return [{"title": "a", "url": "u", "text": "t", "source": "news", "score": 0.5}]
 

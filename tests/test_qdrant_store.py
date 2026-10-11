@@ -141,8 +141,17 @@ def test_hybrid_search_builds_two_prefetches_fused_with_rrf(monkeypatch):
     assert by_using["sparse"].query.model == "qdrant/bm25"
     assert call["query"] == models.FusionQuery(fusion=models.Fusion.RRF)
     assert call["limit"] == 30
+    assert call["query_filter"] is None
     assert result == [
-        {"title": "T", "url": "https://x", "text": "body", "source": "github", "score": 0.5}
+        {
+            "title": "T",
+            "url": "https://x",
+            "text": "body",
+            "source": "github",
+            "published_date": "",
+            "published_ts": 0,
+            "score": 0.5,
+        }
     ]
 
 

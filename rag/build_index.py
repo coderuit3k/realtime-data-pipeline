@@ -8,6 +8,7 @@ agent's own tools instead of being embedded.
 
 import json
 import logging
+from datetime import datetime, timezone
 from io import BytesIO
 
 import boto3
@@ -56,6 +57,36 @@ def embed_text(text: str) -> list[float]:
     return json.loads(response["body"].read())["embedding"]
 
 
+def _published_date(record: dict, source: str) -> str:
+    """Best-effort YYYY-MM-DD for a curated record, "" when none is parseable.
+
+    hackernews_stories has created_at, news_articles has published_at, github_repos is best
+    represented by pushed_at (last activity); ingested_at is the fallback everywhere.
+    """
+    if source == "hackernews":
+        raw = record.get("created_at") or record.get("ingested_at")
+    elif source == "news":
+        raw = record.get("published_at") or record.get("ingested_at")
+    else:  # github
+        raw = record.get("pushed_at") or record.get("created_at") or record.get("ingested_at")
+    if not isinstance(raw, str) or len(raw) < 10:
+        return ""
+    date = raw[:10]
+    if len(date) == 10 and date[4] == "-" and date[7] == "-" and date.replace("-", "").isdigit():
+        return date
+    return ""
+
+
+def _published_ts(date_str: str) -> int:
+    """Unix timestamp for a YYYY-MM-DD string; 0 when empty/invalid (unfilterable, unboosted)."""
+    if not date_str:
+        return 0
+    try:
+        return int(datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp())
+    except ValueError:
+        return 0
+
+
 def build_document(record: dict, source: str) -> dict:
     """Map a curated record to the index's common {id, source, title, url, text} shape.
 
@@ -65,33 +96,42 @@ def build_document(record: dict, source: str) -> dict:
     if source == "hackernews":
         title = normalize_text(record.get("title"))
         text = f"{title} {normalize_text(record.get('text'))}".strip()
+        pub_date = _published_date(record, source)
         return {
             "id": record["story_id"],
             "source": "hackernews",
             "title": title,
             "url": record.get("url") or record.get("permalink") or "",
             "text": text,
+            "published_date": pub_date,
+            "published_ts": _published_ts(pub_date),
         }
 
     if source == "github":
         full_name = record.get("full_name") or ""
         text = f"{normalize_text(full_name)} {normalize_text(record.get('description'))}".strip()
+        pub_date = _published_date(record, source)
         return {
             "id": record["repo_id"],
             "source": "github",
             "title": full_name,
             "url": record.get("url") or "",
             "text": text,
+            "published_date": pub_date,
+            "published_ts": _published_ts(pub_date),
         }
 
     title = normalize_text(record.get("title"))
     text = f"{title} {normalize_text(record.get('description'))}".strip()
+    pub_date = _published_date(record, source)
     return {
         "id": record["article_id"],
         "source": "news",
         "title": title,
         "url": record.get("url") or "",
         "text": text,
+        "published_date": pub_date,
+        "published_ts": _published_ts(pub_date),
     }
 
 
@@ -204,9 +244,19 @@ def lambda_handler(event, context):
         embedded += len(chunk)
 
     remaining = len(needs_embedding) - embedded
+    # Points written before published_date existed get it via set_payload (no re-embed);
+    # documents upserted above already carry it, so this is a no-op once caught up.
+    dates_by_point_id = {
+        qdrant_store.point_id(d["source"], d["id"]): (
+            d.get("published_date", ""),
+            d.get("published_ts", 0),
+        )
+        for d in documents
+    }
+    backfilled = qdrant_store.backfill_published_dates(dates_by_point_id)
     logger.info(
-        "Indexed %d documents (%d newly embedded, %d unchanged, %d remaining) into %s",
-        len(documents), embedded, len(unchanged), remaining, config.QDRANT_COLLECTION,
+        "Indexed %d documents (%d newly embedded, %d unchanged, %d remaining, %d backfilled) into %s",
+        len(documents), embedded, len(unchanged), remaining, backfilled, config.QDRANT_COLLECTION,
     )
     return {
         "statusCode": 200,
@@ -214,6 +264,7 @@ def lambda_handler(event, context):
         "newly_embedded": embedded,
         "unchanged": len(unchanged),
         "remaining": remaining,
+        "backfilled_dates": backfilled,
         "collection": config.QDRANT_COLLECTION,
     }
 

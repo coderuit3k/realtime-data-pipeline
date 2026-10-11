@@ -189,15 +189,18 @@ def make_docs(count):
     ]
 
 
-def fake_store(monkeypatch, upserted):
+def fake_store(monkeypatch, upserted, backfilled):
     monkeypatch.setattr(qdrant_store, "ensure_collection", lambda: None)
     monkeypatch.setattr(qdrant_store, "existing_hashes", lambda: {})
     monkeypatch.setattr(qdrant_store, "upsert_documents", lambda docs: upserted.extend(docs))
+    monkeypatch.setattr(
+        qdrant_store, "backfill_published_dates", lambda dates: backfilled.append(dates) or 0
+    )
 
 
 def test_lambda_handler_embeds_and_upserts_new_documents(monkeypatch):
     upserted = []
-    fake_store(monkeypatch, upserted)
+    fake_store(monkeypatch, upserted, [])
     monkeypatch.setattr(build_index, "build_documents", lambda: make_docs(2))
     monkeypatch.setattr(build_index, "embed_text", lambda text: [float(len(text))])
 
@@ -214,7 +217,7 @@ def test_lambda_handler_embeds_concurrently_and_keeps_each_vector_with_its_docum
     monkeypatch,
 ):
     upserted = []
-    fake_store(monkeypatch, upserted)
+    fake_store(monkeypatch, upserted, [])
     monkeypatch.setattr(build_index, "build_documents", lambda: make_docs(8))
     active = {"now": 0, "max": 0}
     lock = threading.Lock()
@@ -239,7 +242,7 @@ def test_lambda_handler_embeds_concurrently_and_keeps_each_vector_with_its_docum
 
 def test_lambda_handler_stops_between_chunks_when_time_runs_out(monkeypatch):
     upserted = []
-    fake_store(monkeypatch, upserted)
+    fake_store(monkeypatch, upserted, [])
     monkeypatch.setattr(build_index, "build_documents", lambda: make_docs(5))
     monkeypatch.setattr(build_index, "embed_text", lambda text: [0.1])
     monkeypatch.setattr(build_index, "UPSERT_BATCH", 1)  # chunks of 2 documents
@@ -255,7 +258,7 @@ def test_lambda_handler_stops_between_chunks_when_time_runs_out(monkeypatch):
 
 def test_lambda_handler_propagates_an_embedding_failure(monkeypatch):
     upserted = []
-    fake_store(monkeypatch, upserted)
+    fake_store(monkeypatch, upserted, [])
     monkeypatch.setattr(build_index, "build_documents", lambda: make_docs(3))
 
     def boom(text):
@@ -270,7 +273,7 @@ def test_lambda_handler_propagates_an_embedding_failure(monkeypatch):
 
 def test_lambda_handler_skips_documents_with_empty_text(monkeypatch):
     upserted = []
-    fake_store(monkeypatch, upserted)
+    fake_store(monkeypatch, upserted, [])
     empty = [{"id": "1", "source": "news", "title": "t", "url": "u", "text": ""}]
     monkeypatch.setattr(build_index, "build_documents", lambda: empty)
     monkeypatch.setattr(build_index, "embed_text", lambda text: [0.1])
