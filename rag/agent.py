@@ -54,8 +54,8 @@ TOOLS = [
             "name": "search_knowledge_base",
             "description": (
                 "Search this pipeline's own curated knowledge base -- Hacker News "
-                "stories, news articles and trending GitHub repos it has ingested. Best for questions "
-                "about tech, AI, startups, or recent news topics the pipeline "
+                "stories, news articles and trending GitHub repos it has ingested. Best for "
+                "questions about tech, AI, startups, or recent news topics the pipeline "
                 "actually covers. Returns titles, URLs, snippets, publication dates "
                 "and a relevance score per result. May return no results when nothing "
                 "ingested is relevant enough to the query. Results are gently nudged "
