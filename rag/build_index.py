@@ -255,7 +255,8 @@ def lambda_handler(event, context):
     }
     backfilled = qdrant_store.backfill_published_dates(dates_by_point_id)
     logger.info(
-        "Indexed %d documents (%d newly embedded, %d unchanged, %d remaining, %d backfilled) into %s",
+        "Indexed %d documents (%d newly embedded, %d unchanged, "
+        "%d remaining, %d backfilled) into %s",
         len(documents), embedded, len(unchanged), remaining, backfilled, config.QDRANT_COLLECTION,
     )
     return {

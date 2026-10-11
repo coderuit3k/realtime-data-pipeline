@@ -131,7 +131,11 @@ def test_search_knowledge_base_reranks_the_hybrid_candidates(monkeypatch):
 def test_search_knowledge_base_returns_nothing_when_rerank_finds_nothing_relevant(monkeypatch):
     candidates = [{"title": "a", "url": "u1", "text": "ta", "source": "news", "score": 0.5}]
     monkeypatch.setattr(agent, "embed_text", lambda text: [0.1])
-    monkeypatch.setattr(agent.qdrant_store, "hybrid_search", lambda q, v, n, query_filter=None: candidates)
+    monkeypatch.setattr(
+        agent.qdrant_store,
+        "hybrid_search",
+        lambda q, v, n, query_filter=None: candidates,
+    )
     monkeypatch.setattr(agent, "rerank", lambda q, docs, top_n: [])
     monkeypatch.setattr(agent.config, "RAG_RERANK", True)
 
@@ -147,7 +151,11 @@ def test_search_knowledge_base_skips_rerank_when_disabled(monkeypatch):
         raise AssertionError("rerank must not run when RAG_RERANK is false")
 
     monkeypatch.setattr(agent, "embed_text", lambda text: [0.1])
-    monkeypatch.setattr(agent.qdrant_store, "hybrid_search", lambda q, v, n, query_filter=None: candidates)
+    monkeypatch.setattr(
+        agent.qdrant_store,
+        "hybrid_search",
+        lambda q, v, n, query_filter=None: candidates,
+    )
     monkeypatch.setattr(agent, "rerank", fail_if_called)
     monkeypatch.setattr(agent.config, "RAG_RERANK", False)
 

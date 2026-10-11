@@ -113,7 +113,12 @@ def test_build_document_hackernews_prefers_created_at():
 
 def test_build_document_news_falls_back_to_ingested_at():
     doc = build_document(
-        {"article_id": "a", "title": "t", "description": "x", "ingested_at": "2026-09-01T00:00:00Z"},
+        {
+            "article_id": "a",
+            "title": "t",
+            "description": "x",
+            "ingested_at": "2026-09-01T00:00:00Z",
+        },
         "news",
     )
 
