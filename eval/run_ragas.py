@@ -38,7 +38,7 @@ from rag import agent  # noqa: E402
 
 def load_questions() -> list[dict]:
     """Load the fixed question set from eval/questions.json."""
-    return json.loads((Path(__file__).parent / "questions_kb.json").read_text())
+    return json.loads((Path(__file__).parent / "questions.json").read_text())
 
 
 def run_rag_agent(question: str) -> dict:
