@@ -57,7 +57,7 @@ def build_keyword_prompt(texts: list[str]) -> str:
         "For each numbered item below, extract up to 5 short topical keywords "
         "(lowercase, comma-separated, no generic filler words). Respond with ONLY "
         'a JSON array of objects -- {"i": <item number>, "keywords": "a, b, c"} -- '
-        "one per item, using the item's own [N] number as \"i\" (skip an item "
+        'one per item, using the item\'s own [N] number as "i" (skip an item '
         "instead of guessing if its text is empty/unclear). No other text.\n\n"
         f"{items}"
     )
@@ -422,7 +422,10 @@ def lambda_handler(event, context):
 
         logger.info(
             "Transformed %d -> %d records from %s to %s",
-            len(raw_records), len(cleaned), key, curated_key,
+            len(raw_records),
+            len(cleaned),
+            key,
+            curated_key,
         )
         results.append(
             {"source": source, "input_key": key, "output_key": curated_key, "records": len(cleaned)}

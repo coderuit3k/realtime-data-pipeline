@@ -408,7 +408,7 @@ def read_latest_curated_snapshot(source: str, now: datetime | None = None) -> li
 def _apply_recency_boost(candidates: list[dict], now: datetime | None = None) -> list[dict]:
     """Nudge RRF-ordered candidates toward fresh documents before the rerank.
 
-    Each score is multiplied by 
+    Each score is multiplied by
     `1 + RAG_RECENCY_WEIGHT * 2**(-age_days / RAG_RECENCY_HALF_LIFE_DAYS)`.
     Documents without a published_ts (indexed before the field existed and not yet backfilled)
     keep their score. RAG_RECENCY_WEIGHT=0 disables the boost entirely.
@@ -590,9 +590,7 @@ def run_tool(name: str, tool_input: dict) -> tuple[list[dict], list[dict]]:
         except Exception:
             logger.exception("search_web tool failed")
             return [{"error": "web search failed"}], []
-        summary = [
-            {"title": r["title"], "url": r["url"], "snippet": r["text"]} for r in results
-        ]
+        summary = [{"title": r["title"], "url": r["url"], "snippet": r["text"]} for r in results]
         return summary, results
 
     return [{"error": f"unknown tool: {name}"}], []

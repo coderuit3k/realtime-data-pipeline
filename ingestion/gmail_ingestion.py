@@ -113,9 +113,9 @@ def fetch_raw_message(conn, number: bytes) -> dict:
     _, data = conn.fetch(number, "(X-GM-MSGID INTERNALDATE BODY.PEEK[])")
     raw = data[0][1]
     # The attributes may sit before or after the body literal, so search every non-body part.
-    head_text = b" ".join(
-        item[0] if isinstance(item, tuple) else item for item in data
-    ).decode("ascii", errors="replace")
+    head_text = b" ".join(item[0] if isinstance(item, tuple) else item for item in data).decode(
+        "ascii", errors="replace"
+    )
     gm_id = int(re.search(r"X-GM-MSGID (\d+)", head_text).group(1))
     date = re.search(r'INTERNALDATE "([^"]+)"', head_text)
     return {

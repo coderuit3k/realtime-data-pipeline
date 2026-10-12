@@ -100,7 +100,10 @@ def test_build_documents_reads_parquet_files_concurrently_and_keeps_order(monkey
     docs = build_index.build_documents()
 
     assert [d["id"] for d in docs] == [
-        "hn/1.parquet", "hn/2.parquet", "hn/3.parquet", "hn/4.parquet"
+        "hn/1.parquet",
+        "hn/2.parquet",
+        "hn/3.parquet",
+        "hn/4.parquet",
     ]
     assert active["max"] > 1
 

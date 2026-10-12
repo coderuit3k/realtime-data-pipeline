@@ -95,11 +95,13 @@ def test_get_r2_client_disables_aws_only_checksum_headers(mock_boto_client):
     # must opt back into "when_required" for both request and response checksums.
     from ingestion.gmail_ingestion import get_r2_client
 
-    get_r2_client({
-        "r2_account_id": "acc",
-        "r2_access_key_id": "ak",
-        "r2_secret_access_key": "sk",
-    })
+    get_r2_client(
+        {
+            "r2_account_id": "acc",
+            "r2_access_key_id": "ak",
+            "r2_secret_access_key": "sk",
+        }
+    )
 
     _, kwargs = mock_boto_client.call_args
     config = kwargs["config"]
@@ -236,8 +238,11 @@ def test_connect_imap_logs_in_and_opens_the_inbox_read_only(mock_imap_cls):
 
 
 CREDS = {
-    "imap_user": "me@gmail.com", "imap_password": "pw",
-    "r2_account_id": "acc", "r2_access_key_id": "ak", "r2_secret_access_key": "sk",
+    "imap_user": "me@gmail.com",
+    "imap_password": "pw",
+    "r2_account_id": "acc",
+    "r2_access_key_id": "ak",
+    "r2_secret_access_key": "sk",
 }
 
 

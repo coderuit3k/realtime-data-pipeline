@@ -452,8 +452,12 @@ def test_normalize_text_columns_turns_an_all_stopword_title_into_an_empty_string
 
 
 LABEL = {
-    "category": "recruiting", "urgency": "high", "needs_reply": True,
-    "deadline": "2026-10-10", "job_stage": "interview", "company": "Acme",
+    "category": "recruiting",
+    "urgency": "high",
+    "needs_reply": True,
+    "deadline": "2026-10-10",
+    "job_stage": "interview",
+    "company": "Acme",
 }
 EMAIL = {"message_id": "m1", "subject": "Interview", "from_address": "hr@acme.com", "snippet": "Hi"}
 

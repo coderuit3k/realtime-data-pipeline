@@ -40,6 +40,7 @@ def test_read_latest_curated_snapshot_picks_most_recent_key_today(monkeypatch):
             {"coin_id": "bitcoin", "price_usd": 88420.0}
         ]
     }
+
     def fake_list(bucket, prefix):
         return keys_by_prefix.get(prefix, [])
 
@@ -64,6 +65,7 @@ def test_read_latest_curated_snapshot_falls_back_to_previous_day_when_today_empt
             {"location": "Hanoi", "temperature_c": 22.0}
         ]
     }
+
     def fake_list(bucket, prefix):
         return keys_by_prefix.get(prefix, [])
 
@@ -307,18 +309,14 @@ def test_run_tool_query_athena_returns_summary_and_no_sources(monkeypatch):
         agent, "query_athena", lambda sql, **kwargs: ([{"coin_id": "bitcoin"}], False)
     )
 
-    summary, raw = agent.run_tool(
-        "query_athena", {"sql": "SELECT * FROM crypto_prices"}
-    )
+    summary, raw = agent.run_tool("query_athena", {"sql": "SELECT * FROM crypto_prices"})
 
     assert summary == [{"coin_id": "bitcoin"}]
     assert raw == []
 
 
 def test_run_tool_query_athena_appends_truncation_note(monkeypatch):
-    monkeypatch.setattr(
-        agent, "query_athena", lambda sql, **kwargs: ([{"n": "1"}], True)
-    )
+    monkeypatch.setattr(agent, "query_athena", lambda sql, **kwargs: ([{"n": "1"}], True))
 
     summary, raw = agent.run_tool("query_athena", {"sql": "SELECT n FROM t"})
 

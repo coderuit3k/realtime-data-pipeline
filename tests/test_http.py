@@ -144,8 +144,9 @@ def test_get_with_retry_waits_longer_before_each_further_attempt():
 
 
 def test_get_with_retry_follows_retry_after_but_caps_it_to_fit_the_lambda_timeout():
-    short, long = _Client(_Reply(429, {"Retry-After": "3"}), _Reply(200)), _Client(
-        _Reply(429, {"Retry-After": "300"}), _Reply(200)
+    short, long = (
+        _Client(_Reply(429, {"Retry-After": "3"}), _Reply(200)),
+        _Client(_Reply(429, {"Retry-After": "300"}), _Reply(200)),
     )
     short_naps, long_naps = [], []
 

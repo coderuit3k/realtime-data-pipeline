@@ -33,10 +33,7 @@ def rerank(query: str, docs: list[dict], top_n: int) -> list[dict]:
         api_key = get_secret(config.JINA_SECRET_NAME)["api_key"]
         response = requests.post(
             JINA_RERANK_URL,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}"
-            },
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
             json={
                 "model": config.JINA_RERANK_MODEL,
                 "query": query,

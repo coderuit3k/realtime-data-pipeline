@@ -257,7 +257,12 @@ def lambda_handler(event, context):
     logger.info(
         "Indexed %d documents (%d newly embedded, %d unchanged, "
         "%d remaining, %d backfilled) into %s",
-        len(documents), embedded, len(unchanged), remaining, backfilled, config.QDRANT_COLLECTION,
+        len(documents),
+        embedded,
+        len(unchanged),
+        remaining,
+        backfilled,
+        config.QDRANT_COLLECTION,
     )
     return {
         "statusCode": 200,

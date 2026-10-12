@@ -118,7 +118,17 @@ def test_normalize_text_is_idempotent_on_random_markup_like_strings():
 
     rng = random.Random(7)
     pieces = list("<>&;#x/ab1 +$%!'\"-.,\n\t") + [
-        "İ", "é", "é", "😀", "&lt;", "&amp;", "&#38;", "<b>", "</b>", "<!--", "-->",
+        "İ",
+        "é",
+        "é",
+        "😀",
+        "&lt;",
+        "&amp;",
+        "&#38;",
+        "<b>",
+        "</b>",
+        "<!--",
+        "-->",
     ]
     failures = []
     for _ in range(5000):

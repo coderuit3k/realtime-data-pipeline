@@ -24,7 +24,12 @@ def _entry(**overrides):
 
 def test_label_fields_are_the_six_columns_in_order():
     assert el.LABEL_FIELDS == (
-        "category", "urgency", "needs_reply", "deadline", "job_stage", "company"
+        "category",
+        "urgency",
+        "needs_reply",
+        "deadline",
+        "job_stage",
+        "company",
     )
 
 

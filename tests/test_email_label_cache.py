@@ -2,8 +2,12 @@ from common import config
 from common import email_label_cache as cache
 
 LABEL = {
-    "category": "recruiting", "urgency": "high", "needs_reply": True,
-    "deadline": "2026-10-10", "job_stage": "interview", "company": "Acme",
+    "category": "recruiting",
+    "urgency": "high",
+    "needs_reply": True,
+    "deadline": "2026-10-10",
+    "job_stage": "interview",
+    "company": "Acme",
 }
 
 

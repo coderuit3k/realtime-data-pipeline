@@ -11,8 +11,12 @@ NOW = datetime(2026, 10, 6, 9, 30, tzinfo=timezone.utc)
 
 def _row(day, category, emails, needs_reply=0, urgent=0, with_deadline=0):
     return {
-        "received_date": day, "category": category, "emails": str(emails),
-        "needs_reply": str(needs_reply), "urgent": str(urgent), "with_deadline": str(with_deadline),
+        "received_date": day,
+        "category": category,
+        "emails": str(emails),
+        "needs_reply": str(needs_reply),
+        "urgent": str(urgent),
+        "with_deadline": str(with_deadline),
     }
 
 
@@ -45,10 +49,18 @@ def test_build_stats_sums_totals_by_category_and_per_day():
     stats = gs.build_stats(rows, TODAY, NOW)
 
     assert stats["totals"] == {
-        "emails": 14, "needsReply": 3, "urgent": 1, "withDeadline": 1, "unclassified": 5,
+        "emails": 14,
+        "needsReply": 3,
+        "urgent": 1,
+        "withDeadline": 1,
+        "unclassified": 5,
     }
     assert stats["byCategory"] == {
-        "newsletter": 3, "notification": 0, "personal": 4, "recruiting": 2, "other": 0,
+        "newsletter": 3,
+        "notification": 0,
+        "personal": 4,
+        "recruiting": 2,
+        "other": 0,
     }
     per_day = {d["date"]: d["total"] for d in stats["perDay"]}
     assert per_day["2026-10-06"] == 5 and per_day["2026-10-05"] == 9
@@ -71,7 +83,11 @@ def test_build_stats_has_the_exact_documented_keys_and_metadata():
     assert stats["generatedAt"] == "2026-10-06T09:30:00+00:00"
     assert stats["windowDays"] == 14
     assert set(stats["totals"]) == {
-        "emails", "needsReply", "urgent", "withDeadline", "unclassified",
+        "emails",
+        "needsReply",
+        "urgent",
+        "withDeadline",
+        "unclassified",
     }
 
 
