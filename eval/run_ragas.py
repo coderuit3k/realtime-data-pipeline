@@ -25,8 +25,11 @@ from langchain_aws import BedrockEmbeddings, ChatBedrockConverse  # noqa: E402
 from ragas import EvaluationDataset, evaluate  # noqa: E402
 from ragas.embeddings import LangchainEmbeddingsWrapper  # noqa: E402
 from ragas.llms import LangchainLLMWrapper  # noqa: E402
-from ragas.metrics import LLMContextPrecisionWithoutReference, ResponseRelevancy  # noqa: E402
-from ragas.metrics.collections import Faithfulness  # noqa: E402
+from ragas.metrics import (  # noqa: E402
+    Faithfulness,
+    LLMContextPrecisionWithoutReference,
+    ResponseRelevancy,
+)
 from ragas.run_config import RunConfig  # noqa: E402
 
 from common import config  # noqa: E402
