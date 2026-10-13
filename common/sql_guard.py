@@ -25,8 +25,6 @@ QUALIFY_CLAUSE = re.compile(r"\bQUALIFY\b", re.IGNORECASE)
 
 # Curated-table schemas, mirroring the query_athena tool description in
 # rag/agent.py. year/month/day are partition columns present on every table.
-# This dict is the source of truth for the column check; the tool description
-# prose is written for the model, this is what gets enforced.
 TABLE_SCHEMAS = {
     "hackernews_stories": {
         "story_id", "title", "text", "author", "score", "num_comments",
