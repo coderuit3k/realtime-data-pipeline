@@ -1,10 +1,11 @@
-"""Tests for the Tier 2 correctness checks in common/sql_guard.py."""
+"""Tests for the Tier 2/3 correctness checks in common/sql_guard.py."""
 
 import builtins
 
-from common.sql_guard import (  # noqa: E402
+from common.sql_guard import (
     validate_athena_sql,
     validate_columns,
+    validate_group_by,
 )
 
 
@@ -69,3 +70,67 @@ def test_rejects_hallucinated_column():
     ok, reason = validate_athena_sql("SELECT sentiment_score FROM news_articles LIMIT 5")
     assert not ok
     assert "does not exist" in reason
+
+
+# --- Tier 3: GROUP BY completeness ---
+
+
+def test_group_by_rejects_bare_column():
+    ok, reason = validate_group_by(
+        "SELECT observed_at, AVG(temperature_c) AS a FROM weather_observations"
+    )
+    assert not ok
+    assert "observed_at" in reason
+    assert "GROUP BY" in reason
+
+
+def test_group_by_rejects_wrong_group_key():
+    ok, reason = validate_group_by(
+        "SELECT observed_at, AVG(temperature_c) AS a FROM weather_observations GROUP BY location"
+    )
+    assert not ok
+
+
+def test_group_by_accepts_positional_alias_expression():
+    for sql in [
+        "SELECT SUBSTR(observed_at,1,10) AS day, AVG(temperature_c) AS a "
+        "FROM weather_observations GROUP BY 1",
+        "SELECT SUBSTR(observed_at,1,10) AS day, AVG(temperature_c) AS a "
+        "FROM weather_observations GROUP BY day",
+        "SELECT SUBSTR(observed_at,1,10), AVG(temperature_c) "
+        "FROM weather_observations GROUP BY SUBSTR(observed_at,1,10)",
+    ]:
+        ok, reason = validate_group_by(sql)
+        assert ok, f"{sql!r} rejected: {reason}"
+
+
+def test_group_by_skips_non_aggregated_queries():
+    # no aggregates -> GROUP BY not required
+    assert validate_group_by("SELECT observed_at, temperature_c FROM weather_observations")[0]
+    # only aggregates -> fine
+    assert validate_group_by("SELECT AVG(temperature_c) FROM weather_observations")[0]
+    # window functions don't need GROUP BY
+    assert validate_group_by(
+        "SELECT full_name, ROW_NUMBER() OVER (PARTITION BY language ORDER BY stars DESC) AS rn "
+        "FROM github_repos"
+    )[0]
+
+
+def test_group_by_fails_open_without_sqlglot(monkeypatch):
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "sqlglot":
+            raise ImportError("blocked for test")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    assert validate_group_by("SELECT observed_at, AVG(x) FROM t") == (True, None)
+
+
+def test_group_by_wired_into_full_validation():
+    ok, reason = validate_athena_sql(
+        "SELECT observed_at, AVG(temperature_c) AS a FROM weather_observations"
+    )
+    assert not ok
+    assert "GROUP BY" in reason

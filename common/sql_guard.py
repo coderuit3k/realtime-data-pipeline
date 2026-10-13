@@ -10,6 +10,12 @@ Athena/Trino correctness checks (Python-only, no TS port needed):
 - dialect check: reject QUALIFY (valid in Snowflake/BigQuery, syntax error in Trino)
 - schema check: every referenced column must exist in the curated tables,
   with a "did you mean ...?" hint for typos like `keyword` vs `keywords`.
+- group-by check: when a SELECT mixes aggregates with other expressions, every
+  non-aggregated expression must appear in GROUP BY (catches
+  EXPRESSION_NOT_AGGREGATE before Athena).
+
+The sqlglot-based checks fail open: if sqlglot is missing or the SQL cannot be
+parsed, the query passes through and Athena remains the judge.
 """
 
 import difflib
@@ -25,6 +31,8 @@ QUALIFY_CLAUSE = re.compile(r"\bQUALIFY\b", re.IGNORECASE)
 
 # Curated-table schemas, mirroring the query_athena tool description in
 # rag/agent.py. year/month/day are partition columns present on every table.
+# This dict is the source of truth for the column check; the tool description
+# prose is written for the model, this is what gets enforced.
 TABLE_SCHEMAS = {
     "hackernews_stories": {
         "story_id", "title", "text", "author", "score", "num_comments",
@@ -124,12 +132,107 @@ def validate_columns(sql: str) -> tuple[bool, str | None]:
     return True, None
 
 
+def _gb_norm(expr) -> str:
+    return expr.sql(dialect="trino").lower()
+
+
+def _gb_bare_columns(expr, exp) -> set:
+    """Column refs in expr that are NOT inside an aggregate function.
+
+    Window-function internals (PARTITION BY ...) are not bare: windows don't
+    trigger GROUP BY requirements.
+    """
+    if isinstance(expr, exp.Window):
+        return set()
+    all_cols = {_gb_norm(c) for c in expr.find_all(exp.Column)}
+    agg_cols = set()
+    for agg in expr.find_all(exp.AggFunc):
+        agg_cols.update(_gb_norm(c) for c in agg.find_all(exp.Column))
+    return all_cols - agg_cols
+
+
+def _gb_check_scope(select, exp) -> tuple[bool, str | None]:
+    """Check one SELECT scope for GROUP BY completeness. Fail-open when uncertain."""
+    targets = [e.this if isinstance(e, exp.Alias) else e for e in select.expressions]
+
+    has_agg = any(t.find(exp.AggFunc) for t in targets)
+    if not has_agg:
+        return True, None  # no aggregation -> GROUP BY not required
+
+    # Alias map for resolving GROUP BY references.
+    aliases = {}
+    norm_selects = []
+    for e in select.expressions:
+        if isinstance(e, exp.Alias):
+            aliases[e.alias.lower()] = e.this
+            norm_selects.append(_gb_norm(e.this))
+        else:
+            norm_selects.append(_gb_norm(e))
+
+    # Normalized GROUP BY keys (resolve positionals and aliases).
+    group_keys = set()
+    group_by = select.args.get("group")
+    if group_by:
+        for gb in group_by.expressions:
+            if isinstance(gb, exp.Literal) and not gb.is_string:
+                try:
+                    pos = int(gb.name) - 1
+                    if 0 <= pos < len(norm_selects):
+                        group_keys.add(norm_selects[pos])
+                        continue
+                except (ValueError, IndexError):
+                    pass
+            if isinstance(gb, exp.Column) and gb.name.lower() in aliases:
+                group_keys.add(_gb_norm(aliases[gb.name.lower()]))
+                continue
+            group_keys.add(_gb_norm(gb))
+
+    for target in targets:
+        if not _gb_bare_columns(target, exp):
+            continue  # pure aggregate / literal / star / window
+        if _gb_norm(target) in group_keys:
+            continue
+        return False, (
+            f"Expression '{target.sql(dialect='trino')}' is not an aggregate function "
+            f"and does not appear in GROUP BY. Either wrap it in an aggregate "
+            f"or add it to GROUP BY (e.g. GROUP BY 1 for the first select expression)."
+        )
+    return True, None
+
+
+def validate_group_by(sql: str) -> tuple[bool, str | None]:
+    """Check GROUP BY completeness for every SELECT scope in the query.
+
+    Fail-open: if sqlglot is missing or the SQL cannot be parsed, the query
+    passes through and Athena remains the judge.
+    """
+    try:
+        import sqlglot
+        from sqlglot import exp
+    except ImportError:
+        return True, None
+    try:
+        tree = sqlglot.parse_one(sql, read="trino")
+    except Exception:
+        return True, None
+    for select in tree.find_all(exp.Select):
+        ok, reason = _gb_check_scope(select, exp)
+        if not ok:
+            return False, reason
+    return True, None
+
+
 def validate_athena_sql(sql: str) -> tuple[bool, str | None]:
-    """Full pre-execution validation: safety, then dialect, then schema.
+    """Full pre-execution validation: safety, dialect, schema, then group-by.
 
     Returns the first failure so the model gets one actionable error at a time.
     """
-    for check in (validate_read_only_select, validate_trino_dialect, validate_columns):
+    for check in (
+        validate_read_only_select,
+        validate_trino_dialect,
+        validate_columns,
+        validate_group_by,
+    ):
         ok, reason = check(sql)
         if not ok:
             return ok, reason
