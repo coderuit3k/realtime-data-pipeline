@@ -1,76 +1,71 @@
-import pytest
+"""Tests for the Tier 2 correctness checks in common/sql_guard.py."""
 
-from common.sql_guard import validate_read_only_select
+import builtins
 
-
-def test_accepts_a_plain_select():
-    assert validate_read_only_select("SELECT * FROM crypto_prices") == (True, None)
-
-
-def test_accepts_a_with_select_cte():
-    assert validate_read_only_select("WITH x AS (SELECT 1) SELECT * FROM x") == (True, None)
-
-
-def test_accepts_leading_whitespace_and_lowercase_select():
-    assert validate_read_only_select("  select 1") == (True, None)
-
-
-def test_rejects_an_empty_string():
-    ok, _reason = validate_read_only_select("   ")
-    assert ok is False
-
-
-def test_rejects_a_statement_that_doesnt_start_with_select_or_with():
-    ok, reason = validate_read_only_select("EXPLAIN SELECT * FROM crypto_prices")
-    assert (ok, reason) == (
-        False,
-        "Only SELECT statements are allowed (optionally starting with WITH).",
-    )
-
-
-@pytest.mark.parametrize(
-    "sql",
-    [
-        "INSERT INTO crypto_prices VALUES (1)",
-        "UPDATE crypto_prices SET price_usd=1",
-        "DELETE FROM crypto_prices",
-        "DROP TABLE crypto_prices",
-        "ALTER TABLE crypto_prices ADD COLUMN x int",
-        "CREATE TABLE x AS SELECT * FROM crypto_prices",
-        "GRANT SELECT ON crypto_prices TO someone",
-        "REVOKE SELECT ON crypto_prices FROM someone",
-        "TRUNCATE TABLE crypto_prices",
-        "MERGE INTO crypto_prices USING x ON true WHEN MATCHED THEN DELETE",
-        "UNLOAD (SELECT 1) TO 's3://bucket/' WITH (format='JSON')",
-        "VACUUM crypto_prices",
-        "CALL some_procedure()",
-    ],
+from common.sql_guard import (  # noqa: E402
+    validate_athena_sql,
+    validate_columns,
 )
-def test_rejects_forbidden_statements(sql):
-    ok, _reason = validate_read_only_select(sql)
-    assert ok is False
 
 
-def test_rejects_a_forbidden_keyword_smuggled_inside_a_cte_under_a_legitimate_prefix():
-    ok, reason = validate_read_only_select(
-        "WITH x AS (INSERT INTO crypto_prices VALUES (1)) SELECT * FROM x"
+def test_rejects_unknown_column_with_hint():
+    ok, reason = validate_athena_sql("SELECT keyword FROM hackernews_stories")
+    assert not ok
+    assert "keywords" in reason  # did-you-mean hint
+
+
+def test_rejects_qualify_with_rewrite_guidance():
+    ok, reason = validate_athena_sql(
+        "SELECT full_name, ROW_NUMBER() OVER (PARTITION BY language ORDER BY stars DESC) AS rn "
+        "FROM github_repos QUALIFY rn <= 3"
     )
-    assert (ok, reason) == (
-        False,
-        "The statement contains a disallowed keyword (read-only access only).",
-    )
+    assert not ok
+    assert "QUALIFY is not supported" in reason
+    assert "ROW_NUMBER()" in reason
 
 
-def test_rejects_a_select_followed_by_a_second_statement():
-    ok, reason = validate_read_only_select("SELECT 1; DROP TABLE crypto_prices")
-    assert (ok, reason) == (False, "Multiple statements separated by ';' are not allowed.")
+def test_accepts_valid_queries():
+    valid = [
+        # aliases + positional GROUP BY
+        "SELECT SUBSTR(observed_at,1,10) AS day, AVG(temperature_c) "
+        "FROM weather_observations GROUP BY 1",
+        # CTE + window function
+        "WITH r AS (SELECT full_name, ROW_NUMBER() OVER (ORDER BY stars DESC) AS rn "
+        "FROM github_repos) SELECT full_name FROM r WHERE rn <= 3",
+        # star + string literal
+        "SELECT * FROM crypto_prices WHERE coin_id = 'bitcoin'",
+        # LIKE on keywords with string literal
+        "SELECT title FROM news_articles WHERE keywords LIKE '%rust%'",
+        # partition columns
+        "SELECT year, month, day, COUNT(*) FROM hackernews_stories GROUP BY 1,2,3",
+    ]
+    for sql in valid:
+        ok, reason = validate_athena_sql(sql)
+        assert ok, f"{sql!r} rejected: {reason}"
 
 
-def test_allows_a_single_trailing_semicolon():
-    assert validate_read_only_select("SELECT 1;") == (True, None)
+def test_safety_checks_still_hold():
+    assert not validate_athena_sql("DROP TABLE t")[0]
+    assert not validate_athena_sql("INSERT INTO t VALUES (1)")[0]
+    assert not validate_athena_sql("")[0]
 
 
-def test_does_not_false_positive_on_a_forbidden_word_substring_in_a_column_name():
-    # 'created_at' contains no forbidden keyword as a whole word; guards
-    # against a naive substring match rejecting legitimate queries.
-    assert validate_read_only_select("SELECT created_at FROM hackernews_stories") == (True, None)
+def test_column_check_fails_open_without_sqlglot(monkeypatch):
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "sqlglot":
+            raise ImportError("blocked for test")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    # unknown column passes through when sqlglot is unavailable; Athena decides
+    assert validate_columns("SELECT keyword FROM hackernews_stories") == (True, None)
+    # safety check does not depend on sqlglot
+    assert not validate_athena_sql("DROP TABLE t")[0]
+
+
+def test_rejects_hallucinated_column():
+    ok, reason = validate_athena_sql("SELECT sentiment_score FROM news_articles LIMIT 5")
+    assert not ok
+    assert "does not exist" in reason

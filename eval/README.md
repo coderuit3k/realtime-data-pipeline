@@ -80,11 +80,13 @@ The agent picks a tool, or none, from the tool descriptions alone and falls back
 always something to cite. The `edge` questions are expected to be refused or answered with
 "I can't": judge them by reading the answers, not by the scores.
 
-**Latest run (2026-10-12, 30 `kb` questions, AFTER adding recency boost and the
-`sources`/`days_back` filters to `search_knowledge_base`):** faithfulness 0.5890,
-answer relevancy 0.6819, context precision 0.4911 (28/30 grounded). The BEFORE run
-on the same 30 questions is still pending. Expect the same ballpark, not identical
-values: the judge LLM and the agent's tool choices both vary between runs.
+**Latest run (2026-10-13, 100 questions, AFTER adding recency boost and the
+`sources`/`days_back` filters to `search_knowledge_base`):** faithfulness 0.5852,
+answer relevancy 0.6699, context precision 0.5944 (300 scoring jobs, ~52 min for
+scoring alone). The BEFORE run on the same 100 questions is still pending. Expect
+the same ballpark, not identical values: the judge LLM and the agent's tool choices
+both vary between runs. (This run predates the `sql_guard` column/dialect checks
+added later the same day.)
 
 Set `ATHENA_WORKGROUP`, `ATHENA_DATABASE` and `CURATED_BUCKET` before running
 (the bucket comes from `aws lambda get-function-configuration --function-name
@@ -95,9 +97,9 @@ it; without the bucket the crypto and weather tools crash the run. The script st
 once if any is empty.
 
 **Cost and time:** each metric makes several Bedrock calls per question
-(faithfulness splits the answer into statements and checks each). The 30 `kb` questions
-took about 30 minutes, so budget well over an hour for all 100, plus the Bedrock and
-Tavily calls. Don't run it on every commit.
+(faithfulness splits the answer into statements and checks each). The full 100
+questions took about 2 hours end to end (52 minutes for the scoring step alone),
+plus the Bedrock and Tavily calls. Don't run it on every commit.
 
 ## Why `RunConfig(max_workers=2)`
 

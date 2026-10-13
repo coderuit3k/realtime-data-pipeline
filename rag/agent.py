@@ -19,7 +19,7 @@ import requests
 from common import athena, config, qdrant_store
 from common.rerank import rerank
 from common.secrets import get_secret
-from common.sql_guard import validate_read_only_select
+from common.sql_guard import validate_athena_sql
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -182,6 +182,9 @@ TOOLS = [
                 "SQL SHAPE: every non-aggregated column in SELECT must also appear in GROUP BY "
                 "(e.g. SELECT SUBSTR(observed_at,1,10) AS day, AVG(temperature_c) ... GROUP BY 1). "
                 "Use the exact column names listed above: `keywords` (plural, never `keyword`). "
+                "When a query fails, fix exactly what the Athena error names instead of guessing."
+                "Athena runs Trino SQL: there is no QUALIFY clause -- keep one row per group with "
+                "a subquery using ROW_NUMBER() OVER (...) AS rn and filter WHERE rn = 1 outside. "
                 "When a query fails, fix exactly what the Athena error names instead of guessing."
             ),
             "inputSchema": {
@@ -464,7 +467,7 @@ def query_athena(sql: str, max_rows: int = 25) -> tuple[list[dict], bool]:
 
     Raises ValueError if the guard rejects the SQL, RuntimeError if Athena fails or times out.
     """
-    ok, reason = validate_read_only_select(sql)
+    ok, reason = validate_athena_sql(sql)
     if not ok:
         raise ValueError(reason)
     return athena.run_query(sql, max_rows)

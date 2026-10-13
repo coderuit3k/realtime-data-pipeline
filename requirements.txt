@@ -6,3 +6,5 @@ boto3==1.36.1
 pandas>=2.2
 pyarrow>=17.0
 qdrant-client==1.19.1
+sqlglot==30.22.0
+sqlglot==30.22.0
