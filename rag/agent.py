@@ -179,6 +179,10 @@ TOOLS = [
                 "with punctuation and common stopwords removed, so match them "
                 "with lowercase patterns (LIKE '%rust%'), never capitalized "
                 "ones. full_name and url keep their original case."
+                "SQL SHAPE: every non-aggregated column in SELECT must also appear in GROUP BY "
+                "(e.g. SELECT SUBSTR(observed_at,1,10) AS day, AVG(temperature_c) ... GROUP BY 1). "
+                "Use the exact column names listed above: `keywords` (plural, never `keyword`). "
+                "When a query fails, fix exactly what the Athena error names instead of guessing."
             ),
             "inputSchema": {
                 "json": {
