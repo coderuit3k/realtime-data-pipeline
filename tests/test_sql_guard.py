@@ -1,11 +1,19 @@
-"""Tests for the Tier 2/3 correctness checks in common/sql_guard.py."""
+"""Tests for the Tier 2/3/4/5 correctness checks in common/sql_guard.py."""
 
 import builtins
 
 from common.sql_guard import (
     validate_athena_sql,
+    validate_cast_types,
     validate_columns,
+    validate_dialect_funcs,
     validate_group_by,
+    validate_no_arrow,
+    validate_no_date_on_varchar,
+    validate_order_by_ordinal,
+    validate_subquery_alias,
+    validate_union_columns,
+    validate_where_clause,
 )
 
 
@@ -134,3 +142,111 @@ def test_group_by_wired_into_full_validation():
     )
     assert not ok
     assert "GROUP BY" in reason
+
+
+# --- Tier 4: WHERE clause, => syntax, CAST types ---
+
+
+def test_where_rejects_window_function():
+    ok, reason = validate_where_clause(
+        "SELECT story_id FROM hackernews_stories "
+        "WHERE ROW_NUMBER() OVER (PARTITION BY story_id ORDER BY ingested_at DESC) = 1"
+    )
+    assert not ok
+    assert "subquery" in reason
+
+
+def test_where_rejects_aggregate():
+    ok, reason = validate_where_clause("SELECT a FROM t WHERE AVG(x) > 5")
+    assert not ok
+    assert "HAVING" in reason
+
+
+def test_where_allows_normal_and_having():
+    assert validate_where_clause("SELECT a FROM t WHERE x > 5")[0]
+    assert validate_where_clause(
+        "SELECT a, AVG(x) AS m FROM t GROUP BY a HAVING AVG(x) > 5"
+    )[0]
+
+
+def test_no_arrow_rejects():
+    ok, reason = validate_no_arrow("SELECT * FROM t WHERE f(x => 1)")
+    assert not ok
+    assert "positional" in reason
+
+
+def test_no_arrow_allows_in_string_literal():
+    assert validate_no_arrow("SELECT * FROM t WHERE x = 'a=>b'")[0]
+
+
+def test_cast_types_rejects_float():
+    ok, reason = validate_cast_types("SELECT CAST(price_usd AS float) FROM crypto_prices")
+    assert not ok
+    assert "REAL" in reason
+
+
+def test_cast_types_allows_real():
+    assert validate_cast_types("SELECT CAST(price_usd AS REAL) FROM crypto_prices")[0]
+
+
+def test_tier4_wired_into_full_validation():
+    ok, reason = validate_athena_sql(
+        "SELECT story_id FROM hackernews_stories "
+        "WHERE ROW_NUMBER() OVER (PARTITION BY story_id ORDER BY ingested_at DESC) = 1"
+    )
+    assert not ok
+    assert "WHERE" in reason
+
+
+# --- Tier 5: dialect funcs, subquery alias, date-on-varchar, order-by, union ---
+
+
+def test_dialect_funcs_rejected():
+    for sql, hint in [
+        ("SELECT IFNULL(title, 'x') FROM t", "COALESCE"),
+        ("SELECT NVL(score, 0) FROM t", "COALESCE"),
+        ("SELECT LEN(title) FROM t", "LENGTH"),
+    ]:
+        ok, reason = validate_dialect_funcs(sql)
+        assert not ok, sql
+        assert hint in reason
+
+
+def test_dialect_funcs_ok():
+    assert validate_dialect_funcs("SELECT COALESCE(title, 'x') FROM t")[0]
+    assert validate_dialect_funcs("SELECT * FROM t WHERE x = 'len('")[0]
+
+
+def test_subquery_alias():
+    ok, reason = validate_subquery_alias("SELECT * FROM (SELECT a FROM t)")
+    assert not ok
+    assert "alias" in reason
+    assert validate_subquery_alias("SELECT * FROM (SELECT a FROM t) AS s")[0]
+    assert validate_subquery_alias("WITH c AS (SELECT a FROM t) SELECT * FROM c")[0]
+
+
+def test_no_date_on_varchar():
+    ok, reason = validate_no_date_on_varchar("SELECT DATE(observed_at) FROM t")
+    assert not ok
+    assert "SUBSTR" in reason
+    assert validate_no_date_on_varchar("SELECT SUBSTR(observed_at,1,10) FROM t")[0]
+
+
+def test_order_by_ordinal():
+    ok, reason = validate_order_by_ordinal("SELECT a, b FROM t ORDER BY 5")
+    assert not ok
+    assert "out of range" in reason
+    assert validate_order_by_ordinal("SELECT a, b FROM t ORDER BY 2")[0]
+
+
+def test_union_columns():
+    ok, reason = validate_union_columns("SELECT a FROM t UNION SELECT a, b FROM u")
+    assert not ok
+    assert "same number of columns" in reason
+    assert validate_union_columns("SELECT a, b FROM t UNION ALL SELECT c, d FROM u")[0]
+
+
+def test_tier5_wired_into_full_validation():
+    ok, reason = validate_athena_sql("SELECT IFNULL(title, 'x') FROM hackernews_stories")
+    assert not ok
+    assert "COALESCE" in reason

@@ -13,6 +13,18 @@ Athena/Trino correctness checks (Python-only, no TS port needed):
 - group-by check: when a SELECT mixes aggregates with other expressions, every
   non-aggregated expression must appear in GROUP BY (catches
   EXPRESSION_NOT_AGGREGATE before Athena).
+- where-clause check: WHERE cannot contain window functions or aggregates
+  (catches EXPRESSION_NOT_SCALAR before Athena).
+- arrow check: reject `=>` named-argument syntax (not valid Trino).
+- cast-type check: reject non-Trino type names like `float`/`string`/`text`
+  in CAST (catches TYPE_MISMATCH before Athena).
+- dialect-func check: reject wrong-dialect functions (IFNULL, NVL, LEN, ...)
+  with the Trino equivalent.
+- subquery-alias check: derived tables in FROM must have an alias in Trino.
+- date-on-varchar check: date functions on VARCHAR timestamp columns
+  (observed_at, ...) won't work -- use SUBSTR instead.
+- order-by check: positional ORDER BY must be within the SELECT list range.
+- union check: UNION/INTERSECT/EXCEPT sides must have equal column counts.
 
 The sqlglot-based checks fail open: if sqlglot is missing or the SQL cannot be
 parsed, the query passes through and Athena remains the judge.
@@ -222,16 +234,216 @@ def validate_group_by(sql: str) -> tuple[bool, str | None]:
     return True, None
 
 
+def validate_where_clause(sql: str) -> tuple[bool, str | None]:
+    """WHERE cannot contain window functions, aggregates or grouping operations.
+
+    Fail-open: if sqlglot is missing or the SQL cannot be parsed, the query
+    passes through and Athena remains the judge.
+    """
+    try:
+        import sqlglot
+        from sqlglot import exp
+    except ImportError:
+        return True, None
+    try:
+        tree = sqlglot.parse_one(sql, read="trino")
+    except Exception:
+        return True, None
+    for where in tree.find_all(exp.Where):
+        if where.find(exp.Window):
+            return False, (
+                "Window functions (e.g. ROW_NUMBER()) cannot appear in WHERE. "
+                "Compute it in a subquery first: SELECT * FROM (SELECT ..., "
+                "ROW_NUMBER() OVER (...) AS rn FROM ...) WHERE rn = 1."
+            )
+        if where.find(exp.AggFunc):
+            return False, (
+                "Aggregate functions cannot appear in WHERE. Use HAVING for "
+                "post-aggregation filters, or compute the aggregate in a subquery first."
+            )
+    return True, None
+
+
+def validate_no_arrow(sql: str) -> tuple[bool, str | None]:
+    """Reject `=>` named-argument syntax, which is not valid Trino."""
+    no_strings = re.sub(r"'[^']*'", "''", sql)
+    if "=>" in no_strings:
+        return False, (
+            "'=>' is not valid Trino syntax (it is named-argument syntax from other "
+            "dialects). Use positional arguments instead, e.g. date_trunc('day', observed_at)."
+        )
+    return True, None
+
+
+# Common non-Trino type names the model reaches for, and what to use instead.
+_BAD_CAST_TYPES = {
+    "float": "REAL or DOUBLE",
+    "string": "VARCHAR",
+    "text": "VARCHAR",
+}
+
+
+def validate_cast_types(sql: str) -> tuple[bool, str | None]:
+    """Reject non-Trino type names in CAST (catches TYPE_MISMATCH before Athena)."""
+    m = re.search(r"\bAS\s+(float|string|text)\b", sql, re.IGNORECASE)
+    if m:
+        bad = m.group(1).lower()
+        good = _BAD_CAST_TYPES[bad].split(" or ")[0]
+        return False, (
+            f"'{m.group(1)}' is not a Trino type. Use {_BAD_CAST_TYPES[bad]} instead, "
+            f"e.g. CAST(x AS {good})."
+        )
+    return True, None
+
+
+# Wrong-dialect functions the model borrows from MySQL/Oracle/SQL Server,
+# mapped to the Trino equivalent.
+_WRONG_DIALECT_FUNCS = {
+    "ifnull": "COALESCE",
+    "nvl": "COALESCE",
+    "isnull": "COALESCE",
+    "nz": "COALESCE",
+    "len": "LENGTH",
+    "getdate": "CURRENT_TIMESTAMP",
+    "sysdate": "CURRENT_TIMESTAMP",
+    "decode": "a CASE WHEN expression",
+}
+
+
+def validate_dialect_funcs(sql: str) -> tuple[bool, str | None]:
+    """Reject functions from other SQL dialects with the Trino equivalent."""
+    no_strings = re.sub(r"'[^']*'", "''", sql)
+    for bad, good in _WRONG_DIALECT_FUNCS.items():
+        if re.search(rf"\b{bad}\s*\(", no_strings, re.IGNORECASE):
+            return False, f"'{bad.upper()}' is not a Trino function. Use {good} instead."
+    return True, None
+
+
+# VARCHAR timestamp columns ('yyyy-MM-dd HH:mm:ss.SSSSSS'): date functions don't
+# work on them -- the tool description says to use SUBSTR instead.
+_VARCHAR_TIMESTAMPS = {"observed_at", "created_at", "published_at", "ingested_at", "pushed_at"}
+_DATE_FUNCS = {
+    "DATE", "YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND",
+    "DATE_TRUNC", "DATE_ADD", "DATE_DIFF", "DATE_PARSE", "DATE_FORMAT",
+}
+
+
+def validate_no_date_on_varchar(sql: str) -> tuple[bool, str | None]:
+    """Reject date functions applied to VARCHAR timestamp columns."""
+    try:
+        import sqlglot
+        from sqlglot import exp
+    except ImportError:
+        return True, None
+    try:
+        tree = sqlglot.parse_one(sql, read="trino")
+    except Exception:
+        return True, None
+    for func in tree.find_all(exp.Func):
+        if func.sql_name().upper() not in _DATE_FUNCS:
+            continue
+        for col in func.find_all(exp.Column):
+            if col.name.lower() in _VARCHAR_TIMESTAMPS:
+                return False, (
+                    f"'{col.name}' is a VARCHAR timestamp ('yyyy-MM-dd HH:mm:ss.SSSSSS'), "
+                    f"not a TIMESTAMP. Date functions like {func.sql_name().upper()}() won't "
+                    f"work on it. Use SUBSTR({col.name},1,10) for the date part instead."
+                )
+    return True, None
+
+
+def validate_subquery_alias(sql: str) -> tuple[bool, str | None]:
+    """Derived tables in FROM must have an alias in Trino."""
+    try:
+        import sqlglot
+        from sqlglot import exp
+    except ImportError:
+        return True, None
+    try:
+        tree = sqlglot.parse_one(sql, read="trino")
+    except Exception:
+        return True, None
+    for sub in tree.find_all(exp.Subquery):
+        if not sub.alias and sub.find(exp.Select):
+            return False, (
+                "Subquery in FROM must have an alias in Trino. "
+                "Write FROM (SELECT ...) AS t instead of FROM (SELECT ...)."
+            )
+    return True, None
+
+
+def validate_order_by_ordinal(sql: str) -> tuple[bool, str | None]:
+    """Positional ORDER BY must reference a SELECT list position that exists."""
+    try:
+        import sqlglot
+        from sqlglot import exp
+    except ImportError:
+        return True, None
+    try:
+        tree = sqlglot.parse_one(sql, read="trino")
+    except Exception:
+        return True, None
+    for select in tree.find_all(exp.Select):
+        n = len(select.expressions)
+        order = select.args.get("order")
+        if not order:
+            continue
+        for ob in order.expressions:
+            target = ob.this if isinstance(ob, exp.Ordered) else ob
+            if isinstance(target, exp.Literal) and not target.is_string:
+                try:
+                    pos = int(target.name)
+                    if pos < 1 or pos > n:
+                        return False, (
+                            f"ORDER BY position {pos} is out of range: the SELECT list "
+                            f"has only {n} expression(s). Use a position between 1 and {n}, "
+                            f"or the column/expression directly."
+                        )
+                except ValueError:
+                    pass
+    return True, None
+
+
+def validate_union_columns(sql: str) -> tuple[bool, str | None]:
+    """UNION/INTERSECT/EXCEPT sides must return the same number of columns."""
+    try:
+        import sqlglot
+        from sqlglot import exp
+    except ImportError:
+        return True, None
+    try:
+        tree = sqlglot.parse_one(sql, read="trino")
+    except Exception:
+        return True, None
+    for u in tree.find_all(exp.Union, exp.Intersect, exp.Except):
+        left_n = len(u.left.expressions) if isinstance(u.left, exp.Select) else None
+        right_n = len(u.right.expressions) if isinstance(u.right, exp.Select) else None
+        if left_n is not None and right_n is not None and left_n != right_n:
+            return False, (
+                "Set operation requires both sides to have the same number of columns: "
+                f"left has {left_n}, right has {right_n}."
+            )
+    return True, None
+
+
 def validate_athena_sql(sql: str) -> tuple[bool, str | None]:
-    """Full pre-execution validation: safety, dialect, schema, then group-by.
+    """Full pre-execution validation, cheapest and most fundamental checks first.
 
     Returns the first failure so the model gets one actionable error at a time.
     """
     for check in (
         validate_read_only_select,
         validate_trino_dialect,
+        validate_dialect_funcs,
+        validate_no_arrow,
+        validate_cast_types,
         validate_columns,
+        validate_no_date_on_varchar,
+        validate_subquery_alias,
         validate_group_by,
+        validate_where_clause,
+        validate_order_by_ordinal,
+        validate_union_columns,
     ):
         ok, reason = check(sql)
         if not ok:
