@@ -520,7 +520,7 @@ def search_web(query: str, max_results: int = 5) -> list[dict]:
     response = requests.post(
         "https://api.tavily.com/search",
         json={"api_key": api_key, "query": query, "max_results": max_results},
-        timeout=10,
+        timeout=60,
     )
     response.raise_for_status()
     return [

@@ -25,6 +25,10 @@ Athena/Trino correctness checks (Python-only, no TS port needed):
   (observed_at, ...) won't work -- use SUBSTR instead.
 - order-by check: positional ORDER BY must be within the SELECT list range.
 - union check: UNION/INTERSECT/EXCEPT sides must have equal column counts.
+- aggregate-type check: AVG/SUM/STDDEV/VARIANCE require a numeric argument
+  (catches FUNCTION_NOT_FOUND from AVG() on a VARCHAR column before Athena).
+- set-op-order check: ORDER BY/LIMIT/OFFSET cannot appear before
+  UNION/INTERSECT/EXCEPT in Trino (catches "mismatched input 'UNION'" before Athena).
 
 The sqlglot-based checks fail open: if sqlglot is missing or the SQL cannot be
 parsed, the query passes through and Athena remains the judge.
@@ -47,69 +51,29 @@ QUALIFY_CLAUSE = re.compile(r"\bQUALIFY\b", re.IGNORECASE)
 # prose is written for the model, this is what gets enforced.
 TABLE_SCHEMAS = {
     "hackernews_stories": {
-        "story_id",
-        "title",
-        "text",
-        "author",
-        "score",
-        "num_comments",
-        "url",
-        "created_at",
-        "ingested_at",
-        "keywords",
-        "year",
-        "month",
-        "day",
+        "story_id", "title", "text", "author", "score", "num_comments",
+        "url", "created_at", "ingested_at", "keywords",
+        "year", "month", "day",
     },
     "news_articles": {
-        "article_id",
-        "provider",
-        "title",
-        "description",
-        "url",
-        "published_at",
-        "ingested_at",
-        "keywords",
-        "year",
-        "month",
-        "day",
+        "article_id", "provider", "title", "description", "url",
+        "published_at", "ingested_at", "keywords",
+        "year", "month", "day",
     },
     "weather_observations": {
-        "location",
-        "temperature_c",
-        "humidity_pct",
-        "precipitation_mm",
-        "wind_speed_kmh",
-        "observed_at",
-        "year",
-        "month",
-        "day",
+        "location", "temperature_c", "humidity_pct", "precipitation_mm",
+        "wind_speed_kmh", "observed_at",
+        "year", "month", "day",
     },
     "crypto_prices": {
-        "coin_id",
-        "price_usd",
-        "market_cap_usd",
-        "volume_24h_usd",
-        "change_24h_pct",
-        "observed_at",
-        "year",
-        "month",
-        "day",
+        "coin_id", "price_usd", "market_cap_usd", "volume_24h_usd",
+        "change_24h_pct", "observed_at",
+        "year", "month", "day",
     },
     "github_repos": {
-        "repo_id",
-        "full_name",
-        "description",
-        "language",
-        "stars",
-        "forks",
-        "created_at",
-        "pushed_at",
-        "ingested_at",
-        "keywords",
-        "year",
-        "month",
-        "day",
+        "repo_id", "full_name", "description", "language", "stars",
+        "forks", "created_at", "pushed_at", "ingested_at", "keywords",
+        "year", "month", "day",
     },
 }
 
@@ -165,7 +129,9 @@ def validate_columns(sql: str) -> tuple[bool, str | None]:
     except Exception:
         return True, None
 
-    defined_aliases = {a.alias.lower() for a in tree.find_all(exp.Alias) if a.alias}
+    defined_aliases = {
+        a.alias.lower() for a in tree.find_all(exp.Alias) if a.alias
+    }
 
     for column in tree.find_all(exp.Column):
         name = column.name.lower()
@@ -361,18 +327,8 @@ def validate_dialect_funcs(sql: str) -> tuple[bool, str | None]:
 # work on them -- the tool description says to use SUBSTR instead.
 _VARCHAR_TIMESTAMPS = {"observed_at", "created_at", "published_at", "ingested_at", "pushed_at"}
 _DATE_FUNCS = {
-    "DATE",
-    "YEAR",
-    "MONTH",
-    "DAY",
-    "HOUR",
-    "MINUTE",
-    "SECOND",
-    "DATE_TRUNC",
-    "DATE_ADD",
-    "DATE_DIFF",
-    "DATE_PARSE",
-    "DATE_FORMAT",
+    "DATE", "YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND",
+    "DATE_TRUNC", "DATE_ADD", "DATE_DIFF", "DATE_PARSE", "DATE_FORMAT",
 }
 
 
@@ -452,6 +408,106 @@ def validate_order_by_ordinal(sql: str) -> tuple[bool, str | None]:
     return True, None
 
 
+# Numeric columns across the curated tables (bigint/double). Every other
+# curated column is VARCHAR. Used by the aggregate-type check: AVG/SUM/
+# STDDEV/VARIANCE on a VARCHAR column fails in Athena with FUNCTION_NOT_FOUND.
+_NUMERIC_COLUMNS = {
+    "score", "num_comments",
+    "temperature_c", "humidity_pct", "precipitation_mm", "wind_speed_kmh",
+    "price_usd", "market_cap_usd", "volume_24h_usd", "change_24h_pct",
+    "stars", "forks",
+}
+
+# Aggregate functions that require a numeric argument in Trino. COUNT/MIN/MAX
+# accept any type, so they are deliberately excluded.
+_NUMERIC_ONLY_AGGS = {
+    "AVG", "SUM",
+    "STDDEV", "STDDEV_POP", "STDDEV_SAMP",
+    "VARIANCE", "VAR_POP", "VAR_SAMP",
+}
+
+
+def validate_aggregate_types(sql: str) -> tuple[bool, str | None]:
+    """AVG/SUM/STDDEV/VARIANCE require a numeric argument.
+
+    Only bare column arguments are checked: expressions (CASE, arithmetic,
+    CAST, ...) fail open, because a string column inside a CASE condition
+    does not make the aggregate invalid. Unknown columns / aliases also fail
+    open -- the column check and Athena handle those.
+    """
+    try:
+        import sqlglot
+        from sqlglot import exp
+    except ImportError:
+        return True, None
+    try:
+        tree = sqlglot.parse_one(sql, read="trino")
+    except Exception:
+        return True, None
+    for func in tree.find_all(exp.Func):
+        fname = func.sql_name().upper()
+        if fname not in _NUMERIC_ONLY_AGGS:
+            continue
+        arg = func.this
+        if isinstance(arg, exp.Distinct):
+            exprs = arg.expressions
+            if len(exprs) != 1:
+                continue
+            arg = exprs[0]
+        if not isinstance(arg, exp.Column):
+            continue
+        name = arg.name.lower()
+        if name in _NUMERIC_COLUMNS:
+            continue
+        if name not in _ALL_COLUMNS:
+            continue  # alias or unknown column: fail open
+        return False, (
+            f"{fname}() requires a numeric argument: '{arg.name}' is a string column. "
+            "Use AVG()/SUM() on a numeric column (score, num_comments, temperature_c, "
+            "humidity_pct, precipitation_mm, wind_speed_kmh, price_usd, market_cap_usd, "
+            "volume_24h_usd, change_24h_pct, stars, forks) or COUNT(*) to count rows."
+        )
+    return True, None
+
+
+def validate_set_op_order(sql: str) -> tuple[bool, str | None]:
+    """ORDER BY/LIMIT/OFFSET cannot appear before UNION/INTERSECT/EXCEPT in Trino.
+
+    They apply to the whole set operation, so Trino rejects them mid-query with
+    "mismatched input 'UNION'. Expecting: <EOF>". sqlglot parses the invalid
+    form by attaching ORDER BY/LIMIT to the left SELECT, which is exactly what
+    this check looks for. ORDER BY/LIMIT at the very end (attached to the set
+    operation itself) and parenthesized sides "(SELECT ... LIMIT 5) UNION ..."
+    are valid and pass.
+    """
+    try:
+        import sqlglot
+        from sqlglot import exp
+    except ImportError:
+        return True, None
+    try:
+        tree = sqlglot.parse_one(sql, read="trino")
+    except Exception:
+        return True, None
+    for u in tree.find_all(exp.Union, exp.Intersect, exp.Except):
+        left = u.left
+        if not isinstance(left, exp.Select):
+            continue
+        if (
+            left.args.get("order")
+            or left.args.get("limit")
+            or left.args.get("offset")
+            or left.args.get("fetch")
+        ):
+            return False, (
+                "ORDER BY / LIMIT / OFFSET cannot appear before UNION/INTERSECT/EXCEPT "
+                "in Trino -- they apply to the whole set operation, not one side. "
+                "Move them to the end of the query, or wrap each side in parentheses: "
+                "(SELECT ... LIMIT 5) UNION ALL (SELECT ... LIMIT 5)."
+            )
+    return True, None
+
+
 def validate_union_columns(sql: str) -> tuple[bool, str | None]:
     """UNION/INTERSECT/EXCEPT sides must return the same number of columns."""
     try:
@@ -491,6 +547,8 @@ def validate_athena_sql(sql: str) -> tuple[bool, str | None]:
         validate_group_by,
         validate_where_clause,
         validate_order_by_ordinal,
+        validate_aggregate_types,
+        validate_set_op_order,
         validate_union_columns,
     ):
         ok, reason = check(sql)

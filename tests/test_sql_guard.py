@@ -1,8 +1,9 @@
-"""Tests for the Tier 2/3/4/5 correctness checks in common/sql_guard.py."""
+"""Tests for the Tier 2/3/4/5/6 correctness checks in common/sql_guard.py."""
 
 import builtins
 
 from common.sql_guard import (
+    validate_aggregate_types,
     validate_athena_sql,
     validate_cast_types,
     validate_columns,
@@ -11,6 +12,7 @@ from common.sql_guard import (
     validate_no_arrow,
     validate_no_date_on_varchar,
     validate_order_by_ordinal,
+    validate_set_op_order,
     validate_subquery_alias,
     validate_union_columns,
     validate_where_clause,
@@ -164,7 +166,9 @@ def test_where_rejects_aggregate():
 
 def test_where_allows_normal_and_having():
     assert validate_where_clause("SELECT a FROM t WHERE x > 5")[0]
-    assert validate_where_clause("SELECT a, AVG(x) AS m FROM t GROUP BY a HAVING AVG(x) > 5")[0]
+    assert validate_where_clause(
+        "SELECT a, AVG(x) AS m FROM t GROUP BY a HAVING AVG(x) > 5"
+    )[0]
 
 
 def test_no_arrow_rejects():
@@ -248,3 +252,73 @@ def test_tier5_wired_into_full_validation():
     ok, reason = validate_athena_sql("SELECT IFNULL(title, 'x') FROM hackernews_stories")
     assert not ok
     assert "COALESCE" in reason
+
+
+# --- Tier 6: aggregate arg types, set-op ordering ---
+
+
+def test_aggregate_types_rejects_varchar():
+    for sql, col in [
+        ("SELECT AVG(title) FROM hackernews_stories", "title"),
+        ("SELECT SUM(observed_at) FROM weather_observations", "observed_at"),
+        ("SELECT AVG(DISTINCT title) FROM hackernews_stories", "title"),
+        ("SELECT STDDEV(title) FROM hackernews_stories", "title"),
+        ("SELECT VARIANCE(description) FROM github_repos", "description"),
+    ]:
+        ok, reason = validate_aggregate_types(sql)
+        assert not ok, sql
+        assert col in reason
+        assert "numeric" in reason
+
+
+def test_aggregate_types_accepts_numeric_and_fails_open():
+    for sql in [
+        "SELECT AVG(score) FROM hackernews_stories",
+        "SELECT AVG(DISTINCT stars) FROM github_repos",
+        "SELECT SUM(price_usd) FROM crypto_prices",
+        "SELECT STDDEV(temperature_c) FROM weather_observations",
+        # COUNT/MIN/MAX accept strings
+        "SELECT COUNT(title) FROM hackernews_stories",
+        "SELECT MIN(title), MAX(title) FROM hackernews_stories",
+        # expressions fail open: string col inside CASE condition is fine
+        "SELECT AVG(price_usd * 2) FROM crypto_prices",
+        "SELECT AVG(CASE WHEN language = 'rust' THEN stars ELSE 0 END) FROM github_repos",
+        # alias from subquery: not a real column, fail open
+        "SELECT AVG(avg_temp) FROM (SELECT AVG(temperature_c) AS avg_temp "
+        "FROM weather_observations)",
+    ]:
+        ok, reason = validate_aggregate_types(sql)
+        assert ok, f"{sql!r} rejected: {reason}"
+
+
+def test_set_op_order_rejects_order_limit_before_union():
+    for sql in [
+        "SELECT a FROM t1 ORDER BY a LIMIT 5 UNION ALL SELECT b FROM t2",
+        "SELECT a FROM t1 LIMIT 5 UNION SELECT b FROM t2",
+        "SELECT a FROM t1 ORDER BY a INTERSECT SELECT b FROM t2",
+    ]:
+        ok, reason = validate_set_op_order(sql)
+        assert not ok, sql
+        assert "UNION" in reason or "INTERSECT" in reason
+
+
+def test_set_op_order_accepts_valid_forms():
+    for sql in [
+        "SELECT a FROM t1 UNION ALL SELECT b FROM t2 ORDER BY a LIMIT 5",
+        "(SELECT a FROM t1 LIMIT 5) UNION ALL (SELECT b FROM t2 LIMIT 5)",
+        "SELECT a FROM t1 UNION SELECT b FROM t2 UNION SELECT c FROM t3",
+    ]:
+        ok, reason = validate_set_op_order(sql)
+        assert ok, f"{sql!r} rejected: {reason}"
+
+
+def test_tier6_wired_into_full_validation():
+    ok, reason = validate_athena_sql("SELECT AVG(title) FROM hackernews_stories")
+    assert not ok
+    assert "numeric" in reason
+    ok, reason = validate_athena_sql(
+        "SELECT author FROM hackernews_stories ORDER BY author LIMIT 5 "
+        "UNION ALL SELECT provider FROM news_articles"
+    )
+    assert not ok
+    assert "UNION" in reason

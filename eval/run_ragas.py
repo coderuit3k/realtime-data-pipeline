@@ -18,6 +18,7 @@ from eval_contexts import (  # noqa: E402
     REQUIRED_SETTINGS,
     ToolRecorder,
     build_contexts,
+    is_grounded,
     missing_settings,
     tool_calls_column,
 )
@@ -54,8 +55,10 @@ def run_rag_agent(question: str) -> dict:
     return {
         "answer": result["answer"],
         "contexts": build_contexts(result["sources"], recorder.calls),
-        # Same definition as the Lambda: grounded means at least one cited source.
-        "grounded": bool(result["sources"]),
+        # Grounded = the answer rests on checkable evidence: a cited source with
+        # text, or usable rows from a structured tool (see eval_contexts.is_grounded).
+        # Counting sources alone would label every Athena-only answer UNGROUNDED.
+        "grounded": is_grounded(result["sources"], recorder.calls),
         "tool_calls": tool_calls_column(recorder.calls),
     }
 

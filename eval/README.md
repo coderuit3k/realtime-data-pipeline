@@ -62,21 +62,19 @@ the script):
 | `ood` | 12 | out of domain: a recipe, a sports result, other cities and coins (web fallback) |
 | `edge` | 9 | private mail (no tool), destructive SQL, prompt injection, vague or made-up topics |
 
-To run a subset — e.g. the 30 `kb` questions for a before/after comparison of a
-retrieval change — point `load_questions` at a filtered copy such as
-`eval/questions_kb.json`. Never reorder or edit the questions: subsets stay
-comparable only if the questions are byte-identical.
-
 The agent picks a tool, or none, from the tool descriptions alone and falls back to
 `search_web` (Tavily). A healthy run has high faithfulness and relevancy on both kinds, and
 `grounded: true` on almost every question, because the web fallback means there is nearly
 always something to cite. The `edge` questions are expected to be refused or answered with
 "I can't": judge them by reading the answers, not by the scores.
 
-**Latest run (2026-10-13, 100 questions, AFTER adding recency boost and the
-`sources`/`days_back` filters to `search_knowledge_base`):** faithfulness 0.5852,
-answer relevancy 0.6699, context precision 0.5944 (300 scoring jobs, ~52 min for
-scoring alone).
+## Evaluation
+
+| timestamp | added | faithfulness | answer relevancy | context precision | finshed_time |
+|---|---|---|---|---|---|
+| `13-10-2026` | `recency boost` and `sources/days_back` filters to `search_knowledge_base` | 0.5852 | 0.6699 | 0.5944 | 52 mins |
+| `14-10-2026` | `guard the SQL injection`, `use few shot examples for each tool` and `adjust system prompt` | 0.5977 | 0.6592 | 0.6017 | 49 mins |
+| `14-10-2026` | `increase timeout for web_search from 10 to 60`, `fix another errors from query_athena` | 0.6407 | 0.6950 | 0.6225 | 53 mins |
 
 Set `ATHENA_WORKGROUP`, `ATHENA_DATABASE` and `CURATED_BUCKET` before running
 (the bucket comes from `aws lambda get-function-configuration --function-name

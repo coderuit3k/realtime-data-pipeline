@@ -5,7 +5,7 @@ from pathlib import Path
 # eval/ is a script directory, not a package; its helpers avoid importing ragas so CI can run them.
 sys.path.insert(0, str(Path(__file__).parent.parent / "eval"))
 
-import eval_contexts as ec  # noqa: E402
+import eval.eval_contexts as ec  # noqa: E402
 
 
 def _call(tool, summary, tool_input=None, result_count=0):
@@ -138,3 +138,50 @@ def test_missing_settings_names_every_empty_one():
 
 def test_missing_settings_is_empty_when_everything_is_set():
     assert ec.missing_settings({"ATHENA_WORKGROUP": "wg", "CURATED_BUCKET": "b"}) == []
+
+
+# --- is_grounded: an answer is grounded when the judge has evidence to check ---
+
+
+def test_is_grounded_with_a_cited_source():
+    assert ec.is_grounded([{"url": "u", "text": "passage"}], [])
+
+
+def test_is_grounded_with_successful_athena_rows_and_no_sources():
+    calls = [_call("query_athena", [{"n": 7}], {"sql": "SELECT COUNT(*) AS n FROM t"})]
+    assert ec.is_grounded([], calls)
+
+
+def test_is_grounded_with_crypto_or_weather_rows_and_no_sources():
+    assert ec.is_grounded([], [_call("get_crypto_prices", [{"coin_id": "bitcoin"}])])
+    assert ec.is_grounded([], [_call("get_weather", [{"location": "Da Lat"}])])
+
+
+def test_is_not_grounded_when_the_only_athena_call_errored_or_returned_nothing():
+    assert not ec.is_grounded([], [_call("query_athena", [{"error": "boom"}], {"sql": "x"})])
+    # Empty result adds no evidence, same as in build_contexts.
+    assert not ec.is_grounded([], [_call("query_athena", [], {"sql": "y"})])
+    assert not ec.is_grounded([], [])
+
+
+def test_is_not_grounded_by_a_source_without_text_or_a_search_call_alone():
+    assert not ec.is_grounded([{"url": "u", "text": ""}], [])
+    # search_web rows are represented by sources' text, not by the call itself.
+    assert not ec.is_grounded([], [_call("search_web", [{"snippet": "dup"}], {"query": "q"})])
+
+
+def test_is_grounded_agrees_with_build_contexts():
+    """is_grounded is True exactly when build_contexts produces real evidence."""
+    cases = [
+        ([{"url": "u", "text": "t"}], []),
+        ([{"url": "u", "text": ""}], []),
+        ([], [_call("query_athena", [{"n": 1}])]),
+        ([], [_call("query_athena", [{"error": "boom"}])]),
+        ([], [_call("query_athena", [])]),
+        ([], [_call("get_crypto_prices", [{"coin_id": "bitcoin"}])]),
+        ([], [_call("search_web", [{"snippet": "dup"}])]),
+        ([], []),
+    ]
+    for sources, calls in cases:
+        contexts = ec.build_contexts(sources, calls)
+        assert ec.is_grounded(sources, calls) == (contexts != [ec.NO_CONTEXT])

@@ -73,6 +73,21 @@ def build_contexts(sources: list[dict], calls: list[dict]) -> list[str]:
     return contexts or [NO_CONTEXT]
 
 
+def is_grounded(sources: list[dict], calls: list[dict]) -> bool:
+    """Whether the answer rests on evidence the judge can check.
+
+    Grounded means build_contexts() would produce real evidence, not just the
+    NO_CONTEXT placeholder: a cited source with text, or a structured tool call
+    that returned usable rows. query_athena returns rows with no URL to cite,
+    so counting sources alone labels every Athena-only answer UNGROUNDED even
+    when it is fully grounded in rows. An errored or empty tool result adds no
+    evidence, same as in build_contexts.
+    """
+    if any(s.get("text") for s in sources):
+        return True
+    return any(_structured_context(call) is not None for call in calls)
+
+
 def tool_calls_column(calls: list[dict]) -> str:
     """The `tool_calls` results.csv cell: tools run, their input, and whether each failed."""
     return json.dumps(
