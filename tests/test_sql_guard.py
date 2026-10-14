@@ -164,9 +164,7 @@ def test_where_rejects_aggregate():
 
 def test_where_allows_normal_and_having():
     assert validate_where_clause("SELECT a FROM t WHERE x > 5")[0]
-    assert validate_where_clause(
-        "SELECT a, AVG(x) AS m FROM t GROUP BY a HAVING AVG(x) > 5"
-    )[0]
+    assert validate_where_clause("SELECT a, AVG(x) AS m FROM t GROUP BY a HAVING AVG(x) > 5")[0]
 
 
 def test_no_arrow_rejects():

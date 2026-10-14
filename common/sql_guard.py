@@ -47,29 +47,69 @@ QUALIFY_CLAUSE = re.compile(r"\bQUALIFY\b", re.IGNORECASE)
 # prose is written for the model, this is what gets enforced.
 TABLE_SCHEMAS = {
     "hackernews_stories": {
-        "story_id", "title", "text", "author", "score", "num_comments",
-        "url", "created_at", "ingested_at", "keywords",
-        "year", "month", "day",
+        "story_id",
+        "title",
+        "text",
+        "author",
+        "score",
+        "num_comments",
+        "url",
+        "created_at",
+        "ingested_at",
+        "keywords",
+        "year",
+        "month",
+        "day",
     },
     "news_articles": {
-        "article_id", "provider", "title", "description", "url",
-        "published_at", "ingested_at", "keywords",
-        "year", "month", "day",
+        "article_id",
+        "provider",
+        "title",
+        "description",
+        "url",
+        "published_at",
+        "ingested_at",
+        "keywords",
+        "year",
+        "month",
+        "day",
     },
     "weather_observations": {
-        "location", "temperature_c", "humidity_pct", "precipitation_mm",
-        "wind_speed_kmh", "observed_at",
-        "year", "month", "day",
+        "location",
+        "temperature_c",
+        "humidity_pct",
+        "precipitation_mm",
+        "wind_speed_kmh",
+        "observed_at",
+        "year",
+        "month",
+        "day",
     },
     "crypto_prices": {
-        "coin_id", "price_usd", "market_cap_usd", "volume_24h_usd",
-        "change_24h_pct", "observed_at",
-        "year", "month", "day",
+        "coin_id",
+        "price_usd",
+        "market_cap_usd",
+        "volume_24h_usd",
+        "change_24h_pct",
+        "observed_at",
+        "year",
+        "month",
+        "day",
     },
     "github_repos": {
-        "repo_id", "full_name", "description", "language", "stars",
-        "forks", "created_at", "pushed_at", "ingested_at", "keywords",
-        "year", "month", "day",
+        "repo_id",
+        "full_name",
+        "description",
+        "language",
+        "stars",
+        "forks",
+        "created_at",
+        "pushed_at",
+        "ingested_at",
+        "keywords",
+        "year",
+        "month",
+        "day",
     },
 }
 
@@ -125,9 +165,7 @@ def validate_columns(sql: str) -> tuple[bool, str | None]:
     except Exception:
         return True, None
 
-    defined_aliases = {
-        a.alias.lower() for a in tree.find_all(exp.Alias) if a.alias
-    }
+    defined_aliases = {a.alias.lower() for a in tree.find_all(exp.Alias) if a.alias}
 
     for column in tree.find_all(exp.Column):
         name = column.name.lower()
@@ -323,8 +361,18 @@ def validate_dialect_funcs(sql: str) -> tuple[bool, str | None]:
 # work on them -- the tool description says to use SUBSTR instead.
 _VARCHAR_TIMESTAMPS = {"observed_at", "created_at", "published_at", "ingested_at", "pushed_at"}
 _DATE_FUNCS = {
-    "DATE", "YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND",
-    "DATE_TRUNC", "DATE_ADD", "DATE_DIFF", "DATE_PARSE", "DATE_FORMAT",
+    "DATE",
+    "YEAR",
+    "MONTH",
+    "DAY",
+    "HOUR",
+    "MINUTE",
+    "SECOND",
+    "DATE_TRUNC",
+    "DATE_ADD",
+    "DATE_DIFF",
+    "DATE_PARSE",
+    "DATE_FORMAT",
 }
 
 

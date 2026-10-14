@@ -62,6 +62,12 @@ TOOLS = [
                 "toward recent items; pass days_back (e.g. 7) for a hard cutoff when the "
                 "question is time-bounded ('today', 'this week', 'recently', 'latest'), "
                 "and sources (e.g. ['hackernews']) to restrict which sources are searched."
+                ' Examples: {"query": "AI agent developer tools"} for a plain topic search; '
+                '{"query": "semiconductor industry news", "sources": ["news"], "days_back": 7} '
+                "when the question is time-bounded ('latest', 'this week', 'recently'); "
+                '{"query": "PostgreSQL discussions", "sources": ["hackernews"]} '
+                "when the question names a source. Omit days_back/sources when the question "
+                "has no time or source constraint."
             ),
             "inputSchema": {
                 "json": {
@@ -98,6 +104,11 @@ TOOLS = [
                 "own current data, more reliable than a general web search "
                 "for them. For any other coin, use search_web instead. "
                 "Takes no arguments."
+                "Examples: call me with no arguments for \"What is Bitcoin's "
+                'price right now?" or "Which of BTC/ETH/SOL moved the most in 24h?". '
+                'Do NOT use me for price history ("Bitcoin\'s price last week") '
+                "-- query crypto_prices via query_athena instead. "
+                "Do NOT use me for Dogecoin or any other coin -- use search_web."
             ),
             "inputSchema": {"json": {"type": "object", "properties": {}, "required": []}},
         }
@@ -116,7 +127,11 @@ TOOLS = [
                 "search_web for current weather in one of these specific "
                 "locations. For any other location (e.g. Hanoi, Da Nang, or "
                 "anywhere outside Vietnam), use search_web instead. Takes no "
-                "arguments."
+                "arguments. "
+                'Examples: call me with no arguments for "Which tracked location is hottest '
+                'right now?" or "Is it raining in Bien Hoa?". '
+                "Do NOT use me for Hanoi, Da Nang, or anywhere outside the 12 -- use search_web. "
+                "I return current observations only, not forecasts."
             ),
             "inputSchema": {"json": {"type": "object", "properties": {}, "required": []}},
         }
@@ -139,53 +154,61 @@ TOOLS = [
                 "volume_24h_usd, change_24h_pct, observed_at), "
                 "github_repos(repo_id, full_name, description, language, stars, "
                 "forks, created_at, pushed_at, ingested_at, keywords). Every "
-                "table is also "
-                "partitioned by year/month/day (strings, e.g. year='2026', "
-                "month='03', day='30') -- filter on these to avoid scanning the "
-                "whole table. Only SELECT/WITH statements are allowed; no "
-                "INSERT/UPDATE/DELETE/DDL. Prefer this over search_knowledge_base "
+                "table is also partitioned by year/month/day (strings, e.g. "
+                "year='2026', month='03', day='30') -- filter on these to avoid "
+                "scanning the whole table. Only SELECT/WITH statements are allowed; "
+                "no INSERT/UPDATE/DELETE/DDL. Prefer this over search_knowledge_base "
                 "for anything requiring counting, averaging, or aggregating "
-                "across many records. IMPORTANT: ingested_at/created_at/"
-                "published_at/observed_at/pushed_at are plain strings with "
-                "MICROSECOND precision (e.g. '2026-09-27T11:31:29.142944+00:00') "
-                "-- CAST(... AS DATE/TIMESTAMP), DATE(...), date_trunc(...), and "
-                "format_datetime(...) all fail on this exact format with "
-                "INVALID_CAST_ARGUMENT or FUNCTION_NOT_FOUND. To group/filter by "
-                "calendar day, use SUBSTR(column, 1, 10) directly (no cast) to "
-                "get 'YYYY-MM-DD' as a string -- that works. Don't burn several "
-                "tool calls rediscovering this. REPEATED SNAPSHOTS: "
-                "hackernews_stories, news_articles and github_repos keep one row "
-                "per item per ingestion run, so the same story/article/repo "
-                "appears in many rows with a changing score/stars. COUNT(*) "
-                "counts rows, not items. To count items use COUNT(DISTINCT "
-                "story_id / article_id / repo_id); to group or rank items "
-                "(by language, author, provider), count DISTINCT ids per group; "
-                "for an item's current score/stars/comments take its newest row "
-                "(ROW_NUMBER() OVER (PARTITION BY <id> ORDER BY ingested_at DESC) "
-                "= 1) or its MAX, never SUM or COUNT across rows. Say 'distinct' "
-                "when you report such a count. weather_observations and "
-                "crypto_prices can repeat a reading too when the source had not "
-                "updated between runs. TIME WINDOWS: year, month and day are "
-                "separate strings, so a window that crosses a month boundary "
-                "(e.g. the last 7 days on 2026-10-04 start on 2026-09-28) cannot "
-                "be written as month = '10' AND day >= '28': that silently drops "
-                "the earlier month's days. For any multi-day window filter on the "
-                "joined date instead: concat(year, month, day) BETWEEN "
-                "'20260928' AND '20261004' (zero-padded, inclusive; the same form "
-                "works inside one month). Take today's date from the system "
-                "prompt, count 'the last 7 days' as today and the 6 days before "
-                "it, and state the exact dates you queried. TEXT COLUMNS ARE "
-                "NORMALIZED: title, text and description are stored lowercase "
-                "with punctuation and common stopwords removed, so match them "
-                "with lowercase patterns (LIKE '%rust%'), never capitalized "
-                "ones. full_name and url keep their original case."
+                "across many records. "
+                "IMPORTANT: ingested_at/created_at/published_at/observed_at/pushed_at "
+                "are plain strings with MICROSECOND precision "
+                "(e.g. '2026-09-27T11:31:29.142944+00:00') -- CAST(... AS DATE/TIMESTAMP), "
+                "DATE(...), date_trunc(...), and format_datetime(...) all fail on this "
+                "exact format with INVALID_CAST_ARGUMENT or FUNCTION_NOT_FOUND. To "
+                "group/filter by calendar day, use SUBSTR(column, 1, 10) directly "
+                "(no cast) to get 'YYYY-MM-DD' as a string -- that works. Don't burn "
+                "several tool calls rediscovering this. "
+                "REPEATED SNAPSHOTS: hackernews_stories, news_articles and github_repos "
+                "keep one row per item per ingestion run, so the same story/article/repo "
+                "appears in many rows with a changing score/stars. COUNT(*) counts rows, "
+                "not items. To count items use COUNT(DISTINCT story_id / article_id / "
+                "repo_id); to group or rank items (by language, author, provider), count "
+                "DISTINCT ids per group; for an item's current score/stars/comments take "
+                "its newest row (ROW_NUMBER() OVER (PARTITION BY story_id ORDER BY "
+                "ingested_at DESC) = 1) or its MAX, never SUM or COUNT across rows. Say "
+                "'distinct' when you report such a count. weather_observations and "
+                "crypto_prices can repeat a reading too when the source had not updated "
+                "between runs. "
+                "TIME WINDOWS: year, month and day are separate strings, so a window that "
+                "crosses a month boundary (e.g. the last 7 days on 2026-10-04 start on "
+                "2026-09-28) cannot be written as month = '10' AND day >= '28': that "
+                "silently drops the earlier month's days. For any multi-day window filter "
+                "on the joined date instead: concat(year, month, day) BETWEEN '20260928' "
+                "AND '20261004' (zero-padded, inclusive; the same form works inside one "
+                "month). Take today's date from the system prompt, count 'the last 7 days' "
+                "as today and the 6 days before it, and state the exact dates you queried. "
+                "TEXT COLUMNS ARE NORMALIZED: title, text and description are stored "
+                "lowercase with punctuation and common stopwords removed, so match them "
+                "with lowercase patterns (LIKE '%rust%'), never capitalized ones. "
+                "full_name and url keep their original case. "
                 "SQL SHAPE: every non-aggregated column in SELECT must also appear in GROUP BY "
                 "(e.g. SELECT SUBSTR(observed_at,1,10) AS day, AVG(temperature_c) ... GROUP BY 1). "
                 "Use the exact column names listed above: `keywords` (plural, never `keyword`). "
-                "When a query fails, fix exactly what the Athena error names instead of guessing."
-                "Athena runs Trino SQL: there is no QUALIFY clause -- keep one row per group with "
-                "a subquery using ROW_NUMBER() OVER (...) AS rn and filter WHERE rn = 1 outside. "
-                "When a query fails, fix exactly what the Athena error names instead of guessing."
+                "Athena runs Trino SQL: there is no QUALIFY clause -- keep one row per group "
+                "with a subquery using ROW_NUMBER() OVER (...) AS rn and filter WHERE rn = 1 "
+                "outside. Window functions and aggregates cannot appear in WHERE (use HAVING "
+                "for aggregates, or a subquery for windows). When a query fails, fix exactly "
+                "what the Athena error names instead of guessing. "
+                "EXAMPLES. Daily average temperature: "
+                "SELECT SUBSTR(observed_at,1,10) AS day, AVG(temperature_c) AS avg_temp "
+                "FROM weather_observations GROUP BY 1 ORDER BY 1. "
+                "Top 5 HN authors by distinct stories: "
+                "SELECT author, COUNT(DISTINCT story_id) AS n FROM hackernews_stories "
+                "GROUP BY author ORDER BY n DESC LIMIT 5. "
+                "Current top Rust repos (newest row per repo): "
+                "SELECT full_name, stars FROM (SELECT full_name, stars, ROW_NUMBER() OVER "
+                "(PARTITION BY repo_id ORDER BY ingested_at DESC) AS rn FROM github_repos "
+                "WHERE keywords LIKE '%rust%') WHERE rn = 1 ORDER BY stars DESC LIMIT 5."
             ),
             "inputSchema": {
                 "json": {
@@ -209,7 +232,13 @@ TOOLS = [
                 "nothing relevant, the question is about a coin other than "
                 "Bitcoin/Ethereum/Solana or a location other than the 12 "
                 "get_weather covers, or the question is otherwise outside "
-                "this pipeline's domain."
+                "this pipeline's domain. "
+                'Examples: {"query": "who won the most recent football world cup"} (outside '
+                'pipeline domain); {"query": "Dogecoin price today"} (coin not covered by '
+                'get_crypto_prices); {"query": "weather in Hanoi today"} (location not covered '
+                "by get_weather). "
+                "Use me only after the pipeline's own tools came back empty or "
+                "don't cover the question."
             ),
             "inputSchema": {
                 "json": {
@@ -225,11 +254,13 @@ TOOLS = [
 SYSTEM_PROMPT = (
     "You are a research agent that answers questions using tools, not "
     "unverified memory. For every question:\n"
-    "1. Decide which tool(s) to call, and with what input. Reformulate and "
+    "1. Decide which tool to call next, and with what input. Reformulate and "
     "search again if the first results are weak, or the question has "
     "multiple parts that need separate searches. For questions asking to "
     "count, average, or otherwise aggregate across many records, use "
-    "query_athena instead of search_knowledge_base.\n"
+    "query_athena instead of search_knowledge_base. For questions implying "
+    "recency ('latest', 'this week', 'recently'), constrain the search with "
+    "days_back rather than searching everything.\n"
     "2. Only stop calling tools once you have enough grounded information, "
     "or you've tried the relevant tools and found nothing useful.\n"
     "3. Call at most one tool per turn, then look at its results before "
@@ -641,7 +672,10 @@ def run_agent(question: str) -> dict:
             system=[{"text": system_prompt}],
             messages=messages,
             toolConfig={"tools": TOOLS},
-            inferenceConfig={"maxTokens": MAX_ANSWER_TOKENS},
+            inferenceConfig={
+                "maxTokens": MAX_ANSWER_TOKENS,
+                "temperature": 0.0,
+            },
         )
         output_message = response["output"]["message"]
         messages.append(output_message)
@@ -682,7 +716,10 @@ def run_agent(question: str) -> dict:
         system=[{"text": force_answer_system}],
         messages=messages,
         toolConfig={"tools": TOOLS},
-        inferenceConfig={"maxTokens": MAX_ANSWER_TOKENS},
+        inferenceConfig={
+            "maxTokens": MAX_ANSWER_TOKENS,
+            "temperature": 0.0,
+        },
     )
     return _final_result(response, trace, sources_by_url, degraded)
 
