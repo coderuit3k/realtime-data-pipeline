@@ -21,13 +21,6 @@ pip install -r requirements-dev.txt
 pip install "ragas==0.4.3" "langchain-core==0.3.86" "langchain-community==0.3.27" "langchain-openai==0.3.35" "langchain-aws==0.2.35"
 ```
 
-Check with `pip show ragas` — it must report `0.4.3`.
-
-Import the metrics old-style (`from ragas.metrics import ...`). Version 0.4.3
-also ships `ragas.metrics.collections`, but those classes require a modern
-`InstructorLLM` and reject the `LangchainLLMWrapper` this script uses —
-importing `Faithfulness` from `collections` crashes the scoring step.
-
 ## Run
 
 ```bash
@@ -83,10 +76,7 @@ always something to cite. The `edge` questions are expected to be refused or ans
 **Latest run (2026-10-13, 100 questions, AFTER adding recency boost and the
 `sources`/`days_back` filters to `search_knowledge_base`):** faithfulness 0.5852,
 answer relevancy 0.6699, context precision 0.5944 (300 scoring jobs, ~52 min for
-scoring alone). The BEFORE run on the same 100 questions is still pending. Expect
-the same ballpark, not identical values: the judge LLM and the agent's tool choices
-both vary between runs. (This run predates the `sql_guard` column/dialect checks
-added later the same day.)
+scoring alone).
 
 Set `ATHENA_WORKGROUP`, `ATHENA_DATABASE` and `CURATED_BUCKET` before running
 (the bucket comes from `aws lambda get-function-configuration --function-name
