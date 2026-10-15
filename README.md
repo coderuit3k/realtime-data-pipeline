@@ -193,8 +193,7 @@ latest numbers are in `eval/README.md`.
 
 ### Retrieval tuning
 
-The old in-Lambda cosine search over a 27 MB `index.json` was replaced with
-hybrid search in Qdrant Cloud (Titan dense + BM25 sparse), merged with
+Uses hybrid search in Qdrant Cloud (Titan dense + BM25 sparse), merged with
 Reciprocal Rank Fusion, plus a Jina reranker that picks the final 5 from the
 top 30. The real gain is scale: the old index capped out around 1.4k documents
 in a 512 MB Lambda, while Qdrant now holds all 34,977 and ingests incrementally.
@@ -202,14 +201,10 @@ Rerank costs roughly $0.0004 per search, within Jina's free allowance.
 
 | Stage (12 questions, same agent/model, 1,158 docs) | Faithfulness | Answer relevancy | Context precision | Search p50 |
 |---|---|---|---|---|
-| Cosine on `index.json` | 0.676 | 0.729 | 0.385 | 672 ms (+ 12.3 s index load) |
 | Hybrid + RRF | 0.681 | 0.611 | 0.462 | 1,338 ms |
 | Hybrid + RRF + rerank | 0.705 | 0.666 | 0.300 | 2,505 ms |
 
-Two follow-ups: the reranker now drops passages scoring below 0.15 instead of
-always returning its top 5; query normalization (lowercase, strip HTML/emoji/
-punctuation) was tried and dropped -- no real gain over the raw query at the
-same cutoff. Caveat: small sample (12 questions) and the judge is a model with
+Caveat: small sample (12 questions) and the judge is a model with
 its own noise, so differences under ~0.1 should not be trusted.
 
 ## OpenClaw ops agent
