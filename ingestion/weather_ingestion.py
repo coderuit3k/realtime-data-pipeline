@@ -1,12 +1,18 @@
-"""Lambda: ingests current conditions from Open-Meteo for config.WEATHER_LOCATIONS."""
+"""Lambda: ingests current conditions from Open-Meteo for config.WEATHER_LOCATIONS.
+
+Fault isolation: one location failing (after retries) no longer fails the
+whole run. Successful locations are still written to S3; failures are logged
+and returned in the response. The run only raises when *all* locations fail.
+"""
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 import requests
 
 from common import config
-from common.http import get_with_retry, make_session, map_concurrently
+from common.http import get_with_retry, make_session
 from common.s3_writer import write_records
 
 logger = logging.getLogger()
@@ -25,6 +31,10 @@ def normalize_current(location: dict, payload: dict) -> dict:
     """Map an Open-Meteo `current` block to the raw weather record."""
     current = payload.get("current") or {}
     observed_at = current.get("time")
+    if not observed_at:
+        # A 200 with no current block is an API-shape change, not data —
+        # fail this location loudly instead of writing a "name-None" record.
+        raise ValueError(f"Open-Meteo reply for {location['name']} has no current.time")
     return {
         # Open-Meteo has no reading id; location + observed timestamp is unique.
         "weather_id": f"{location['name']}-{observed_at}",
@@ -58,22 +68,51 @@ def fetch_location(session: requests.Session, location: dict) -> dict:
     return normalize_current(location, response.json())
 
 
-def fetch_weather() -> list[dict]:
-    """Fetch every location concurrently; any single failure fails the run."""
+def fetch_weather() -> tuple[list[dict], list[dict]]:
+    """Fetch every location concurrently, isolating per-location failures.
+
+    Returns (records, failures). A location that still fails after retries is
+    appended to `failures` instead of aborting the whole run, so one flaky
+    location can no longer zero out an entire ingestion window. Records keep
+    config order (futures are awaited in submission order).
+    """
     session = make_session(config.INGESTION_FETCH_WORKERS)
-    return map_concurrently(
-        lambda location: fetch_location(session, location),
-        config.WEATHER_LOCATIONS,
-        config.INGESTION_FETCH_WORKERS,
-    )
+    records: list[dict] = []
+    failures: list[dict] = []
+    with ThreadPoolExecutor(max_workers=config.INGESTION_FETCH_WORKERS) as pool:
+        futures = [pool.submit(fetch_location, session, loc) for loc in config.WEATHER_LOCATIONS]
+        for location, future in zip(config.WEATHER_LOCATIONS, futures):
+            try:
+                records.append(future.result())
+            except Exception as exc:  # noqa: BLE001 - isolation boundary
+                logger.warning("Weather fetch failed for %s: %r", location["name"], exc)
+                failures.append({"location": location["name"], "error": repr(exc)})
+    return records, failures
 
 
 def lambda_handler(event, context):
     """Scheduled entry point: fetch weather and write it to the raw zone."""
-    records = fetch_weather()
+    records, failures = fetch_weather()
+    if not records:
+        # Nothing to write at all — a real outage, raise so alarms fire.
+        raise RuntimeError(
+            f"Weather ingestion failed for all {len(failures)} locations: {failures}"
+        )
     key = write_records("weather", records, "weather_id")
     logger.info("Wrote %d records to %s", len(records), key)
-    return {"statusCode": 200, "records_ingested": len(records), "s3_key": key}
+    if failures:
+        logger.warning(
+            "Partial weather ingestion: %d/%d locations failed: %s",
+            len(failures),
+            len(config.WEATHER_LOCATIONS),
+            failures,
+        )
+    return {
+        "statusCode": 200,
+        "records_ingested": len(records),
+        "failed_locations": failures,
+        "s3_key": key,
+    }
 
 
 if __name__ == "__main__":

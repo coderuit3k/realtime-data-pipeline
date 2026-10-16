@@ -1,6 +1,8 @@
 import threading
 from unittest.mock import patch
 
+import pytest
+
 from common import config
 from ingestion import weather_ingestion
 from ingestion.weather_ingestion import lambda_handler, normalize_current
@@ -32,26 +34,58 @@ def test_normalize_current_maps_fields():
     assert "ingested_at" in result
 
 
-def test_normalize_current_handles_missing_current_block():
+def test_normalize_current_rejects_missing_current_time():
+    # A record without observed_at is useless for time-based questions and
+    # breaks the weather_id uniqueness, so it must fail loudly instead of
+    # producing a "Da Lat-None" junk record.
     location = {"name": "Da Lat", "latitude": 11.9404, "longitude": 108.4583}
 
-    result = normalize_current(location, {})
-
-    assert result["weather_id"] == "Da Lat-None"
-    assert result["temperature_c"] is None
+    with pytest.raises(ValueError, match="no current.time"):
+        normalize_current(location, {})
 
 
 @patch("ingestion.weather_ingestion.write_records")
 @patch("ingestion.weather_ingestion.fetch_weather")
 def test_lambda_handler_writes_records_keyed_by_weather_id(mock_fetch_weather, mock_write_records):
-    mock_fetch_weather.return_value = [{"weather_id": "Da Lat-2026-09-19T18:00"}]
+    mock_fetch_weather.return_value = ([{"weather_id": "Da Lat-2026-09-19T18:00"}], [])
     mock_write_records.return_value = "some/key.json"
 
-    lambda_handler({}, None)
+    result = lambda_handler({}, None)
 
     mock_write_records.assert_called_once_with(
         "weather", [{"weather_id": "Da Lat-2026-09-19T18:00"}], "weather_id"
     )
+    assert result["statusCode"] == 200
+    assert result["records_ingested"] == 1
+    assert result["failed_locations"] == []
+
+
+@patch("ingestion.weather_ingestion.write_records")
+@patch("ingestion.weather_ingestion.fetch_weather")
+def test_lambda_handler_reports_partial_failures(mock_fetch_weather, mock_write_records):
+    mock_fetch_weather.return_value = (
+        [{"weather_id": "Da Lat-2026-09-19T18:00"}],
+        [{"location": "Ca Mau", "error": "HTTPError('500')"}],
+    )
+    mock_write_records.return_value = "some/key.json"
+
+    result = lambda_handler({}, None)
+
+    # Partial success still writes and stays 200; failures are reported.
+    assert result["statusCode"] == 200
+    assert result["records_ingested"] == 1
+    assert result["failed_locations"] == [{"location": "Ca Mau", "error": "HTTPError('500')"}]
+
+
+@patch("ingestion.weather_ingestion.write_records")
+@patch("ingestion.weather_ingestion.fetch_weather")
+def test_lambda_handler_raises_when_all_locations_fail(mock_fetch_weather, mock_write_records):
+    mock_fetch_weather.return_value = ([], [{"location": "Ca Mau", "error": "HTTPError('500')"}])
+
+    with pytest.raises(RuntimeError, match="failed for all"):
+        lambda_handler({}, None)
+
+    mock_write_records.assert_not_called()
 
 
 class _FakeResponse:
@@ -91,9 +125,10 @@ def test_fetch_weather_requests_locations_concurrently_in_config_order(monkeypat
     session = _FakeWeatherSession(barrier=threading.Barrier(3, timeout=2))
     monkeypatch.setattr(weather_ingestion, "make_session", lambda pool_size: session)
 
-    records = weather_ingestion.fetch_weather()
+    records, failures = weather_ingestion.fetch_weather()
 
     assert [r["location"] for r in records] == ["A", "B", "C"]
+    assert failures == []
 
 
 def test_fetch_weather_reuses_one_session_for_every_location(monkeypatch):
@@ -113,6 +148,30 @@ def test_fetch_weather_reuses_one_session_for_every_location(monkeypatch):
     weather_ingestion.fetch_weather()
 
     assert len(created) == 1
+
+
+def test_fetch_weather_isolates_single_location_failure(monkeypatch):
+    """One flaky location must not zero out the whole run."""
+    locations = [
+        {"name": "A", "latitude": 1, "longitude": 1},
+        {"name": "B", "latitude": 2, "longitude": 2},
+        {"name": "C", "latitude": 3, "longitude": 3},
+    ]
+    monkeypatch.setattr(config, "WEATHER_LOCATIONS", locations)
+
+    class _FlakySession(_FakeWeatherSession):
+        def get(self, url, params, timeout):
+            if params["latitude"] == 2:
+                raise weather_ingestion.requests.ConnectionError("boom")
+            return super().get(url, params, timeout)
+
+    monkeypatch.setattr(weather_ingestion, "make_session", lambda pool_size: _FlakySession())
+
+    records, failures = weather_ingestion.fetch_weather()
+
+    assert [r["location"] for r in records] == ["A", "C"]
+    assert len(failures) == 1
+    assert failures[0]["location"] == "B"
 
 
 class _Reply:
@@ -144,7 +203,10 @@ LOCATION = {"name": "Can Tho", "latitude": 10.0, "longitude": 105.0}
 
 def test_fetch_location_retries_a_rate_limited_request(monkeypatch):
     monkeypatch.setattr("common.http.time.sleep", lambda s: None)
-    session = _Session(_Reply(429), _Reply(200, {"current": {"temperature_2m": 30.0}}))
+    session = _Session(
+        _Reply(429),
+        _Reply(200, {"current": {"time": "2026-09-19T18:00", "temperature_2m": 30.0}}),
+    )
 
     record = weather_ingestion.fetch_location(session, LOCATION)
 
