@@ -227,11 +227,7 @@ latest numbers are in `eval/README.md`.
 
 ### Retrieval tuning
 
-<<<<<<< HEAD
 Uses hybrid search in Qdrant Cloud (Titan dense + BM25 sparse), merged with
-=======
-Uses ybrid search in Qdrant Cloud (Titan dense + BM25 sparse), merged with
->>>>>>> 75e3479 (add rag flow to README.md and revise the README.md)
 Reciprocal Rank Fusion, plus a Jina reranker that picks the final 5 from the
 top 30.
 
@@ -240,15 +236,10 @@ top 30.
 | Hybrid + RRF | 0.681 | 0.611 | 0.462 | 1,338 ms |
 | Hybrid + RRF + rerank | 0.705 | 0.666 | 0.300 | 2,505 ms |
 
-<<<<<<< HEAD
-Caveat: small sample (12 questions) and the judge is a model with
-its own noise, so differences under ~0.1 should not be trusted.
-=======
 Two follow-ups: the reranker now drops passages scoring below 0.15 instead of
 always returning its top 5; query normalization (lowercase, strip HTML/emoji/
 punctuation) was tried and dropped -- no real gain over the raw query at the
 same cutoff.
->>>>>>> 75e3479 (add rag flow to README.md and revise the README.md)
 
 ## OpenClaw ops agent
 
