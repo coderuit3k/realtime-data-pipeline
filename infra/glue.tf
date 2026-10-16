@@ -406,6 +406,9 @@ locals {
     { name = "hn_count", type = "bigint", comment = "Distinct Hacker News stories mentioning the keyword that day." },
     { name = "news_count", type = "bigint", comment = "Distinct news articles mentioning the keyword that day." },
     { name = "detected_at", type = "string", comment = "ISO 8601 UTC timestamp of when trend_scan ran." },
+    { name = "today_total", type = "bigint", comment = "Distinct mentions across all three sources on the event day." },
+    { name = "baseline_total", type = "bigint", comment = "Distinct mentions across all three sources over the preceding baseline days." },
+    { name = "burst_ratio", type = "double", comment = "today_total / (baseline_total + 1); higher means a sharper burst." },
   ]
 }
 

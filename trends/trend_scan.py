@@ -1,12 +1,15 @@
-"""Lambda: daily scan for keywords trending on GitHub, Hacker News and the news at once.
+"""Lambda: daily scan for keywords bursting across GitHub, Hacker News and the news.
 
-Results land in the curated zone as trend_events Parquet.
+A keyword counts as trending when it appears in all three sources *today* and
+today's mention count far exceeds its trailing baseline (burst detection), so
+perennially popular keywords like "ai" don't win every single day. Results
+land in the curated zone as trend_events Parquet.
 """
 
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import boto3
 import pandas as pd
@@ -27,45 +30,70 @@ def _s3():
     return _s3_client
 
 
-def build_detection_query(year: str, month: str, day: str) -> str:
-    """Build the SQL finding keywords present in all three sources on the given day.
+def _window_predicate(dates: list[datetime]) -> str:
+    """OR of day-partition predicates covering every date in the window."""
+    ors = " OR ".join(f"(year='{d:%Y}' AND month='{d:%m}' AND day='{d:%d}')" for d in dates)
+    return f"({ors})"
 
-    Fixed, Lambda-authored SQL (no user/LLM input), so sql_guard isn't needed.
-    Matches whole keyword tokens via UNNEST(split(...)), not substrings, and
-    counts DISTINCT item ids because ingestion re-ingests the same story or
-    article across its ~48 runs a day.
+
+def build_detection_query(target: datetime) -> str:
+    """Build the SQL finding keywords bursting in all three sources on `target`.
+
+    Window: the target day plus TREND_BASELINE_DAYS preceding days. Each
+    source contributes per-(keyword, day) mention counts; a keyword qualifies
+    when it appears in all three sources *today*, ranked by burst ratio:
+
+        burst_ratio = today_total / (baseline_total + 1)
+
+    The +1 is Laplace smoothing: brand-new keywords (zero baseline) score by
+    raw today volume instead of dividing by zero, while perennial keywords
+    ("ai") score near 1 and sink below real bursts. Fixed, Lambda-authored SQL
+    (no user/LLM input), so sql_guard isn't needed. Matches whole keyword
+    tokens via UNNEST(split(...)), not substrings, and counts DISTINCT item
+    ids because ingestion re-ingests the same story or article ~48 times a day.
     """
-    where = f"year='{year}' AND month='{month}' AND day='{day}' AND k <> ''"
-    return f"""WITH gh AS (
-  SELECT DISTINCT repo_id AS item_id, k AS keyword
+    dates = [target - timedelta(days=i) for i in range(config.TREND_BASELINE_DAYS, -1, -1)]
+    window = _window_predicate(dates)
+    today = f"year='{target:%Y}' AND month='{target:%m}' AND day='{target:%d}'"
+    return f"""WITH daily AS (
+  SELECT k AS keyword, 'gh' AS src, year, month, day, COUNT(DISTINCT repo_id) AS n
   FROM github_repos
   CROSS JOIN UNNEST(split(keywords, ',')) AS t(k)
-  WHERE {where}
-),
-hn AS (
-  SELECT DISTINCT story_id AS item_id, k AS keyword
+  WHERE {window} AND k <> ''
+  GROUP BY k, year, month, day
+  UNION ALL
+  SELECT k AS keyword, 'hn' AS src, year, month, day, COUNT(DISTINCT story_id) AS n
   FROM hackernews_stories
   CROSS JOIN UNNEST(split(keywords, ',')) AS t(k)
-  WHERE {where}
-),
-news AS (
-  SELECT DISTINCT article_id AS item_id, k AS keyword
+  WHERE {window} AND k <> ''
+  GROUP BY k, year, month, day
+  UNION ALL
+  SELECT k AS keyword, 'news' AS src, year, month, day, COUNT(DISTINCT article_id) AS n
   FROM news_articles
   CROSS JOIN UNNEST(split(keywords, ',')) AS t(k)
-  WHERE {where}
+  WHERE {window} AND k <> ''
+  GROUP BY k, year, month, day
+),
+scored AS (
+  SELECT keyword, src,
+    SUM(CASE WHEN {today} THEN n ELSE 0 END) AS today_n,
+    SUM(CASE WHEN NOT ({today}) THEN n ELSE 0 END) AS baseline_n
+  FROM daily
+  GROUP BY keyword, src
 )
-SELECT
-  gh.keyword,
-  COUNT(DISTINCT gh.item_id) AS github_count,
-  COUNT(DISTINCT hn.item_id) AS hn_count,
-  COUNT(DISTINCT news.item_id) AS news_count
-FROM gh
-JOIN hn ON gh.keyword = hn.keyword
-JOIN news ON gh.keyword = news.keyword
-GROUP BY gh.keyword
-HAVING COUNT(DISTINCT hn.item_id) >= {config.TREND_HN_MIN_STORIES}
-   AND COUNT(DISTINCT news.item_id) >= {config.TREND_NEWS_MIN_ARTICLES}
-ORDER BY (COUNT(DISTINCT hn.item_id) + COUNT(DISTINCT news.item_id)) DESC
+SELECT keyword,
+  SUM(today_n) AS today_total,
+  SUM(baseline_n) AS baseline_total,
+  SUM(today_n) / (SUM(baseline_n) + 1.0) AS burst_ratio,
+  SUM(CASE WHEN src = 'gh' THEN today_n ELSE 0 END) AS github_count,
+  SUM(CASE WHEN src = 'hn' THEN today_n ELSE 0 END) AS hn_count,
+  SUM(CASE WHEN src = 'news' THEN today_n ELSE 0 END) AS news_count
+FROM scored
+GROUP BY keyword
+HAVING COUNT(CASE WHEN today_n > 0 THEN 1 END) = 3
+   AND SUM(CASE WHEN src = 'hn' THEN today_n ELSE 0 END) >= {config.TREND_HN_MIN_STORIES}
+   AND SUM(CASE WHEN src = 'news' THEN today_n ELSE 0 END) >= {config.TREND_NEWS_MIN_ARTICLES}
+ORDER BY burst_ratio DESC
 LIMIT {config.TREND_MAX_EVENTS_PER_DAY}"""
 
 
@@ -81,7 +109,8 @@ def write_trend_events(rows: list[dict], event_date: str, now: datetime | None =
     """Write detected events as one Parquet file and return its key ("" if none).
 
     GetQueryResults returns every cell as a string, so the counts are cast to
-    int here -- otherwise the Parquet columns would be written as strings.
+    int (and burst_ratio to float) here -- otherwise the Parquet columns would
+    be written as strings.
     """
     if not rows:
         return ""
@@ -95,6 +124,9 @@ def write_trend_events(rows: list[dict], event_date: str, now: datetime | None =
             "github_count": int(row["github_count"]),
             "hn_count": int(row["hn_count"]),
             "news_count": int(row["news_count"]),
+            "today_total": int(row["today_total"]),
+            "baseline_total": int(row["baseline_total"]),
+            "burst_ratio": float(row["burst_ratio"]),
             "detected_at": now.isoformat(),
         }
         for row in rows
@@ -123,7 +155,7 @@ def lambda_handler(event, context):
     """Daily entry point: detect today's (UTC) trend events and write them."""
     now = datetime.now(timezone.utc)
     event_date = now.strftime("%Y-%m-%d")
-    sql = build_detection_query(now.strftime("%Y"), now.strftime("%m"), now.strftime("%d"))
+    sql = build_detection_query(now)
 
     rows, _truncated = athena.run_query(sql, max_rows=config.TREND_MAX_EVENTS_PER_DAY)
     key = write_trend_events(rows, event_date, now)
