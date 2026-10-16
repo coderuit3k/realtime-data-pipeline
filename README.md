@@ -77,6 +77,40 @@ Parquet]
 | `web/` | Next.js app (dashboard, RAG assistant, explorer, ops, trends, cicd, weather, catalog, insights, settings). |
 | `scripts/` | `build_lambdas.sh` packages the Lambdas; `telegram_*.sh` are the OpenClaw push automations (see OpenClaw). |
 
+## RAG Flow
+
+```mermaid
+flowchart TD
+    U([User sends a question]) --> H[Lambda handler<br/>run_agent]
+    H --> L1{Bedrock LLM + system prompt<br/>7 rules → pick next tool}
+
+    L1 -->|Knowledge / news| SKB[search_knowledge_base<br/>query, sources, days_back]
+    L1 -->|Curated metrics| ATH[query_athena<br/>LLM generates Trino SQL]
+    L1 -->|Coin prices / weather| OT[crypto / weather]
+    L1 -->|Enough evidence| ANS[Compose answer + citations]
+
+    SKB --> F[build_search_filter<br/>sources, days_back]
+    F --> Q[Qdrant hybrid search<br/>collection: datapulse-rag]
+    Q --> DV[Dense vector]
+    Q --> BM[Sparse BM25]
+    DV --> RRF[RRF]
+    BM --> RRF
+    RRF --> RB[Recency boost<br/>score × 2^-age/14d, weight 0.5]
+    RB --> RR[Rerank top-k]
+    RR --> CTX[Chunks + source labels]
+    CTX --> L1
+
+    ATH --> VG[validate_athena_sql<br/>Tier 2→6: read-only, dialect,<br/>columns, set-op order, agg types]
+    VG -->|fail| FIX[Return error + fix hints<br/>LLM regenerates SQL]
+    FIX --> ATH
+    VG -->|pass| EXE[Run on Athena<br/>5 curated tables]
+    EXE --> SUM[Summarize results]
+    SUM --> L1
+
+    OT --> L1
+    ANS --> R([Response + sources<br/>returned to user])
+```
+
 ## Local development
 
 ```bash
@@ -193,19 +227,28 @@ latest numbers are in `eval/README.md`.
 
 ### Retrieval tuning
 
+<<<<<<< HEAD
 Uses hybrid search in Qdrant Cloud (Titan dense + BM25 sparse), merged with
+=======
+Uses ybrid search in Qdrant Cloud (Titan dense + BM25 sparse), merged with
+>>>>>>> 75e3479 (add rag flow to README.md and revise the README.md)
 Reciprocal Rank Fusion, plus a Jina reranker that picks the final 5 from the
-top 30. The real gain is scale: the old index capped out around 1.4k documents
-in a 512 MB Lambda, while Qdrant now holds all 34,977 and ingests incrementally.
-Rerank costs roughly $0.0004 per search, within Jina's free allowance.
+top 30.
 
 | Stage (12 questions, same agent/model, 1,158 docs) | Faithfulness | Answer relevancy | Context precision | Search p50 |
 |---|---|---|---|---|
 | Hybrid + RRF | 0.681 | 0.611 | 0.462 | 1,338 ms |
 | Hybrid + RRF + rerank | 0.705 | 0.666 | 0.300 | 2,505 ms |
 
+<<<<<<< HEAD
 Caveat: small sample (12 questions) and the judge is a model with
 its own noise, so differences under ~0.1 should not be trusted.
+=======
+Two follow-ups: the reranker now drops passages scoring below 0.15 instead of
+always returning its top 5; query normalization (lowercase, strip HTML/emoji/
+punctuation) was tried and dropped -- no real gain over the raw query at the
+same cutoff.
+>>>>>>> 75e3479 (add rag flow to README.md and revise the README.md)
 
 ## OpenClaw ops agent
 
