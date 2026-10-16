@@ -225,6 +225,12 @@ def lambda_handler(event, context):
     Documents are embedded concurrently in chunks and each chunk is upserted before the next
     starts, so a run that ends early (time) keeps its progress and the next run continues.
     """
+    # Weekly Qdrant trim through EventBridge — keep free tier 1GB/4GB
+    if isinstance(event, dict) and event.get("task") == "qdrant_trim":
+        from common.qdrant_trim import trim_old_points
+        deleted = trim_old_points(days=60, dry_run=False)
+        return {"statusCode": 200, "body": f"trimmed {deleted} points"}
+
     documents = [doc for doc in build_documents() if doc["text"]]
     qdrant_store.ensure_collection()
     unchanged, needs_embedding = partition_changed(documents, qdrant_store.existing_hashes())
