@@ -175,7 +175,9 @@ def test_run_tool_search_knowledge_base_returns_summary_and_raw(monkeypatch):
     assert summary[0]["title"] == "t"
     assert summary[0]["url"] == "https://example.com"
     # The model gets the whole passage the reranker scored, not a 300-character prefix.
-    assert summary[0]["snippet"] == "x" * 400
+    assert summary[0]["snippet"].startswith("<retrieved_document")
+    assert summary[0]["snippet"].endswith("</retrieved_document>")
+    assert "x" * 400 in summary[0]["snippet"]
     assert raw == matches
 
 

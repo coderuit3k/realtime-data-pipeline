@@ -1,8 +1,10 @@
 import threading
+import time
 from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
+import requests
 
 from ingestion import hackernews_ingestion
 from ingestion.hackernews_ingestion import lambda_handler, normalize_story
@@ -60,17 +62,21 @@ def test_normalize_story_handles_missing_text():
 def test_lambda_handler_writes_records_keyed_by_story_id(
     mock_fetch_new_stories, mock_write_records
 ):
-    mock_fetch_new_stories.return_value = [{"story_id": "123"}]
+    mock_fetch_new_stories.return_value = ([{"story_id": "123"}], [456])
     mock_write_records.return_value = "some/key.json"
 
-    lambda_handler({}, None)
+    result = lambda_handler({}, None)
 
     mock_write_records.assert_called_once_with("hackernews", [{"story_id": "123"}], "story_id")
+    assert result["records_ingested"] == 1
+    assert result["failed_items"] == [456]
+    assert result["s3_key"] == "some/key.json"
 
 
 class _FakeResponse:
-    def __init__(self, data):
+    def __init__(self, data, status_code=200):
         self._data = data
+        self.status_code = status_code
 
     def raise_for_status(self):
         pass
@@ -88,7 +94,7 @@ class _FakeHnSession:
         self._items = items
         self._barrier = barrier
 
-    def get(self, url, timeout):
+    def get(self, url, params=None, timeout=None):
         if url.endswith("newstories.json"):
             return _FakeResponse(self._ids)
         if self._barrier:
@@ -115,9 +121,10 @@ def test_fetch_new_stories_fetches_items_concurrently_in_feed_order(monkeypatch)
     session = _FakeHnSession([3, 1, 2], items, barrier=threading.Barrier(3, timeout=2))
     _patch_session(monkeypatch, session)
 
-    stories = hackernews_ingestion.fetch_new_stories(limit=3)
+    stories, failed = hackernews_ingestion.fetch_new_stories(limit=3)
 
     assert [s["story_id"] for s in stories] == ["3", "1", "2"]
+    assert failed == []
 
 
 def test_fetch_new_stories_reuses_one_session_for_every_request(monkeypatch):
@@ -133,14 +140,52 @@ def test_fetch_new_stories_skips_deleted_and_non_story_items(monkeypatch):
     items = {1: _fake_item(id=1), 2: None, 3: _fake_item(id=3, type="comment")}
     _patch_session(monkeypatch, _FakeHnSession([1, 2, 3], items))
 
-    stories = hackernews_ingestion.fetch_new_stories(limit=3)
+    stories, failed = hackernews_ingestion.fetch_new_stories(limit=3)
 
     assert [s["story_id"] for s in stories] == ["1"]
+    assert failed == []
 
 
-def test_fetch_new_stories_fails_the_run_when_an_item_request_fails(monkeypatch):
-    items = {1: _fake_item(id=1), 2: RuntimeError("HN down")}
+def test_fetch_new_stories_skips_failed_items_and_reports_them(monkeypatch):
+    items = {1: _fake_item(id=1), 2: RuntimeError("HN down"), 3: _fake_item(id=3)}
+    _patch_session(monkeypatch, _FakeHnSession([1, 2, 3], items))
+
+    stories, failed = hackernews_ingestion.fetch_new_stories(limit=3)
+
+    assert [s["story_id"] for s in stories] == ["1", "3"]
+    assert failed == [2]
+
+
+def test_fetch_new_stories_fails_the_run_when_every_item_request_fails(monkeypatch):
+    items = {1: RuntimeError("HN down"), 2: RuntimeError("HN down")}
     _patch_session(monkeypatch, _FakeHnSession([1, 2], items))
 
-    with pytest.raises(RuntimeError, match="HN down"):
+    with pytest.raises(RuntimeError, match="All 2 HN item fetch"):
         hackernews_ingestion.fetch_new_stories(limit=2)
+
+
+class _FlakySession(_FakeHnSession):
+    """First item fetch drops the connection; the retry must succeed."""
+
+    def __init__(self, ids, items):
+        super().__init__(ids, items)
+        self.calls = 0
+
+    def get(self, url, params=None, timeout=None):
+        if not url.endswith("newstories.json"):
+            self.calls += 1
+            if self.calls == 1:
+                raise requests.ConnectionError("dropped")
+        return super().get(url, params=params, timeout=timeout)
+
+
+def test_fetch_item_retries_transient_failures(monkeypatch):
+    monkeypatch.setattr(time, "sleep", lambda s: None)  # skip the retry backoff
+    session = _FlakySession([1], {1: _fake_item(id=1)})
+    _patch_session(monkeypatch, session)
+
+    stories, failed = hackernews_ingestion.fetch_new_stories(limit=1)
+
+    assert [s["story_id"] for s in stories] == ["1"]
+    assert failed == []
+    assert session.calls == 2  # first attempt dropped, retry succeeded

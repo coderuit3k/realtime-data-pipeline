@@ -75,6 +75,8 @@ RAG_TOP_K = int(os.environ.get("RAG_TOP_K", "5"))
 RAG_MEMORY_TABLE = os.environ.get("RAG_MEMORY_TABLE", "")
 RAG_MEMORY_TTL_SECONDS = int(os.environ.get("RAG_MEMORY_TTL_SECONDS", str(7 * 24 * 3600)))
 RAG_MEMORY_PROMOTE_AFTER_HITS = int(os.environ.get("RAG_MEMORY_PROMOTE_AFTER_HITS", "2"))
+RAG_QUERY_EXPANSION = os.environ.get("RAG_QUERY_EXPANSION", "false").lower() == "true"
+RAG_EXPANSION_VARIANTS = int(os.environ.get("RAG_EXPANSION_VARIANTS", "2"))
 # Parquet files read at once when rag/build_index.py scans the curated history. Sequential reads
 # (~3,400 files) took longer than the Lambda's 300 s timeout.
 RAG_READ_WORKERS = int(os.environ.get("RAG_READ_WORKERS", "10"))

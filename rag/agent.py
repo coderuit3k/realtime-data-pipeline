@@ -15,11 +15,19 @@ from io import BytesIO
 import boto3
 import pandas as pd
 import requests
+from botocore.config import Config
 
 from common import athena, config, qdrant_store
 from common.rerank import rerank
 from common.secrets import get_secret
 from common.sql_guard import validate_athena_sql
+from rag.retrieval_hardening import (
+    INJECTION_GUARDRAIL_RULE,
+    ToolResults,
+    expand_query,
+    rrf_merge,
+    wrap_retrieved,
+)
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -27,6 +35,9 @@ logger.setLevel(logging.INFO)
 _s3_client = None
 _bedrock_client = None
 _dynamodb_resource = None
+
+# Set config to run stable
+Config(retries={"max_attempts": 8, "mode": "standard"}, read_timeout=120, connect_timeout=10)
 
 # Tool-calling turns before the agent is forced to answer with what it has.
 MAX_ITERATIONS = 6
@@ -298,7 +309,8 @@ SYSTEM_PROMPT = (
     "'Now I have enough data', 'Tuyệt vời!', 'Không sao, ...'), and no narration "
     "of your own process or tool use (what you searched, what failed, what you "
     "are about to do). Mention a failed or empty lookup only when it changes what "
-    "the reader can rely on. Reply in the language of the question."
+    "the reader can rely on. Reply in the language of the question.\n"
+    + INJECTION_GUARDRAIL_RULE
 )
 
 
@@ -484,13 +496,24 @@ def search_knowledge_base(
     how that stage is measured.
     """
     query_filter = qdrant_store.build_search_filter(sources=sources, days_back=days_back)
-    candidates = qdrant_store.hybrid_search(
-        query, embed_text(query), config.RAG_CANDIDATES, query_filter=query_filter
+    queries = expand_query(query, _bedrock)
+    candidate_lists = [
+        qdrant_store.hybrid_search(
+            q, embed_text(q), config.RAG_CANDIDATES, query_filter=query_filter
+        )
+        for q in queries
+    ]
+    candidates = (
+        rrf_merge(candidate_lists) if len(candidate_lists) > 1 else candidate_lists[0]
     )
     candidates = _apply_recency_boost(candidates, now=now)
     if not config.RAG_RERANK:
-        return candidates[:top_k]
-    return rerank(query, candidates, top_k)
+        results = candidates[:top_k]
+    else:
+        results = rerank(query, candidates, top_k)
+    meta = {"expanded_queries": queries} if len(queries) > 1 else {}
+    return ToolResults(results, meta=meta)
+
 
 
 def query_athena(sql: str, max_rows: int = 25) -> tuple[list[dict], bool]:
@@ -558,7 +581,7 @@ def run_tool(name: str, tool_input: dict) -> tuple[list[dict], list[dict]]:
             {
                 "title": m["title"],
                 "url": m["url"],
-                "snippet": m["text"],
+                "snippet": wrap_retrieved(m["text"], source=m.get("source", ""), url=m["url"]),
                 "score": round(m["score"], 4),
                 "published_date": m.get("published_date", ""),
             }
@@ -628,7 +651,14 @@ def run_tool(name: str, tool_input: dict) -> tuple[list[dict], list[dict]]:
         except Exception:
             logger.exception("search_web tool failed")
             return [{"error": "web search failed"}], []
-        summary = [{"title": r["title"], "url": r["url"], "snippet": r["text"]} for r in results]
+        summary = [
+            {
+                "title": r["title"],
+                "url": r["url"],
+                "snippet": wrap_retrieved(r["text"], source="web", url=r["url"]),
+            }
+            for r in results
+        ]
         return summary, results
 
     return [{"error": f"unknown tool: {name}"}], []
@@ -693,7 +723,15 @@ def run_agent(question: str) -> dict:
             summary, raw_results = run_tool(name, tool_input)
             if len(summary) == 1 and "error" in summary[0]:
                 degraded = True
-            trace.append({"tool": name, "input": tool_input, "result_count": len(raw_results)})
+            trace_entry = {
+                "tool": name,
+                "input": tool_input,
+                "result_count": len(raw_results),
+            }
+            expanded_queries = getattr(raw_results, "meta", {}).get("expanded_queries")
+            if expanded_queries:
+                trace_entry["expanded_queries"] = expanded_queries
+            trace.append(trace_entry)
             for r in raw_results:
                 if r.get("url"):
                     sources_by_url[r["url"]] = r

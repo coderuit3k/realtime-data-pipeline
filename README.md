@@ -82,14 +82,15 @@ Parquet]
 ```mermaid
 flowchart TD
     U([User sends a question]) --> H[Lambda handler<br/>run_agent]
-    H --> L1{Bedrock LLM + system prompt<br/>7 rules → pick next tool}
+    H --> L1{Bedrock LLM + system prompt<br/>8 rules → pick next tool}
 
     L1 -->|Knowledge / news| SKB[search_knowledge_base<br/>query, sources, days_back]
     L1 -->|Curated metrics| ATH[query_athena<br/>LLM generates Trino SQL]
     L1 -->|Coin prices / weather| OT[crypto / weather]
     L1 -->|Enough evidence| ANS[Compose answer + citations]
 
-    SKB --> F[build_search_filter<br/>sources, days_back]
+    SKB --> EXP[Query expansion, optional and off by default<br/>LLM keyword variants, one search each, RRF-merged]
+    EXP --> F[build_search_filter<br/>sources, days_back]
     F --> Q[Qdrant hybrid search<br/>collection: datapulse-rag]
     Q --> DV[Dense vector]
     Q --> BM[Sparse BM25]
@@ -179,6 +180,10 @@ live in a Qdrant Cloud collection (free tier).
  API. On each turn the model decides whether to call a tool, with what input,
  whether to search again, or to answer. Tools:
   - `search_knowledge_base`: hybrid search + RRF in Qdrant, then a Jina rerank of the top 30 down to 5.
+    Optional query expansion (`RAG_QUERY_EXPANSION`, off by default) first rewrites the question
+    into LLM keyword variants, searches each variant and RRF-merges the lists before the rerank.
+    Snippets from this tool and `search_web` are wrapped in `<retrieved_document>` tags, and a
+    system-prompt rule tells the model to treat wrapped content as data, never as instructions.
   - `get_crypto_prices`, `get_weather`: exact, current data read from the curated zone.
   - `query_athena`: read-only SQL for aggregates (averages, counts, time windows).
   - `search_web` (Tavily): out-of-domain questions, fallback for everything else.
@@ -240,6 +245,27 @@ Two follow-ups: the reranker now drops passages scoring below 0.15 instead of
 always returning its top 5; query normalization (lowercase, strip HTML/emoji/
 punctuation) was tried and dropped -- no real gain over the raw query at the
 same cutoff.
+
+### Query expansion (100-question A/B)
+
+With `RAG_QUERY_EXPANSION` on, `search_knowledge_base` first asks the LLM for
+keyword variants of the question, runs the hybrid search once per variant and
+RRF-merges the candidate lists before the usual recency boost and rerank. It
+is off by default because each search then costs one extra LLM call plus one
+embedding/search per variant. Same code, same 100 questions, only the flag
+differs:
+
+| Run | Faithfulness | Answer relevancy | Context precision |
+|---|---|---|---|
+| Expansion off (control, 2026-10-20) | 0.6016 | 0.6758 | 0.5680 |
+| Expansion on (2026-10-20) | 0.6300 | 0.6988 | 0.5572 |
+
+Faithfulness is higher in both expansion runs (+0.06) and relevancy
+slightly higher (+0.02). Context precision is inconclusive: the expansion
+runs differ from each other by 0.056, more than either run's gap to the
+control, so LLM-judge noise swamps the effect at n=100. The case for enabling
+it rests on faithfulness, not precision. Methodology and caveats are in
+`eval/README.md`.
 
 ## OpenClaw ops agent
 
