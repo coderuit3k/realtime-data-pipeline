@@ -16,18 +16,18 @@ import boto3
 import pandas as pd
 import requests
 from botocore.config import Config
-
-from common import athena, config, qdrant_store
-from common.rerank import rerank
-from common.secrets import get_secret
-from common.sql_guard import validate_athena_sql
-from rag.retrieval_hardening import (
+from retrieval_hardening import (
     INJECTION_GUARDRAIL_RULE,
     ToolResults,
     expand_query,
     rrf_merge,
     wrap_retrieved,
 )
+
+from common import athena, config, qdrant_store
+from common.rerank import rerank
+from common.secrets import get_secret
+from common.sql_guard import validate_athena_sql
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
