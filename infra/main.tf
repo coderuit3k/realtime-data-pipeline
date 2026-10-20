@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.5"
+  required_version = ">= 1.10"
 
   # Shared with local dev AND GitHub Actions CI/CD -- created once by
   # infra-bootstrap/state_backend.tf. Without this, CI would start from an
@@ -8,7 +8,7 @@ terraform {
     bucket         = "realtime-data-pipeline-tfstate-541551608787"
     key            = "infra/terraform.tfstate"
     region         = "us-east-1"
-    dynamodb_table = "realtime-data-pipeline-tfstate-lock"
+    use_lockfile   = true
     encrypt        = true
   }
 

@@ -244,6 +244,7 @@ resource "aws_lambda_function" "rag_agent" {
       JINA_SECRET_NAME       = aws_secretsmanager_secret.jina_api.name
       JINA_RERANK_MODEL      = var.jina_rerank_model
       RAG_CANDIDATES         = tostring(var.rag_candidates)
+      RAG_QUERY_EXPANSION    = "true"
     }
   }
 }
