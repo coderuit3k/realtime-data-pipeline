@@ -5,11 +5,11 @@ terraform {
   # infra-bootstrap/state_backend.tf. Without this, CI would start from an
   # empty local state and try to recreate everything that already exists.
   backend "s3" {
-    bucket         = "realtime-data-pipeline-tfstate-541551608787"
-    key            = "infra/terraform.tfstate"
-    region         = "us-east-1"
-    use_lockfile   = true
-    encrypt        = true
+    bucket       = "realtime-data-pipeline-tfstate-541551608787"
+    key          = "infra/terraform.tfstate"
+    region       = "us-east-1"
+    use_lockfile = true
+    encrypt      = true
   }
 
   required_providers {
