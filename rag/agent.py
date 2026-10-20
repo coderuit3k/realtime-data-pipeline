@@ -16,13 +16,24 @@ import boto3
 import pandas as pd
 import requests
 from botocore.config import Config
-from retrieval_hardening import (
-    INJECTION_GUARDRAIL_RULE,
-    ToolResults,
-    expand_query,
-    rrf_merge,
-    wrap_retrieved,
-)
+
+try:
+    from rag.retrieval_hardening import (
+        INJECTION_GUARDRAIL_RULE,
+        ToolResults,
+        expand_query,
+        rrf_merge,
+        wrap_retrieved,
+    )
+except ImportError:  # Lambda package: rag/ is flattened, module sits at the zip root
+    from retrieval_hardening import (
+        INJECTION_GUARDRAIL_RULE,
+        ToolResults,
+        expand_query,
+        rrf_merge,
+        wrap_retrieved,
+    )
+
 
 from common import athena, config, qdrant_store
 from common.rerank import rerank

@@ -66,6 +66,8 @@ package_no_deps trend_scan trends/trend_scan.py
 package_no_deps gmail_stats trends/gmail_stats.py
 package_with_qdrant rag_agent rag/agent.py
 
+cp "$ROOT_DIR/rag/retrieval_hardening.py" "$BUILD_DIR/rag_agent/"
+
 # `cp -r common` copies the repo's local __pycache__ (built by the dev machine's own
 # Python, not the Lambda runtime's). Those .pyc files embed source mtimes, so they made
 # every rebuild's zip hash differ and Terraform plan a no-op redeploy of every Lambda.
