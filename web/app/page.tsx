@@ -1,13 +1,21 @@
-"use client";
-
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { DATA_SOURCE_COUNT, LAMBDA_COUNT, TEST_COUNT, MONTHLY_COST_USD } from "@/lib/landingMeta";
-import type { CommitsResponse, GithubCommit, LogEntry } from "@/lib/types";
+import type { GithubCommit, LogEntry } from "@/lib/types";
 import { relativeTime } from "@/lib/time";
 import { ArchitectureFlow } from "@/components/ArchitectureFlow";
 import { LogPanel } from "@/components/LogPanel";
+import { getRecentCommits } from "@/lib/github";
+import { getCloudWatchLogsClient, requiredEnv } from "@/lib/aws";
+import { queryRecentLogs } from "@/lib/cloudwatchLogs";
+import { PIPELINE_LAMBDAS } from "@/lib/opsMeta";
+
+// Server-rendered with ISR: the HTML ships complete -- hero, stats and both
+// side panels included -- instead of an empty shell that fills in after two
+// client-side fetches. Vercel regenerates the page in the background every
+// 5 minutes, which is plenty fresh for a showcase page and spares the
+// GitHub / CloudWatch quota that per-visit rendering would burn.
+export const revalidate = 300;
 
 const GITHUB_URL = "https://github.com/coderuit3k/realtime-data-pipeline";
 
@@ -224,7 +232,7 @@ const STATS: { value: string; label: string; color: string; path: ReactNode }[] 
   },
 ];
 
-/** Renders nothing when empty, which doubles as the error state for /api/commits. */
+/** Renders nothing when empty, which doubles as the failure state for the commits panel. */
 function CommitsPanel({ commits }: { commits: GithubCommit[] }) {
   if (commits.length === 0) return null;
   return (
@@ -250,41 +258,36 @@ function CommitsPanel({ commits }: { commits: GithubCommit[] }) {
   );
 }
 
+/** Same data the /api/commits route serves, fetched in-process on the server. */
+async function loadCommits(): Promise<GithubCommit[]> {
+  try {
+    return await getRecentCommits(5);
+  } catch (error) {
+    console.error("Landing commits failed", error);
+    return [];
+  }
+}
+
+/** Recent logs for the side panel: the same query /api/ops runs, minus the parts the landing does not show. */
+async function loadLogs(): Promise<{ logs: LogEntry[] | null; error: boolean }> {
+  try {
+    const prefix = requiredEnv("ALARM_NAME_PREFIX");
+    const logGroupNames = PIPELINE_LAMBDAS.map((lambda) => `/aws/lambda/${prefix}-${lambda.suffix}`);
+    const logs = await queryRecentLogs(getCloudWatchLogsClient(), logGroupNames, 5, `${prefix}-`);
+    return { logs, error: false };
+  } catch (error) {
+    console.error("Landing logs failed", error);
+    return { logs: null, error: true };
+  }
+}
+
 /**
- * Public showcase page. Headline numbers are static constants; only the
- * commits and log side panels are fetched live, and either may fail without
- * affecting the rest of the page.
+ * Public showcase page. Headline numbers are static constants; the commits
+ * and log side panels are loaded on the server (see `revalidate` above), and
+ * either may fail without affecting the rest of the page.
  */
-export default function LandingPage() {
-  const [commits, setCommits] = useState<GithubCommit[]>([]);
-  const [logs, setLogs] = useState<LogEntry[] | null>(null);
-  const [logsError, setLogsError] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/commits")
-      .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
-      .then(({ ok, body }: { ok: boolean; body: CommitsResponse }) => {
-        if (ok) setCommits(body.commits);
-      })
-      .catch(() => {
-        /* secondary panel: CommitsPanel simply stays hidden */
-      });
-  }, []);
-
-  useEffect(() => {
-    fetch("/api/ops")
-      .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
-      .then(({ ok, body }) => {
-        if (ok && Array.isArray(body?.recentLogs)) {
-          setLogs(body.recentLogs);
-        } else {
-          setLogsError(true);
-        }
-      })
-      .catch(() => {
-        setLogsError(true);
-      });
-  }, []);
+export default async function LandingPage() {
+  const [commits, logsResult] = await Promise.all([loadCommits(), loadLogs()]);
 
   return (
     <div className="flex flex-col gap-5 p-6 lg:p-9 xl:flex-row">
@@ -392,7 +395,7 @@ export default function LandingPage() {
 
       <div className="flex w-full flex-col gap-4 xl:w-[340px] xl:flex-shrink-0">
         <CommitsPanel commits={commits} />
-        <LogPanel logs={logs} error={logsError} />
+        <LogPanel logs={logsResult.logs} error={logsResult.error} />
       </div>
     </div>
   );
