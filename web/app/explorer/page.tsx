@@ -1,9 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import type { ExplorerQueryResult, SampleQueryGroup } from "@/lib/types";
 import { Chip } from "@/components/Chip";
 import { CardIcon, SectionCard } from "@/components/SectionCard";
+
+// CodeMirror is only ever needed in the browser (and the whole page's data
+// loads client-side anyway), so the editor chunk stays out of the SSR pass.
+const SqlEditor = dynamic(() => import("@/components/SqlEditor"), {
+  ssr: false,
+  loading: () => <div className="min-h-[196px] rounded-lg border border-border bg-bg" aria-hidden="true" />,
+});
 
 type SamplesResponse = { workgroup: string; database: string; groups: SampleQueryGroup[] };
 
@@ -131,19 +139,13 @@ export default function ExplorerPage() {
 
         <div className="flex min-w-0 flex-col gap-4">
           <SectionCard title="SQL" icon={<CardIcon d={["M7 8l-4 4 4 4", "M17 8l4 4-4 4", "M14 4l-4 16"]} />}>
-            <textarea
+            <SqlEditor
               value={sql}
-              onChange={(e) => setSql(e.target.value)}
-              onKeyDown={(e) => {
-                if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !running && sql.trim()) {
-                  e.preventDefault();
-                  runQuery();
-                }
+              onChange={setSql}
+              onRun={() => {
+                if (!running && sql.trim()) runQuery();
               }}
-              rows={8}
-              spellCheck={false}
-              aria-label="Câu lệnh SQL"
-              className="resize-y rounded-lg border border-border bg-bg p-3.5 font-mono text-[13px] leading-relaxed text-accentBright outline-none transition-colors focus:border-accent/60"
+              ariaLabel="Câu lệnh SQL"
             />
             <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="text-[12px] text-textMuted">Nhấn Ctrl+Enter để chạy</span>
