@@ -11,32 +11,53 @@ import { CardIcon, SectionCard } from "@/components/SectionCard";
 
 const ROW_GRID = "grid grid-cols-2 gap-x-4 gap-y-1.5 md:grid-cols-[2fr_1fr_1.2fr_0.6fr_0.9fr] md:items-center";
 
+// How often the page re-polls while open. Each tick is one /api/ops plus one
+// /api/cost call, and ticks are skipped while the tab is hidden.
+const REFRESH_INTERVAL_MS = 60_000;
+
 /**
  * Lambda health, schedule, alarms, logs and cost. Cost is fetched separately
- * so a failing Cost Explorer call never blocks the page.
+ * so a failing Cost Explorer call never blocks the page. Re-polls every
+ * REFRESH_INTERVAL_MS while the tab is visible; a failed background refresh
+ * keeps the last good data and flags it stale instead of replacing the page
+ * with the error screen.
  */
 export default function OpsPage() {
   const [data, setData] = useState<OpsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cost, setCost] = useState<CostResponse | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [stale, setStale] = useState(false);
 
-  async function load() {
-    setError(null);
+  async function load(initial = false) {
+    if (initial) {
+      setError(null);
+    } else {
+      setRefreshing(true);
+    }
     try {
       const res = await fetch("/api/ops");
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Không tải được Ops.");
       setData(body);
+      setError(null);
+      setStale(false);
+      setLastUpdated(new Date());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không tải được Ops.");
+      if (initial) {
+        setError(err instanceof Error ? err.message : "Không tải được Ops.");
+      } else {
+        // Background refresh failed: keep showing the last good data. The
+        // frozen "Cập nhật lúc" time below is what marks it as old.
+        setStale(true);
+      }
+    } finally {
+      if (!initial) setRefreshing(false);
     }
   }
 
-  useEffect(() => {
-    load();
-  }, []);
-
-  useEffect(() => {
+  function loadCost() {
     fetch("/api/cost")
       .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
       .then(({ ok, body }) => {
@@ -45,13 +66,40 @@ export default function OpsPage() {
       .catch(() => {
         /* secondary: the cost card just shows "—" */
       });
+  }
+
+  useEffect(() => {
+    load(true);
+  }, []);
+
+  useEffect(() => {
+    loadCost();
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      load();
+      loadCost();
+    }, REFRESH_INTERVAL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        load();
+        loadCost();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   if (error) {
     return (
       <div className="p-9 flex flex-col gap-4">
         <p className="text-error text-sm">{error}</p>
-        <button onClick={load} className="w-fit rounded-lg border border-border px-4 py-2 text-sm text-textPrimary">
+        <button onClick={() => load(true)} className="w-fit rounded-lg border border-border px-4 py-2 text-sm text-textPrimary">
           Thử lại
         </button>
       </div>
@@ -77,18 +125,29 @@ export default function OpsPage() {
 
   return (
     <div className="p-6 lg:p-9 flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="font-heading text-3xl font-semibold tracking-tight text-textPrimary">Ops &amp; Monitoring</h1>
-        <p className="text-[13px] text-textMuted">
-          {data.lambdaHealth.length} Lambda · EventBridge {data.schedule.scheduleExpression} · {data.alarmsTotal} CloudWatch alarm
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="font-heading text-3xl font-semibold tracking-tight text-textPrimary">Ops &amp; Monitoring</h1>
+          <p className="text-[13px] text-textMuted" role="status">
+            {lastUpdated ? `Cập nhật lúc ${lastUpdated.toLocaleTimeString("vi-VN", { hour12: false })}` : ""}
+            {refreshing ? " · đang làm mới…" : ""}
+            {stale ? <span className="text-error"> · làm mới thất bại, hiện dữ liệu cũ</span> : ""}
+          </p>
+        </div>
+        <button
+          onClick={() => load()}
+          disabled={refreshing}
+          className="rounded-lg border border-border px-4 py-2 text-sm text-textPrimary transition-colors hover:border-accent/40 disabled:opacity-50"
+        >
+          Làm mới
+        </button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
           label="Lambda functions"
           value={`${okCount} / ${data.lambdaHealth.length}`}
-          hint={okCount === data.lambdaHealth.length ? "tất cả đang OK" : "có Lambda chưa OK"}
+          hint={okCount === data.lambdaHealth.length ? "OK" : "chưa OK"}
           hintColor={okCount === data.lambdaHealth.length ? "success" : "error"}
           icon={<CardIcon d="M13 2 3 14h8l-1 8 10-12h-8l1-8z" />}
         />
@@ -102,9 +161,9 @@ export default function OpsPage() {
         <KpiCard
           label="CloudWatch alarms"
           value={`${data.alarmsBreaching} / ${data.alarmsTotal}`}
-          hint={breaching ? "đang có cảnh báo vượt ngưỡng" : "tất cả đều ổn"}
+          hint={breaching ? "vượt ngưỡng" : "tất cả đều ổn"}
           hintColor={breaching ? "error" : "success"}
-          icon={<CardIcon d={["M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9", "M13.7 21a2 2 0 0 1-3.4 0"]} />}
+          icon={<CardIcon d={["M18 8a6 6 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9", "M13.7 21a2 2 0 0 1-3.4 0"]} />}
         />
         <KpiCard
           label="Chi phí tháng này"
@@ -137,7 +196,7 @@ export default function OpsPage() {
                   {row.errors24h}
                 </span>
                 <span className="text-[12px] tabular-nums text-textSecondary">
-                  <span className="text-textMuted md:hidden">TB: </span>
+                  <span className="font-normal text-textMuted md:hidden">TB: </span>
                   {row.avgDurationMs === null ? "—" : `${row.avgDurationMs}ms`}
                 </span>
               </div>
@@ -162,7 +221,7 @@ export default function OpsPage() {
               ))}
             </div>
             <span className="text-[11.5px] text-textMuted">
-              3 hạng mục có giá cụ thể nhất -- không phải tổng đầy đủ, xem infra/README.md
+              3 hạng mục có giá cụ thể nhất
             </span>
           </SectionCard>
         </div>

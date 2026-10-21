@@ -104,7 +104,7 @@ export default function TrendsPage() {
       {events.length === 0 ? (
         <div className="rounded-xl border border-border bg-surface/75 backdrop-blur-md px-5 py-10 text-center">
           <span className="text-[13px] text-textMuted">
-            Chưa có sự kiện xu hướng nào -- sẽ xuất hiện sau lần quét hằng ngày đầu tiên.
+            Chưa có sự kiện xu hướng nào.
           </span>
         </div>
       ) : (
