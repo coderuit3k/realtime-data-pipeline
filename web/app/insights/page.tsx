@@ -70,6 +70,18 @@ const LANGUAGE_COLORS = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", 
 const OTHER_COLOR = "#5b6572";
 
 /** Cross-source trend dashboard (HN, News, GitHub, crypto, weather) for today or the last 7 days. */
+/**
+ * Display form of a keyword: Title Case for each word, except "ai" which
+ * stays the acronym "AI". Only the first letter is forced, so names that
+ * carry their own casing ("ChatGPT", "GPT-4", "OpenAI") survive untouched.
+ */
+function formatKeyword(keyword: string): string {
+  return keyword
+    .split(/\s+/)
+    .map((word) => (word.toLowerCase() === "ai" ? "AI" : word.charAt(0).toUpperCase() + word.slice(1)))
+    .join(" ");
+}
+
 export default function InsightsPage() {
   const [range, setRange] = useState<Range>("today");
   const [data, setData] = useState<InsightsResponse | null>(null);
@@ -198,7 +210,7 @@ export default function InsightsPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
           label="Từ khoá số 1"
-          value={topKeyword?.keyword ?? "—"}
+          value={topKeyword ? formatKeyword(topKeyword.keyword) : "—"}
           hint={topKeyword ? `${topKeyword.mentions} lượt nhắc trên HN + News` : "Chưa có dữ liệu"}
           icon={<CardIcon d="M3 17 9 11 13 15 21 7M21 7h-6M21 7v6" />}
         />
@@ -280,7 +292,7 @@ export default function InsightsPage() {
         >
           <div className="flex flex-col gap-3">
             {data.topKeywords.map((k) => (
-              <RankRow key={k.keyword} label={k.keyword} value={k.mentions} max={maxMentions} />
+              <RankRow key={k.keyword} label={formatKeyword(k.keyword)} value={k.mentions} max={maxMentions} />
             ))}
           </div>
         </SectionCard>

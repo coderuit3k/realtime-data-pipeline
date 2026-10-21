@@ -9,7 +9,7 @@ import { MapboxWeatherMap } from "@/components/MapboxWeatherMap";
 import { WeatherMap } from "@/components/WeatherMap";
 import { BAND_COLOR, resolveMapboxToken } from "@/lib/weatherGeo";
 
-const DEFAULT_LOCATION = "Da Lat";
+const DEFAULT_LOCATION = "Ho Chi Minh City";
 
 // Inlined at build time (the literal `process.env.NEXT_PUBLIC_*` reference is required); a public pk. token only.
 const MAPBOX_TOKEN = resolveMapboxToken(process.env.NEXT_PUBLIC_MAPBOX_TOKEN);
@@ -19,6 +19,13 @@ const BAND_LEGEND = [
   { band: "moderate", label: "Vừa (22–30°C)" },
   { band: "hot", label: "Nóng (>30°C)" },
 ] as const;
+
+/**
+ * Last good /api/weather response, kept at module level: navigating back to
+ * this page renders it instantly while a fresh fetch runs behind it,
+ * instead of gating the whole page on a cold Athena query.
+ */
+let cachedWeather: WeatherResponse | null = null;
 
 /**
  * `observedAt` is naive Vietnam local time (UTC+7, no offset). Parsing it as
@@ -91,13 +98,24 @@ export default function WeatherPage() {
   const latestSelectedRef = useRef<string>(DEFAULT_LOCATION);
 
   useEffect(() => {
+    // Warm the mapbox-gl chunk while the readings load, so the map's own
+    // import does not start cold once the data lands.
+    void import("mapbox-gl").catch(() => {
+      /* the map component retries the import on mount */
+    });
+    if (cachedWeather) setData(cachedWeather);
     fetch("/api/weather")
       .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
       .then(({ ok, body }) => {
         if (!ok) throw new Error(body.error ?? "Không tải được thời tiết.");
+        cachedWeather = body;
         setData(body);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Không tải được thời tiết."));
+      .catch((err) => {
+        // With cached data on screen a failed refresh stays silent; the
+        // full error screen is only for a cold first load.
+        if (!cachedWeather) setError(err instanceof Error ? err.message : "Không tải được thời tiết.");
+      });
   }, []);
 
   useEffect(() => {

@@ -55,6 +55,14 @@ export function MapboxWeatherMap({ locations, selected, onSelect, token, onFail 
       const mapboxgl = (await import("mapbox-gl")).default;
       if (cancelled || !containerRef.current) return;
 
+      // No WebGL (RDP/headless browsers, hardware acceleration off): the
+      // constructor below throws synchronously there, so route it to the
+      // page's SVG fallback up front instead.
+      if (!mapboxgl.supported()) {
+        onFailRef.current();
+        return;
+      }
+
       const map = new mapboxgl.Map({
         container: containerRef.current,
         accessToken: token,
@@ -152,7 +160,12 @@ export function MapboxWeatherMap({ locations, selected, onSelect, token, onFail 
       });
     }
 
-    init();
+    init().catch((err) => {
+      console.error("Mapbox init failed:", err instanceof Error ? err.message : err);
+      mapRef.current?.remove();
+      mapRef.current = null;
+      if (!cancelled) onFailRef.current();
+    });
     return () => {
       cancelled = true;
       readyRef.current = false;

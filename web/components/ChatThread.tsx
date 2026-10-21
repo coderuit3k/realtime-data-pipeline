@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
@@ -36,6 +37,71 @@ const answerMarkdownComponents: Components = {
   ),
 };
 
+// rag_agent computes `grounded` as "at least one source with a URL", so
+// answers built purely from the pipeline's own structured tools (Athena
+// aggregates, crypto prices, weather) come back grounded=false even though
+// they rest on exact data. The badge therefore distinguishes three cases
+// instead of stamping those answers as ungrounded.
+const PIPELINE_DATA_TOOLS = new Set(["query_athena", "get_crypto_prices", "get_weather"]);
+
+type GroundingKind = "sourced" | "pipeline" | "none";
+
+function groundingKind(grounded: boolean, toolCalls: unknown[]): GroundingKind {
+  if (grounded) return "sourced";
+  const usedPipelineData = toolCalls.some((call) => {
+    if (typeof call !== "object" || call === null) return false;
+    const tool = (call as { tool?: unknown }).tool;
+    return typeof tool === "string" && PIPELINE_DATA_TOOLS.has(tool);
+  });
+  return usedPipelineData ? "pipeline" : "none";
+}
+
+const GROUNDING_BADGES: Record<GroundingKind, { label: string; className: string; icon: ReactNode }> = {
+  sourced: {
+    label: "Có nguồn đối chiếu",
+    className: "bg-success/10 text-success",
+    icon: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="m8.5 12.5 2.5 2.5 5-5.5" />
+      </>
+    ),
+  },
+  pipeline: {
+    label: "Từ dữ liệu pipeline",
+    className: "bg-accent/10 text-accent",
+    icon: (
+      <>
+        <path d="M3 5a9 3 0 1 0 18 0 9 3 0 1 0-18 0" />
+        <path d="M3 5v14a9 3 0 0 0 18 0V5" />
+        <path d="M3 12a9 3 0 0 0 18 0" />
+      </>
+    ),
+  },
+  none: {
+    label: "Chưa có nguồn đối chiếu",
+    className: "bg-warning/10 text-warning",
+    icon: (
+      <>
+        <path d="M12 3 2.5 20h19L12 3z" />
+        <path d="M12 10v4M12 17.2v.3" />
+      </>
+    ),
+  },
+};
+
+function GroundingBadge({ kind }: { kind: GroundingKind }) {
+  const badge = GROUNDING_BADGES[kind];
+  return (
+    <span className={`inline-flex w-fit items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium ${badge.className}`}>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {badge.icon}
+      </svg>
+      {badge.label}
+    </span>
+  );
+}
+
 function QuestionBubble({ question }: { question: string }) {
   return (
     <div className="flex items-end gap-2 justify-end">
@@ -52,7 +118,7 @@ function QuestionBubble({ question }: { question: string }) {
   );
 }
 
-function AnswerBubble({ answer, sources }: { answer: string; sources: AssistantSource[] }) {
+function AnswerBubble({ answer, sources, grounding }: { answer: string; sources: AssistantSource[]; grounding: GroundingKind }) {
   return (
     <div className="flex items-end gap-2 justify-start min-w-0">
       <span className="w-7 h-7 rounded-full bg-bg border border-secondary/40 flex items-center justify-center text-secondaryBright flex-shrink-0">
@@ -66,6 +132,7 @@ function AnswerBubble({ answer, sources }: { answer: string; sources: AssistantS
             {answer}
           </ReactMarkdown>
         </div>
+        <GroundingBadge kind={grounding} />
         {sources.length > 0 && (
           <div className="flex flex-wrap gap-2 border-t border-border pt-3">
             {sources.map((s, i) => {
@@ -133,7 +200,7 @@ export function ChatThread({
       {messages.map((m) => (
         <div key={m.id} className="flex flex-col gap-4">
           <QuestionBubble question={m.question} />
-          <AnswerBubble answer={m.answer} sources={m.sources} />
+          <AnswerBubble answer={m.answer} sources={m.sources} grounding={groundingKind(m.grounded, m.toolCalls)} />
         </div>
       ))}
       {pendingQuestion && (
@@ -145,7 +212,13 @@ export function ChatThread({
               Đang xử lý…
             </span>
           )}
-          {pendingResult && <AnswerBubble answer={pendingResult.answer} sources={pendingResult.sources} />}
+          {pendingResult && (
+            <AnswerBubble
+              answer={pendingResult.answer}
+              sources={pendingResult.sources}
+              grounding={groundingKind(pendingResult.grounded, pendingResult.toolCalls)}
+            />
+          )}
         </div>
       )}
     </div>

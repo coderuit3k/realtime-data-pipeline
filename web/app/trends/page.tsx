@@ -33,6 +33,18 @@ function formatDate(date: string): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : date;
 }
 
+/**
+ * Display form of a keyword: Title Case for each word, except "ai" which
+ * stays the acronym "AI". Only the first letter is forced, so names that
+ * carry their own casing ("ChatGPT", "GPT-4", "OpenAI") survive untouched.
+ */
+function formatKeyword(keyword: string): string {
+  return keyword
+    .split(/\s+/)
+    .map((word) => (word.toLowerCase() === "ai" ? "AI" : word.charAt(0).toUpperCase() + word.slice(1)))
+    .join(" ");
+}
+
 /** Keywords the daily trend scan found in GitHub, HN and News on the same day. */
 export default function TrendsPage() {
   const [data, setData] = useState<TrendsResponse | null>(null);
@@ -118,7 +130,7 @@ export default function TrendsPage() {
             />
             <KpiCard
               label="Từ khoá sôi động nhất"
-              value={hottest?.keyword ?? "—"}
+              value={hottest ? formatKeyword(hottest.keyword) : "—"}
               hint={hottest ? `${totalOf(hottest)} mục · ${formatDate(hottest.eventDate)}` : undefined}
               icon={<CardIcon d="M3 17 9 11 13 15 21 7M21 7h-6M21 7v6" />}
             />
@@ -155,7 +167,7 @@ export default function TrendsPage() {
                       className="rounded-xl border border-border bg-surface/75 backdrop-blur-md px-5 py-4 flex flex-col gap-3 transition-colors hover:border-accent/30"
                     >
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <span className="text-base font-semibold text-textPrimary">{event.keyword}</span>
+                        <span className="text-base font-semibold text-textPrimary">{formatKeyword(event.keyword)}</span>
                         {isCrossSource(event) && (
                           <span className="rounded-full bg-success/15 px-2.5 py-0.5 text-[11px] font-semibold text-success">
                             Cả 3 nguồn

@@ -61,6 +61,7 @@ export default function AssistantPage() {
   const [pendingResult, setPendingResult] = useState<AssistantResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [failedQuestion, setFailedQuestion] = useState<string | null>(null);
   const [conversationsError, setConversationsError] = useState<string | null>(null);
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [listCollapsed, setListCollapsed] = useState(false);
@@ -161,6 +162,8 @@ export default function AssistantPage() {
     setPendingResult(null);
     setMessages([]);
     setMessagesError(null);
+    setNotice(null);
+    setFailedQuestion(null);
   }
 
   async function createConversation(): Promise<ConversationJSON | null> {
@@ -197,8 +200,8 @@ export default function AssistantPage() {
   // Lazily creates a conversation on the first question. The pending turn stays
   // on screen until the reloaded history contains it, so the answer never
   // flickers away if persistence lags or fails.
-  async function submit() {
-    const trimmed = input.trim();
+  async function submit(retryOf?: string) {
+    const trimmed = (retryOf ?? input).trim();
     if (!trimmed || loading || !sessionId) return;
 
     let conversationId = selectedId;
@@ -206,6 +209,7 @@ export default function AssistantPage() {
       const created = await createConversation();
       if (!created) {
         setNotice("Không tạo được cuộc trò chuyện mới, thử lại sau.");
+        setFailedQuestion(trimmed);
         return;
       }
       conversationId = created.id;
@@ -215,6 +219,7 @@ export default function AssistantPage() {
     setPendingQuestion(trimmed);
     setPendingResult(null);
     setNotice(null);
+    setFailedQuestion(null);
     setLoading(true);
     try {
       const res = await fetch("/api/assistant", {
@@ -225,8 +230,10 @@ export default function AssistantPage() {
       const body = await res.json();
       if (res.status === 429) {
         setNotice(body.error ?? "Đợi một chút rồi hỏi tiếp.");
+        setFailedQuestion(trimmed);
       } else if (!res.ok) {
         setNotice(body.error ?? "Không gọi được RAG Lambda.");
+        setFailedQuestion(trimmed);
       } else {
         const assistantResult = body as AssistantResult;
         if (conversationId === selectedIdRef.current) {
@@ -243,9 +250,12 @@ export default function AssistantPage() {
       }
     } catch {
       setNotice("Không gọi được RAG Lambda, thử lại sau.");
+      setFailedQuestion(trimmed);
     } finally {
       setLoading(false);
-      setInput("");
+      // Only clear the box if it still holds the question just sent, so a
+      // retry never wipes a newer draft typed in the meantime.
+      setInput((cur) => (cur.trim() === trimmed ? "" : cur));
     }
   }
 
@@ -333,7 +343,21 @@ export default function AssistantPage() {
             />
           </div>
           <div className="flex flex-col gap-2 border-t border-border p-3 sm:p-4">
-            {notice && <p className="text-xs text-warning">{notice}</p>}
+            {notice && (
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-warning">{notice}</p>
+                {failedQuestion && (
+                  <button
+                    type="button"
+                    onClick={() => submit(failedQuestion)}
+                    disabled={loading}
+                    className="flex-shrink-0 text-xs text-accent underline disabled:opacity-50"
+                  >
+                    Gửi lại
+                  </button>
+                )}
+              </div>
+            )}
             <div className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 transition-shadow focus-within:border-accent focus-within:shadow-glowCyan">
               <input
                 ref={inputRef}
@@ -348,7 +372,7 @@ export default function AssistantPage() {
               />
               {input.length > 400 && <span className="text-[11px] tabular-nums text-textMuted">{input.length}/500</span>}
               <button
-                onClick={submit}
+                onClick={() => submit()}
                 disabled={loading}
                 className="rounded-lg bg-accent px-4 py-2 text-[13px] font-semibold text-bg disabled:opacity-50 transition-shadow hover:shadow-glowCyan focus-visible:outline focus-visible:outline-2 focus-visible:outline-accentBright"
               >

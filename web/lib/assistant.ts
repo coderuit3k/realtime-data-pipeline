@@ -16,6 +16,7 @@ export type ChatMessage = {
   id: string;
   question: string;
   answer: string;
+  grounded: boolean;
   sources: AssistantSource[];
   toolCalls: unknown[];
 };
