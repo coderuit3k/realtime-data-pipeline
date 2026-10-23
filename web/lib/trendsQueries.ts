@@ -6,7 +6,7 @@ import { partitionPredicateAny, type TodayParts } from "./athena";
  */
 export function buildTrendEventsQuery(partsList: TodayParts[]): string {
   const where = partitionPredicateAny(partsList);
-  return `SELECT event_id, keyword, event_date, github_count, hn_count, news_count
+  return `SELECT event_id, keyword, event_date, github_count, hn_count, news_count, today_total, baseline_total, burst_ratio
 FROM (
   SELECT *,
          ROW_NUMBER() OVER (PARTITION BY event_id ORDER BY detected_at DESC) AS rn

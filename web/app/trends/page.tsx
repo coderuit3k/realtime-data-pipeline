@@ -33,6 +33,19 @@ function formatDate(date: string): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : date;
 }
 
+/** "Hôm nay" / "Hôm qua" / "x ngày trước" for a YYYY-MM-DD event date, by whole UTC days. */
+function relativeDayLabel(date: string): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
+  if (!m) return null;
+  const then = Date.UTC(+m[1], +m[2] - 1, +m[3]);
+  const now = new Date();
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const diff = Math.round((today - then) / 86_400_000);
+  if (diff <= 0) return "Hôm nay";
+  if (diff === 1) return "Hôm qua";
+  return `${diff} ngày trước`;
+}
+
 /**
  * Display form of a keyword: Title Case for each word, except "ai" which
  * stays the acronym "AI". Only the first letter is forced, so names that
@@ -107,6 +120,13 @@ export default function TrendsPage() {
     else days.push({ date: event.eventDate, items: [event] });
   }
 
+  // Display window: only the 5 most recent days, each trimmed to its top 3
+  // events by total mentions. The KPIs above still describe the full set.
+  const visibleDays = days.slice(0, 5).map((day) => {
+    const top = [...day.items].sort((a, b) => totalOf(b) - totalOf(a)).slice(0, 3);
+    return { date: day.date, rel: relativeDayLabel(day.date), top, extra: day.items.length - top.length };
+  });
+
   return (
     <div className="p-6 lg:p-9 flex flex-col gap-6">
       <div className="flex flex-col gap-1">
@@ -153,24 +173,44 @@ export default function TrendsPage() {
           </ul>
 
           <div className="flex flex-col">
-            {days.map((day) => (
+            {visibleDays.map((day) => (
               <div key={day.date} className="grid grid-cols-[auto_1fr] gap-x-4 sm:gap-x-6">
                 <div className="flex flex-col items-center">
                   <span className="mt-1.5 h-3 w-3 rounded-full bg-accent shadow-glowCyan" />
                   <span className="w-px flex-grow bg-border" />
                 </div>
                 <div className="flex flex-col gap-3 pb-8">
-                  <h2 className="text-sm font-semibold tabular-nums text-textPrimary">{formatDate(day.date)}</h2>
-                  {day.items.map((event) => (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <h2 className="text-sm font-semibold tabular-nums text-textPrimary">{formatDate(day.date)}</h2>
+                    {day.rel && (
+                      <span className="rounded-full bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-medium text-textSecondary">
+                        {day.rel}
+                      </span>
+                    )}
+                    <span className="text-[12px] text-textMuted">Top {day.top.length} trong ngày</span>
+                  </div>
+                  {day.top.map((event, rank) => (
                     <article
                       key={event.eventId}
                       className="rounded-xl border border-border bg-surface/75 backdrop-blur-md px-5 py-4 flex flex-col gap-3 transition-colors hover:border-accent/30"
                     >
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span
+                          className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-[12px] font-bold tabular-nums ${
+                            rank === 0 ? "bg-accent/15 text-accentBright" : "bg-white/[0.04] text-textMuted"
+                          }`}
+                        >
+                          {rank + 1}
+                        </span>
                         <span className="text-base font-semibold text-textPrimary">{formatKeyword(event.keyword)}</span>
                         {isCrossSource(event) && (
                           <span className="rounded-full bg-success/15 px-2.5 py-0.5 text-[11px] font-semibold text-success">
                             Cả 3 nguồn
+                          </span>
+                        )}
+                        {event.burstRatio >= 2 && (
+                          <span className="rounded-full bg-[#d95926]/15 px-2.5 py-0.5 text-[11px] font-semibold text-[#f08a5d]">
+                            Bùng nổ ×{event.burstRatio.toFixed(1)}
                           </span>
                         )}
                         <span className="ml-auto text-[12px] font-semibold tabular-nums text-textSecondary">
@@ -189,8 +229,18 @@ export default function TrendsPage() {
                           </li>
                         ))}
                       </ul>
+                      {event.burstRatio > 0 && (
+                        <p className="text-[12px] tabular-nums text-textMuted">
+                          Tỉ lệ bùng nổ{" "}
+                          <span className="font-semibold text-textSecondary">×{event.burstRatio.toFixed(1)}</span>{" "}
+                          so với nền 7 ngày trước đó ({event.baselineTotal} mục)
+                        </p>
+                      )}
                     </article>
                   ))}
+                  {day.extra > 0 && (
+                    <span className="text-[12px] text-textMuted">+{day.extra} sự kiện khác trong ngày</span>
+                  )}
                 </div>
               </div>
             ))}

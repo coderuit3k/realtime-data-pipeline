@@ -87,6 +87,7 @@ export async function GET(request: NextRequest) {
           comments: Number(cols[2] ?? 0),
           author: cols[3] ?? "",
           url: cols[4] ?? "",
+          publishedAt: cols[5] ?? "",
         }))[0] ?? null,
       githubStars: parseAthenaRows(starsRows, (cols) => ({
         fullName: cols[0] ?? "",
@@ -107,6 +108,7 @@ export async function GET(request: NextRequest) {
           comments: Number(cols[2] ?? 0),
           author: cols[3] ?? "",
           url: cols[4] ?? "",
+          publishedAt: cols[5] ?? "",
         }))[0] ?? null,
       newsSpotlight:
         parseAthenaRows(newsSpotlightRows, (cols) => ({
@@ -115,6 +117,7 @@ export async function GET(request: NextRequest) {
           url: cols[2] ?? "",
           imageUrl: cols[3] ?? "",
           publishedAt: cols[4] ?? "",
+          description: cols[5] ?? "",
         }))[0] ?? null,
     };
 

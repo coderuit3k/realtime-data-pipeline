@@ -23,6 +23,9 @@ export async function GET() {
         githubCount: Number(cols[3] ?? 0),
         hnCount: Number(cols[4] ?? 0),
         newsCount: Number(cols[5] ?? 0),
+        todayTotal: Number(cols[6] ?? 0),
+        baselineTotal: Number(cols[7] ?? 0),
+        burstRatio: Number(cols[8] ?? 0),
       })),
     };
 

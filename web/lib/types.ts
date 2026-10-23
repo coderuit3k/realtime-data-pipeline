@@ -59,7 +59,7 @@ export type WeatherSnapshot = {
   weatherCode: number;
 };
 export type GithubLanguage = { language: string; repoCount: number };
-export type HnSpotlight = { title: string; score: number; comments: number; author: string; url: string };
+export type HnSpotlight = { title: string; score: number; comments: number; author: string; url: string; publishedAt: string };
 export type GithubStarRepo = {
   fullName: string;
   stars: number;
@@ -68,13 +68,14 @@ export type GithubStarRepo = {
   avatarUrl: string;
 };
 export type CryptoRanking = { coinId: string; marketCapUsd: number; volume24hUsd: number };
-export type HnControversial = { title: string; score: number; comments: number; author: string; url: string };
+export type HnControversial = { title: string; score: number; comments: number; author: string; url: string; publishedAt: string };
 export type NewsSpotlight = {
   title: string;
   provider: string;
   url: string;
   imageUrl: string;
   publishedAt: string;
+  description: string;
 };
 
 export type InsightsResponse = {
@@ -205,6 +206,9 @@ export type TrendEvent = {
   githubCount: number;
   hnCount: number;
   newsCount: number;
+  todayTotal: number;
+  baselineTotal: number;
+  burstRatio: number;
 };
 
 export type TrendsResponse = { events: TrendEvent[] };

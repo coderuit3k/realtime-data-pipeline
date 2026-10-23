@@ -10,6 +10,7 @@ import { SpotlightCard } from "@/components/SpotlightCard";
 import { RankRow } from "@/components/RankRow";
 import { StackedBar } from "@/components/StackedBar";
 import { GmailStatsCard } from "@/components/GmailStatsCard";
+import { relativeTime } from "@/lib/time";
 
 /** Maps a WMO weather code to one of a few icon groups. */
 function WeatherIcon({ code }: { code: number }) {
@@ -51,18 +52,29 @@ function formatUsdCompact(value: number): string {
   return `$${value.toFixed(2)}`;
 }
 
-/** dd/mm/yyyy for an ISO timestamp; null when the value is missing or unparseable. */
-function formatNewsDate(iso: string | undefined): string | null {
-  const d = iso ? new Date(iso) : null;
-  if (!d || Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("vi-VN");
-}
-
 /** Compact count (1.2K, 3.4M) for star totals. */
 function formatCountCompact(value: number): string {
   if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
   if (value >= 1e3) return `${(value / 1e3).toFixed(1)}K`;
   return String(value);
+}
+
+/** Small stroke icon shown next to a spotlight stat label. */
+function StatIcon({ d }: { d: string | string[] }) {
+  const paths = Array.isArray(d) ? d : [d];
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-shrink-0">
+      {paths.map((p) => (
+        <path key={p} d={p} />
+      ))}
+    </svg>
+  );
+}
+
+/** "x giờ trước" for a spotlight timestamp; undefined when missing/unparseable, so the byline omits it. */
+function spotlightTimeLabel(iso?: string): string | undefined {
+  if (!iso || Number.isNaN(Date.parse(iso))) return undefined;
+  return relativeTime(iso);
 }
 
 /** Categorical slots from the dataviz palette (dark mode), in fixed order; extra languages fold into "Khác". */
@@ -244,10 +256,14 @@ export default function InsightsPage() {
           url={data.hnSpotlight?.url}
           emptyText="Chưa có story nào."
           stats={data.hnSpotlight ? [
-            { label: "điểm", value: String(data.hnSpotlight.score) },
-            { label: "bình luận", value: String(data.hnSpotlight.comments) },
+            { label: "điểm", value: String(data.hnSpotlight.score), icon: <StatIcon d={["M12 19V5", "m5 12 7-7 7 7"]} /> },
+            { label: "bình luận", value: String(data.hnSpotlight.comments), icon: <StatIcon d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /> },
           ] : undefined}
-          footer={data.hnSpotlight && `Đăng bởi ${data.hnSpotlight.author}`}
+          byline={
+            data.hnSpotlight
+              ? { name: data.hnSpotlight.author, timeLabel: spotlightTimeLabel(data.hnSpotlight.publishedAt) }
+              : undefined
+          }
         />
         <SpotlightCard
           tone="indigo"
@@ -257,29 +273,39 @@ export default function InsightsPage() {
           url={data.hnControversial?.url}
           emptyText="Chưa có story nào."
           stats={data.hnControversial ? [
-            { label: "bình luận", value: String(data.hnControversial.comments) },
-            { label: "điểm", value: String(data.hnControversial.score) },
-            { label: "tỉ lệ", value: (data.hnControversial.comments / Math.max(1, data.hnControversial.score)).toFixed(1) },
+            { label: "bình luận", value: String(data.hnControversial.comments), icon: <StatIcon d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /> },
+            { label: "điểm", value: String(data.hnControversial.score), icon: <StatIcon d={["M12 19V5", "m5 12 7-7 7 7"]} /> },
           ] : undefined}
-          footer={data.hnControversial && `Đăng bởi ${data.hnControversial.author}`}
+          meter={
+            data.hnControversial
+              ? {
+                  label: "Mức tranh luận",
+                  pct: Math.min(100, (data.hnControversial.comments / Math.max(1, data.hnControversial.score) / 3) * 100),
+                  value: `${(data.hnControversial.comments / Math.max(1, data.hnControversial.score)).toFixed(1)} bình luận/điểm`,
+                }
+              : undefined
+          }
+          byline={
+            data.hnControversial
+              ? { name: data.hnControversial.author, timeLabel: spotlightTimeLabel(data.hnControversial.publishedAt) }
+              : undefined
+          }
         />
         <SpotlightCard
           tone="cyan"
+          artPaths={["M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0V9", "M18 14h-8", "M15 18h-5", "M10 6h8v4h-8V6Z"]}
           label="Tin nổi bật"
           title={data.newsSpotlight?.title}
           url={data.newsSpotlight?.url}
           imageUrl={data.newsSpotlight?.imageUrl}
           emptyText="Chưa có tin nào."
-          stats={
+          excerpt={data.newsSpotlight?.description || undefined}
+          byline={
             data.newsSpotlight
-              ? [
-                  { label: "nguồn tin", value: data.newsSpotlight.provider },
-                  ...(formatNewsDate(data.newsSpotlight.publishedAt)
-                    ? [{ label: "ngày đăng", value: formatNewsDate(data.newsSpotlight.publishedAt) as string }]
-                    : []),
-                ]
+              ? { name: data.newsSpotlight.provider, timeLabel: spotlightTimeLabel(data.newsSpotlight.publishedAt) }
               : undefined
           }
+          bylineVerb="Từ"
         />
       </div>
 

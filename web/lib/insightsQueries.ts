@@ -74,7 +74,7 @@ LIMIT 6`;
 /** Highest-scoring HN story; falls back to the HN permalink for text posts with no URL. */
 export function buildHnSpotlightQuery(partsList: TodayParts[]): string {
   const where = partitionPredicateAny(partsList);
-  return `SELECT title, score, num_comments, author, COALESCE(NULLIF(url, ''), permalink) AS link
+  return `SELECT title, score, num_comments, author, COALESCE(NULLIF(url, ''), permalink) AS link, created_at
 FROM hackernews_stories
 WHERE ${where}
 ORDER BY score DESC
@@ -116,7 +116,7 @@ ORDER BY market_cap_usd DESC`;
  */
 export function buildHnControversialQuery(partsList: TodayParts[]): string {
   const where = partitionPredicateAny(partsList);
-  return `SELECT title, score, num_comments, author, COALESCE(NULLIF(url, ''), permalink) AS link
+  return `SELECT title, score, num_comments, author, COALESCE(NULLIF(url, ''), permalink) AS link, created_at
 FROM hackernews_stories
 WHERE (${where}) AND score >= 10
 ORDER BY CAST(num_comments AS DOUBLE) / score DESC
@@ -140,7 +140,7 @@ ORDER BY location`;
 /** Newest article that has an image, for the visual spotlight card. */
 export function buildNewsSpotlightQuery(partsList: TodayParts[]): string {
   const where = partitionPredicateAny(partsList);
-  return `SELECT title, provider, url, image_url, published_at
+  return `SELECT title, provider, url, image_url, published_at, description
 FROM news_articles
 WHERE (${where}) AND image_url <> ''
 ORDER BY published_at DESC

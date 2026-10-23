@@ -33,11 +33,11 @@ function mockAllEmpty() {
     .mockResolvedValueOnce(rows(["keyword", "overlap_count"], []))
     .mockResolvedValueOnce(rows(["location", "temperature_c", "humidity_pct", "weather_code"], []))
     .mockResolvedValueOnce(rows(["language", "repo_count"], []))
-    .mockResolvedValueOnce(rows(["title", "score", "num_comments", "author", "link"], []))
+    .mockResolvedValueOnce(rows(["title", "score", "num_comments", "author", "link", "published_at"], []))
     .mockResolvedValueOnce(rows(["full_name", "stars", "forks", "language", "avatar_url"], []))
     .mockResolvedValueOnce(rows(["coin_id", "market_cap_usd", "volume_24h_usd"], []))
-    .mockResolvedValueOnce(rows(["title", "score", "num_comments", "author", "link"], []))
-    .mockResolvedValueOnce(rows(["title", "provider", "url", "image_url", "published_at"], []));
+    .mockResolvedValueOnce(rows(["title", "score", "num_comments", "author", "link", "published_at"], []))
+    .mockResolvedValueOnce(rows(["title", "provider", "url", "image_url", "published_at", "description"], []));
 }
 
 beforeEach(() => {
@@ -61,8 +61,8 @@ describe("GET /api/insights", () => {
       .mockResolvedValueOnce(rows(["language", "repo_count"], [["Python", "174"]]))
       .mockResolvedValueOnce(
         rows(
-          ["title", "score", "num_comments", "author", "link"],
-          [["Breaking Up with Google Play", "123", "23", "ezst", "https://example.com/story"]]
+          ["title", "score", "num_comments", "author", "link", "published_at"],
+          [["Breaking Up with Google Play", "123", "23", "ezst", "https://example.com/story", "2026-09-20T07:30:00Z"]]
         )
       )
       .mockResolvedValueOnce(
@@ -76,13 +76,13 @@ describe("GET /api/insights", () => {
       )
       .mockResolvedValueOnce(
         rows(
-          ["title", "score", "num_comments", "author", "link"],
-          [["Can AI Shopping Agents Be Trusted?", "14", "26", "ddaniel10", "https://example.com/agents"]]
+          ["title", "score", "num_comments", "author", "link", "published_at"],
+          [["Can AI Shopping Agents Be Trusted?", "14", "26", "ddaniel10", "https://example.com/agents", "2026-09-20T06:15:00Z"]]
         )
       )
       .mockResolvedValueOnce(
         rows(
-          ["title", "provider", "url", "image_url", "published_at"],
+          ["title", "provider", "url", "image_url", "published_at", "description"],
           [
             [
               "AI regulation heats up",
@@ -90,6 +90,7 @@ describe("GET /api/insights", () => {
               "https://example.com/news-article",
               "https://example.com/thumb.jpg",
               "2026-09-20T08:00:00Z",
+              "Regulators propose new rules for AI agents.",
             ],
           ]
         )
@@ -114,6 +115,7 @@ describe("GET /api/insights", () => {
       comments: 23,
       author: "ezst",
       url: "https://example.com/story",
+      publishedAt: "2026-09-20T07:30:00Z",
     });
     expect(body.githubStars).toEqual([
       {
@@ -133,6 +135,7 @@ describe("GET /api/insights", () => {
       comments: 26,
       author: "ddaniel10",
       url: "https://example.com/agents",
+      publishedAt: "2026-09-20T06:15:00Z",
     });
     expect(body.newsSpotlight).toEqual({
       title: "AI regulation heats up",
@@ -140,6 +143,7 @@ describe("GET /api/insights", () => {
       url: "https://example.com/news-article",
       imageUrl: "https://example.com/thumb.jpg",
       publishedAt: "2026-09-20T08:00:00Z",
+      description: "Regulators propose new rules for AI agents.",
     });
   });
 

@@ -18,7 +18,7 @@ function rows(header: string[], data: string[][]) {
   ];
 }
 
-const COLUMNS = ["event_id", "keyword", "event_date", "github_count", "hn_count", "news_count"];
+const COLUMNS = ["event_id", "keyword", "event_date", "github_count", "hn_count", "news_count", "today_total", "baseline_total", "burst_ratio"];
 
 beforeEach(() => {
   mockedRun.mockReset();
@@ -27,7 +27,7 @@ beforeEach(() => {
 describe("GET /api/trends", () => {
   it("returns parsed trend events", async () => {
     mockedRun.mockResolvedValueOnce(
-      rows(COLUMNS, [["deepseek-2026-09-27", "deepseek", "2026-09-27", "2", "5", "3"]])
+      rows(COLUMNS, [["deepseek-2026-09-27", "deepseek", "2026-09-27", "2", "5", "3", "10", "12", "0.77"]])
     );
 
     const response = await GET();
@@ -42,6 +42,9 @@ describe("GET /api/trends", () => {
         githubCount: 2,
         hnCount: 5,
         newsCount: 3,
+        todayTotal: 10,
+        baselineTotal: 12,
+        burstRatio: 0.77,
       },
     ]);
   });
